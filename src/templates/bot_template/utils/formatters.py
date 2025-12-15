@@ -68,6 +68,8 @@ def get_status_icon(task: Dict[str, Any]) -> str:
         now = datetime.now(TZ)
         if deadline.tzinfo is None:
             deadline = TZ.localize(deadline)
+        else:
+            deadline = deadline.astimezone(TZ)
         if deadline < now:
             return ICON_OVERDUE
 
@@ -85,12 +87,15 @@ def get_status_icon(task: Dict[str, Any]) -> str:
 
 
 def format_datetime(dt: Optional[datetime], relative: bool = False) -> str:
-    """Format datetime for display."""
+    """Format datetime for display in Vietnam timezone."""
     if not dt:
         return "Không có"
 
+    # Convert to Vietnam timezone
     if dt.tzinfo is None:
         dt = TZ.localize(dt)
+    else:
+        dt = dt.astimezone(TZ)
 
     if relative:
         now = datetime.now(TZ)
