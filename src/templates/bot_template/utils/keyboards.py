@@ -66,10 +66,28 @@ def task_detail_keyboard(
         ])
 
     buttons.append([
-        InlineKeyboardButton("« Quay lại", callback_data="task_list:back")
+        InlineKeyboardButton("« Quay lại", callback_data="task_category:menu")
     ])
 
     return InlineKeyboardMarkup(buttons)
+
+
+def task_category_keyboard() -> InlineKeyboardMarkup:
+    """Create task category selection menu."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📋 Việc cá nhân", callback_data="task_category:personal"),
+        ],
+        [
+            InlineKeyboardButton("📤 Việc đã giao", callback_data="task_category:assigned"),
+        ],
+        [
+            InlineKeyboardButton("📥 Việc đã nhận", callback_data="task_category:received"),
+        ],
+        [
+            InlineKeyboardButton("📊 Tất cả việc", callback_data="task_category:all"),
+        ],
+    ])
 
 
 def progress_keyboard(task_id: str) -> InlineKeyboardMarkup:
@@ -169,6 +187,11 @@ def task_list_with_pagination(
             InlineKeyboardButton("Sau »", callback_data=f"list:{list_type}:{page + 1}")
         )
     buttons.append(nav_row)
+
+    # Back to category menu
+    buttons.append([
+        InlineKeyboardButton("« Quay lại danh mục", callback_data="task_category:menu")
+    ])
 
     return InlineKeyboardMarkup(buttons)
 

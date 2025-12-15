@@ -80,6 +80,7 @@ from .formatters import (
 from .keyboards import (
     task_actions_keyboard,
     task_detail_keyboard,
+    task_category_keyboard,
     progress_keyboard,
     undo_keyboard,
     pagination_keyboard,
@@ -163,6 +164,7 @@ __all__ = [
     # Keyboards
     "task_actions_keyboard",
     "task_detail_keyboard",
+    "task_category_keyboard",
     "progress_keyboard",
     "undo_keyboard",
     "pagination_keyboard",

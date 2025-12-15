@@ -292,6 +292,40 @@ async def get_user_received_tasks(
     return [dict(t) for t in tasks]
 
 
+async def get_user_personal_tasks(
+    db: Database,
+    user_id: int,
+    limit: int = 20,
+    offset: int = 0,
+    include_completed: bool = False,
+) -> List[Dict[str, Any]]:
+    """Get personal tasks (created by user for themselves)."""
+    status_filter = "" if include_completed else "AND t.status != 'completed'"
+    tasks = await db.fetch_all(
+        f"""
+        SELECT t.*, u.display_name as creator_name
+        FROM tasks t
+        LEFT JOIN users u ON t.creator_id = u.id
+        WHERE t.creator_id = $1
+        AND t.assignee_id = $1
+        AND t.is_deleted = false
+        {status_filter}
+        ORDER BY
+            CASE t.priority
+                WHEN 'urgent' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'normal' THEN 3
+                WHEN 'low' THEN 4
+            END,
+            t.deadline ASC NULLS LAST,
+            t.created_at DESC
+        LIMIT $2 OFFSET $3
+        """,
+        user_id, limit, offset
+    )
+    return [dict(t) for t in tasks]
+
+
 async def get_all_user_related_tasks(
     db: Database,
     user_id: int,

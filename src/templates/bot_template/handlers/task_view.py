@@ -28,6 +28,7 @@ from utils import (
     format_task_detail,
     format_task_list,
     task_detail_keyboard,
+    task_category_keyboard,
     task_list_with_pagination,
     format_datetime,
     format_status,
@@ -158,28 +159,14 @@ async def xemviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
                 await update.message.reply_text(msg, reply_markup=keyboard)
         else:
-            # List ALL user-related tasks (created, received, assigned)
-            tasks = await get_all_user_related_tasks(db, db_user["id"], limit=20)
-
-            if not tasks:
-                await update.message.reply_text(
-                    "Bạn chưa có việc nào.\n\nTạo việc mới: /taoviec [nội dung]\nXem việc được giao: /viecdanhan\nXem việc đã giao: /viecdagiao"
-                )
-                return
-
-            total = len(tasks)
-            total_pages = (total + 9) // 10
-
-            msg = format_task_list(
-                tasks=tasks,
-                title="TẤT CẢ VIỆC LIÊN QUAN",
-                page=1,
-                total=total,
-            )
-
+            # Show task category menu
             await update.message.reply_text(
-                msg,
-                reply_markup=task_list_with_pagination(tasks, 1, total_pages, "all"),
+                "📋 CHỌN DANH MỤC VIỆC\n\n"
+                "📋 Việc cá nhân - Việc bạn tự tạo cho mình\n"
+                "📤 Việc đã giao - Việc bạn giao cho người khác\n"
+                "📥 Việc đã nhận - Việc người khác giao cho bạn\n"
+                "📊 Tất cả việc - Toàn bộ việc liên quan",
+                reply_markup=task_category_keyboard(),
             )
 
     except Exception as e:

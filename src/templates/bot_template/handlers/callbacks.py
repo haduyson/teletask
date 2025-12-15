@@ -29,6 +29,7 @@ from utils import (
     format_datetime,
     format_priority,
     task_detail_keyboard,
+    task_category_keyboard,
     progress_keyboard,
     undo_keyboard,
     edit_menu_keyboard,
@@ -139,10 +140,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             task_id = parts[1]
             await handle_edit_assignee_prompt(query, db, db_user, task_id, context)
 
-        # Back to task list
-        elif action == "task_list":
-            if parts[1] == "back":
-                await handle_list_page(query, db, db_user, "all", 1)
+        # Task category menu
+        elif action == "task_category":
+            category = parts[1]
+            await handle_task_category(query, db, db_user, category)
 
         # Statistics callbacks
         elif action in ("stats_weekly", "stats_monthly"):
@@ -373,24 +374,35 @@ async def handle_undo(query, db, undo_id: int, context=None) -> None:
 
 async def handle_list_page(query, db, db_user, list_type: str, page: int) -> None:
     """Handle list pagination."""
-    from services import get_user_tasks, get_user_created_tasks, get_group_tasks
+    from services import (
+        get_user_personal_tasks,
+        get_user_created_tasks,
+        get_user_received_tasks,
+        get_all_user_related_tasks,
+    )
     from utils import format_task_list, task_list_with_pagination
 
     page_size = 10
     offset = (page - 1) * page_size
 
     if list_type == "personal":
-        tasks = await get_user_tasks(db, db_user["id"], limit=page_size, offset=offset)
-        title = "VIỆC CÁ NHÂN CỦA BẠN"
+        tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size, offset=offset)
+        title = "📋 VIỆC CÁ NHÂN"
     elif list_type == "assigned":
         tasks = await get_user_created_tasks(db, db_user["id"], limit=page_size, offset=offset)
-        title = "VIỆC BẠN ĐÃ GIAO"
-    else:
-        tasks = await get_user_tasks(db, db_user["id"], limit=page_size, offset=offset)
-        title = "DANH SÁCH VIỆC"
+        title = "📤 VIỆC ĐÃ GIAO"
+    elif list_type == "received":
+        tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size, offset=offset)
+        title = "📥 VIỆC ĐÃ NHẬN"
+    else:  # all
+        tasks = await get_all_user_related_tasks(db, db_user["id"], limit=page_size, offset=offset)
+        title = "📊 TẤT CẢ VIỆC"
 
     if not tasks:
-        await query.edit_message_text("Không có việc nào.")
+        await query.edit_message_text(
+            f"{title}\n\nKhông có việc nào.",
+            reply_markup=task_category_keyboard(),
+        )
         return
 
     # Estimate total pages (simplified)
@@ -406,6 +418,70 @@ async def handle_list_page(query, db, db_user, list_type: str, page: int) -> Non
     await query.edit_message_text(
         msg,
         reply_markup=task_list_with_pagination(tasks, page, total_pages, list_type),
+    )
+
+
+async def handle_task_category(query, db, db_user, category: str) -> None:
+    """Handle task category selection."""
+    from services import (
+        get_user_personal_tasks,
+        get_user_created_tasks,
+        get_user_received_tasks,
+        get_all_user_related_tasks,
+    )
+    from utils import format_task_list, task_list_with_pagination
+
+    page_size = 10
+
+    if category == "menu":
+        # Show category menu
+        await query.edit_message_text(
+            "📋 CHỌN DANH MỤC VIỆC\n\n"
+            "📋 Việc cá nhân - Việc bạn tự tạo cho mình\n"
+            "📤 Việc đã giao - Việc bạn giao cho người khác\n"
+            "📥 Việc đã nhận - Việc người khác giao cho bạn\n"
+            "📊 Tất cả việc - Toàn bộ việc liên quan",
+            reply_markup=task_category_keyboard(),
+        )
+        return
+
+    if category == "personal":
+        tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size)
+        title = "📋 VIỆC CÁ NHÂN"
+        list_type = "personal"
+    elif category == "assigned":
+        tasks = await get_user_created_tasks(db, db_user["id"], limit=page_size)
+        title = "📤 VIỆC ĐÃ GIAO"
+        list_type = "assigned"
+    elif category == "received":
+        tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size)
+        title = "📥 VIỆC ĐÃ NHẬN"
+        list_type = "received"
+    else:  # all
+        tasks = await get_all_user_related_tasks(db, db_user["id"], limit=page_size)
+        title = "📊 TẤT CẢ VIỆC"
+        list_type = "all"
+
+    if not tasks:
+        await query.edit_message_text(
+            f"{title}\n\nKhông có việc nào trong danh mục này.",
+            reply_markup=task_category_keyboard(),
+        )
+        return
+
+    total = len(tasks)
+    total_pages = max(1, (total + page_size - 1) // page_size)
+
+    msg = format_task_list(
+        tasks=tasks,
+        title=title,
+        page=1,
+        total=total,
+    )
+
+    await query.edit_message_text(
+        msg,
+        reply_markup=task_list_with_pagination(tasks, 1, total_pages, list_type),
     )
 
 
