@@ -213,6 +213,9 @@ def edit_menu_keyboard(task_id: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton("🔔 Sửa độ ưu tiên", callback_data=f"edit_priority:{task_id}"),
         ],
         [
+            InlineKeyboardButton("👤 Sửa người nhận", callback_data=f"edit_assignee:{task_id}"),
+        ],
+        [
             InlineKeyboardButton("« Quay lại", callback_data=f"task_detail:{task_id}"),
         ],
     ])
