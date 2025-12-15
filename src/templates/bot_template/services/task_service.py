@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 TZ = pytz.timezone("Asia/Ho_Chi_Minh")
 
 
-async def generate_task_id(db: Database, prefix: str = "T") -> str:
+async def generate_task_id(db: Database, prefix: str = "P") -> str:
     """
     Generate unique task ID.
 
@@ -40,7 +40,7 @@ async def generate_task_id(db: Database, prefix: str = "T") -> str:
 
     counter = int(result["value"]) if result else 1
 
-    return f"{prefix}-{counter:04d}"
+    return f"{prefix}{counter:04d}"
 
 
 async def create_task(
@@ -74,12 +74,8 @@ async def create_task(
         Created task record
     """
     # Generate unique public ID
-    # T-xxx for regular tasks, keep existing logic for group children (P-xxx)
-    prefix = "T"
-    if group_task_id:
-        # This is a child task of a group (P-xxx)
-        prefix = "P"
-    public_id = await generate_task_id(db, prefix=prefix)
+    # P-xxx for all individual tasks, G-xxx for group parent tasks
+    public_id = await generate_task_id(db, prefix="P")
 
     task = await db.fetch_one(
         """
