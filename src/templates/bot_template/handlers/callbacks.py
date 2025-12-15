@@ -569,8 +569,8 @@ async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE
                 await update.message.reply_text(f"✅ Đã xóa deadline của {task_id}!")
                 return
 
-            # Parse deadline
-            deadline = parse_vietnamese_time(text)
+            # Parse deadline - returns (datetime, remaining_text) tuple
+            deadline, _ = parse_vietnamese_time(text)
             if not deadline:
                 await update.message.reply_text(
                     "Không hiểu được thời gian. Vui lòng thử lại.\n\n"
