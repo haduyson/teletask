@@ -22,6 +22,8 @@ from utils import (
     ERR_DATABASE,
     undo_keyboard,
     confirm_keyboard,
+    format_datetime,
+    format_status,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,15 +61,20 @@ async def xoa_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             await update.message.reply_text(ERR_NO_PERMISSION)
             return
 
-        # Show confirmation
-        content = task["content"]
-        if len(content) > 50:
-            content = content[:47] + "..."
+        # Show task details for review before deletion
+        status = format_status(task["status"])
+        deadline_str = format_datetime(task.get("deadline"), relative=True) if task.get("deadline") else "Không có"
+        assignee_name = task.get("assignee_name", "Chưa giao")
 
         await update.message.reply_text(
-            f"Xác nhận xóa việc?\n\n"
-            f"{task_id}: {content}",
+            f"⚠️ XÁC NHẬN XÓA VIỆC?\n\n"
+            f"📋 *{task_id}*: {task['content']}\n"
+            f"📊 Trạng thái: {status}\n"
+            f"👤 Người nhận: {assignee_name}\n"
+            f"📅 Deadline: {deadline_str}\n\n"
+            f"Bấm *Xác nhận* để xóa hoặc *Hủy* để giữ lại.",
             reply_markup=confirm_keyboard("delete", task_id),
+            parse_mode="Markdown",
         )
 
     except Exception as e:
@@ -123,7 +130,7 @@ async def process_restore(db, undo_id: int) -> tuple:
     task = await restore_task(db, undo_id)
 
     if not task:
-        return False, "Không thể hoàn tác. Đã hết thời gian (30 giây)."
+        return False, "Không thể hoàn tác. Đã hết thời gian (10 giây)."
 
     return True, task
 
