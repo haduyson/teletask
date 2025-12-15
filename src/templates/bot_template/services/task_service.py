@@ -1,0 +1,525 @@
+"""
+Task Service
+CRUD operations for tasks
+"""
+
+import json
+import logging
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+from database.connection import Database
+
+logger = logging.getLogger(__name__)
+
+
+async def generate_task_id(db: Database, is_group: bool = False) -> str:
+    """
+    Generate unique task ID.
+
+    Args:
+        db: Database connection
+        is_group: True for group task (G-xxx), False for personal (P-xxx)
+
+    Returns:
+        Task ID like P-0001 or G-0001
+    """
+    # Get and increment counter
+    result = await db.fetch_one(
+        """
+        UPDATE bot_config
+        SET value = (CAST(value AS INTEGER) + 1)::TEXT, updated_at = NOW()
+        WHERE key = 'task_id_counter'
+        RETURNING value
+        """
+    )
+
+    counter = int(result["value"]) if result else 1
+    prefix = "G" if is_group else "P"
+
+    return f"{prefix}-{counter:04d}"
+
+
+async def create_task(
+    db: Database,
+    content: str,
+    creator_id: int,
+    assignee_id: int,
+    deadline: Optional[datetime] = None,
+    priority: str = "normal",
+    is_personal: bool = True,
+    group_id: Optional[int] = None,
+    description: str = None,
+    group_task_id: str = None,
+) -> Dict[str, Any]:
+    """
+    Create a new task.
+
+    Args:
+        db: Database connection
+        content: Task content
+        creator_id: Creator user ID
+        assignee_id: Assignee user ID
+        deadline: Task deadline
+        priority: Task priority (low/normal/high/urgent)
+        is_personal: True for personal task
+        group_id: Group ID (for group tasks)
+        description: Optional description
+        group_task_id: Parent group task ID (for multi-assignee)
+
+    Returns:
+        Created task record
+    """
+    # Generate unique public ID
+    public_id = await generate_task_id(db, is_group=not is_personal)
+
+    task = await db.fetch_one(
+        """
+        INSERT INTO tasks (
+            public_id, content, description, creator_id, assignee_id,
+            deadline, priority, is_personal, group_id, group_task_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING *
+        """,
+        public_id,
+        content,
+        description,
+        creator_id,
+        assignee_id,
+        deadline,
+        priority,
+        is_personal,
+        group_id,
+        group_task_id,
+    )
+
+    # Log history
+    await add_task_history(
+        db,
+        task["id"],
+        creator_id,
+        action="created",
+        note=f"Task created: {content[:50]}"
+    )
+
+    # Create default reminders if deadline exists
+    if deadline:
+        await create_default_reminders(db, task["id"], assignee_id, deadline)
+
+    logger.info(f"Created task {public_id}: {content[:30]}...")
+    return dict(task)
+
+
+async def get_task_by_public_id(db: Database, public_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get task by public ID (P-xxxx or G-xxxx).
+
+    Args:
+        db: Database connection
+        public_id: Task public ID
+
+    Returns:
+        Task record or None
+    """
+    task = await db.fetch_one(
+        """
+        SELECT t.*, u.display_name as assignee_name, c.display_name as creator_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assignee_id = u.id
+        LEFT JOIN users c ON t.creator_id = c.id
+        WHERE t.public_id = $1 AND t.is_deleted = false
+        """,
+        public_id.upper()
+    )
+    return dict(task) if task else None
+
+
+async def get_task_by_id(db: Database, task_id: int) -> Optional[Dict[str, Any]]:
+    """Get task by internal ID."""
+    task = await db.fetch_one(
+        """
+        SELECT t.*, u.display_name as assignee_name, c.display_name as creator_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assignee_id = u.id
+        LEFT JOIN users c ON t.creator_id = c.id
+        WHERE t.id = $1 AND t.is_deleted = false
+        """,
+        task_id
+    )
+    return dict(task) if task else None
+
+
+async def get_user_tasks(
+    db: Database,
+    user_id: int,
+    status: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+    include_completed: bool = False,
+) -> List[Dict[str, Any]]:
+    """
+    Get tasks assigned to user.
+
+    Args:
+        db: Database connection
+        user_id: Assignee user ID
+        status: Filter by status
+        limit: Max results
+        offset: Skip results
+        include_completed: Include completed tasks
+
+    Returns:
+        List of task records
+    """
+    conditions = ["t.assignee_id = $1", "t.is_deleted = false"]
+    params = [user_id]
+
+    if status:
+        conditions.append(f"t.status = ${len(params) + 1}")
+        params.append(status)
+    elif not include_completed:
+        conditions.append("t.status != 'completed'")
+
+    query = f"""
+        SELECT t.*, u.display_name as creator_name
+        FROM tasks t
+        LEFT JOIN users u ON t.creator_id = u.id
+        WHERE {' AND '.join(conditions)}
+        ORDER BY
+            CASE t.priority
+                WHEN 'urgent' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'normal' THEN 3
+                WHEN 'low' THEN 4
+            END,
+            t.deadline ASC NULLS LAST,
+            t.created_at DESC
+        LIMIT ${len(params) + 1} OFFSET ${len(params) + 2}
+    """
+
+    tasks = await db.fetch_all(query, *params, limit, offset)
+    return [dict(t) for t in tasks]
+
+
+async def get_user_created_tasks(
+    db: Database,
+    user_id: int,
+    limit: int = 20,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """Get tasks created by user (assigned to others)."""
+    tasks = await db.fetch_all(
+        """
+        SELECT t.*, u.display_name as assignee_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assignee_id = u.id
+        WHERE t.creator_id = $1
+        AND t.assignee_id != $1
+        AND t.is_deleted = false
+        ORDER BY t.created_at DESC
+        LIMIT $2 OFFSET $3
+        """,
+        user_id, limit, offset
+    )
+    return [dict(t) for t in tasks]
+
+
+async def get_group_tasks(
+    db: Database,
+    group_id: int,
+    limit: int = 50,
+    offset: int = 0,
+) -> List[Dict[str, Any]]:
+    """Get all tasks in a group."""
+    tasks = await db.fetch_all(
+        """
+        SELECT t.*,
+            u.display_name as assignee_name,
+            c.display_name as creator_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assignee_id = u.id
+        LEFT JOIN users c ON t.creator_id = c.id
+        WHERE t.group_id = $1 AND t.is_deleted = false
+        ORDER BY t.created_at DESC
+        LIMIT $2 OFFSET $3
+        """,
+        group_id, limit, offset
+    )
+    return [dict(t) for t in tasks]
+
+
+async def update_task_status(
+    db: Database,
+    task_id: int,
+    status: str,
+    user_id: int,
+    progress: Optional[int] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Update task status.
+
+    Args:
+        db: Database connection
+        task_id: Task ID
+        status: New status
+        user_id: User making the change
+        progress: Optional progress percentage
+
+    Returns:
+        Updated task record
+    """
+    # Get current task
+    current = await get_task_by_id(db, task_id)
+    if not current:
+        return None
+
+    old_status = current["status"]
+
+    # Set completed_at if completing
+    completed_at = None
+    if status == "completed":
+        completed_at = datetime.now()
+        progress = 100
+
+    task = await db.fetch_one(
+        """
+        UPDATE tasks SET
+            status = $2,
+            progress = COALESCE($3, progress),
+            completed_at = $4,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+        """,
+        task_id, status, progress, completed_at
+    )
+
+    # Log history
+    await add_task_history(
+        db, task_id, user_id,
+        action="status_changed",
+        field_name="status",
+        old_value=old_status,
+        new_value=status
+    )
+
+    return dict(task) if task else None
+
+
+async def update_task_progress(
+    db: Database,
+    task_id: int,
+    progress: int,
+    user_id: int,
+) -> Optional[Dict[str, Any]]:
+    """Update task progress percentage."""
+    # Validate progress
+    progress = max(0, min(100, progress))
+
+    # Get current
+    current = await get_task_by_id(db, task_id)
+    if not current:
+        return None
+
+    # Auto-update status based on progress
+    status = current["status"]
+    if progress == 100 and status != "completed":
+        status = "completed"
+    elif progress > 0 and status == "pending":
+        status = "in_progress"
+
+    return await update_task_status(db, task_id, status, user_id, progress)
+
+
+async def soft_delete_task(
+    db: Database,
+    task_id: int,
+    user_id: int,
+) -> Optional[Dict[str, Any]]:
+    """
+    Soft delete task with 30-second undo window.
+
+    Args:
+        db: Database connection
+        task_id: Task ID
+        user_id: User deleting the task
+
+    Returns:
+        Undo record for restoring
+    """
+    task = await get_task_by_id(db, task_id)
+    if not task:
+        return None
+
+    # Store in undo buffer
+    expires_at = datetime.now() + timedelta(seconds=30)
+    undo = await db.fetch_one(
+        """
+        INSERT INTO deleted_tasks_undo (task_id, task_data, deleted_by, expires_at)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+        """,
+        task_id,
+        json.dumps(task, default=str),
+        user_id,
+        expires_at
+    )
+
+    # Mark task as deleted
+    await db.execute(
+        """
+        UPDATE tasks SET
+            is_deleted = true,
+            deleted_at = NOW(),
+            deleted_by = $2,
+            updated_at = NOW()
+        WHERE id = $1
+        """,
+        task_id, user_id
+    )
+
+    # Log history
+    await add_task_history(
+        db, task_id, user_id,
+        action="deleted",
+        note="Task deleted (30s undo available)"
+    )
+
+    return dict(undo) if undo else None
+
+
+async def restore_task(db: Database, undo_id: int) -> Optional[Dict[str, Any]]:
+    """
+    Restore deleted task from undo buffer.
+
+    Args:
+        db: Database connection
+        undo_id: Undo record ID
+
+    Returns:
+        Restored task record
+    """
+    # Get undo record
+    undo = await db.fetch_one(
+        """
+        SELECT * FROM deleted_tasks_undo
+        WHERE id = $1 AND is_restored = false AND expires_at > NOW()
+        """,
+        undo_id
+    )
+
+    if not undo:
+        return None
+
+    task_id = undo["task_id"]
+
+    # Restore task
+    await db.execute(
+        """
+        UPDATE tasks SET
+            is_deleted = false,
+            deleted_at = NULL,
+            deleted_by = NULL,
+            updated_at = NOW()
+        WHERE id = $1
+        """,
+        task_id
+    )
+
+    # Mark undo as used
+    await db.execute(
+        "UPDATE deleted_tasks_undo SET is_restored = true WHERE id = $1",
+        undo_id
+    )
+
+    # Log history
+    await add_task_history(
+        db, task_id, undo["deleted_by"],
+        action="restored",
+        note="Task restored from undo"
+    )
+
+    return await get_task_by_id(db, task_id)
+
+
+async def add_task_history(
+    db: Database,
+    task_id: int,
+    user_id: int,
+    action: str,
+    field_name: str = None,
+    old_value: str = None,
+    new_value: str = None,
+    note: str = None,
+) -> None:
+    """Add entry to task history."""
+    await db.execute(
+        """
+        INSERT INTO task_history (task_id, user_id, action, field_name, old_value, new_value, note)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        """,
+        task_id, user_id, action, field_name, old_value, new_value, note
+    )
+
+
+async def create_default_reminders(
+    db: Database,
+    task_id: int,
+    user_id: int,
+    deadline: datetime,
+) -> None:
+    """Create default reminders for a task."""
+    # Reminder 24h before
+    remind_24h = deadline - timedelta(hours=24)
+    if remind_24h > datetime.now():
+        await db.execute(
+            """
+            INSERT INTO reminders (task_id, user_id, remind_at, reminder_type, reminder_offset)
+            VALUES ($1, $2, $3, 'before_deadline', '24h')
+            """,
+            task_id, user_id, remind_24h
+        )
+
+    # Reminder 1h before
+    remind_1h = deadline - timedelta(hours=1)
+    if remind_1h > datetime.now():
+        await db.execute(
+            """
+            INSERT INTO reminders (task_id, user_id, remind_at, reminder_type, reminder_offset)
+            VALUES ($1, $2, $3, 'before_deadline', '1h')
+            """,
+            task_id, user_id, remind_1h
+        )
+
+
+async def get_tasks_with_deadline(
+    db: Database,
+    hours: int = 24,
+    user_id: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Get tasks with deadline within specified hours."""
+    deadline_cutoff = datetime.now() + timedelta(hours=hours)
+
+    conditions = [
+        "is_deleted = false",
+        "status != 'completed'",
+        "deadline IS NOT NULL",
+        "deadline <= $1"
+    ]
+    params = [deadline_cutoff]
+
+    if user_id:
+        conditions.append(f"assignee_id = ${len(params) + 1}")
+        params.append(user_id)
+
+    query = f"""
+        SELECT t.*, u.display_name as assignee_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assignee_id = u.id
+        WHERE {' AND '.join(conditions)}
+        ORDER BY t.deadline ASC
+    """
+
+    tasks = await db.fetch_all(query, *params)
+    return [dict(t) for t in tasks]
