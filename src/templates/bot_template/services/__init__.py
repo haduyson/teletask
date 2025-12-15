@@ -54,6 +54,8 @@ from .task_service import (
     get_child_tasks,
     check_and_complete_group_task,
     is_group_task,
+    convert_individual_to_group,
+    update_group_assignees,
 )
 
 from .recurring_service import (
@@ -112,6 +114,8 @@ __all__ = [
     "get_child_tasks",
     "check_and_complete_group_task",
     "is_group_task",
+    "convert_individual_to_group",
+    "update_group_assignees",
     # Recurring service
     "create_recurring_template",
     "get_recurring_template",

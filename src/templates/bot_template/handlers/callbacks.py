@@ -613,7 +613,9 @@ async def handle_set_priority(query, db, db_user, task_id: str, priority: str) -
 
 
 async def handle_edit_assignee_prompt(query, db, db_user, task_id: str, context) -> None:
-    """Prompt user to enter new assignee."""
+    """Prompt user to enter new assignee(s)."""
+    from services import is_group_task, get_child_tasks
+
     task = await get_task_by_public_id(db, task_id)
 
     if not task:
@@ -624,22 +626,38 @@ async def handle_edit_assignee_prompt(query, db, db_user, task_id: str, context)
         await query.edit_message_text(ERR_NO_PERMISSION)
         return
 
+    is_group = await is_group_task(db, task_id)
+
     # Store pending edit in user_data
     context.user_data["pending_edit"] = {
         "type": "assignee",
         "task_id": task_id,
         "task_db_id": task["id"],
+        "is_group": is_group,
     }
 
-    current_assignee = task.get("assignee_name", "Không rõ")
-
-    await query.edit_message_text(
-        f"👤 SỬA NGƯỜI NHẬN {task_id}\n\n"
-        f"Người nhận hiện tại: {current_assignee}\n\n"
-        f"Hãy gửi @username hoặc Telegram ID của người nhận mới.\n"
-        f"Ví dụ: @username hoặc 123456789\n\n"
-        f"(Gửi /huy để hủy)"
-    )
+    if is_group:
+        # Get current assignees for group task
+        children = await get_child_tasks(db, task_id)
+        current_assignees = ", ".join([c.get("assignee_name", "?") for c in children])
+        await query.edit_message_text(
+            f"👥 SỬA NGƯỜI NHẬN VIỆC NHÓM {task_id}\n\n"
+            f"Người nhận hiện tại:\n{current_assignees}\n\n"
+            f"📝 Nhập danh sách người nhận mới (cách nhau bằng dấu phẩy):\n"
+            f"Ví dụ: @user1, @user2, @user3\n\n"
+            f"💡 Nhập 1 người để chuyển thành việc cá nhân\n"
+            f"(Gửi /huy để hủy)"
+        )
+    else:
+        current_assignee = task.get("assignee_name", "Không rõ")
+        await query.edit_message_text(
+            f"👤 SỬA NGƯỜI NHẬN {task_id}\n\n"
+            f"Người nhận hiện tại: {current_assignee}\n\n"
+            f"📝 Nhập người nhận mới:\n"
+            f"• 1 người: @username → việc cá nhân\n"
+            f"• Nhiều người: @user1, @user2 → việc nhóm\n\n"
+            f"(Gửi /huy để hủy)"
+        )
 
 
 async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -705,59 +723,146 @@ async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
 
         elif edit_type == "assignee":
-            # Parse assignee - @username or telegram_id
-            assignee_input = text.strip().lstrip("@")
+            from services import convert_individual_to_group, update_group_assignees
 
-            # Try to find user by username or telegram_id
-            new_assignee = None
+            # Parse multiple assignees (comma or space separated)
+            raw_inputs = [x.strip().lstrip("@") for x in text.replace(",", " ").split()]
+            raw_inputs = [x for x in raw_inputs if x]  # Remove empty
 
-            # Try as telegram_id first
-            if assignee_input.isdigit():
-                new_assignee = await db.fetch_one(
-                    "SELECT id, display_name, telegram_id FROM users WHERE telegram_id = $1",
-                    int(assignee_input)
-                )
+            if not raw_inputs:
+                await update.message.reply_text("Vui lòng nhập ít nhất 1 người nhận.")
+                return
 
-            # Try by username if not found
-            if not new_assignee:
-                new_assignee = await db.fetch_one(
-                    "SELECT id, display_name, telegram_id FROM users WHERE LOWER(username) = LOWER($1)",
-                    assignee_input
-                )
+            # Find all users
+            assignees = []
+            not_found = []
 
-            if not new_assignee:
+            for inp in raw_inputs:
+                found = None
+                if inp.isdigit():
+                    found = await db.fetch_one(
+                        "SELECT id, display_name, telegram_id, username FROM users WHERE telegram_id = $1",
+                        int(inp)
+                    )
+                if not found:
+                    found = await db.fetch_one(
+                        "SELECT id, display_name, telegram_id, username FROM users WHERE LOWER(username) = LOWER($1)",
+                        inp
+                    )
+                if found:
+                    assignees.append(dict(found))
+                else:
+                    not_found.append(inp)
+
+            if not_found:
                 await update.message.reply_text(
-                    f"Không tìm thấy người dùng '{text}'.\n\n"
+                    f"Không tìm thấy: {', '.join(not_found)}\n\n"
                     f"Người này cần đã từng tương tác với bot.\n"
-                    f"Vui lòng thử lại với @username hoặc Telegram ID đúng."
+                    f"Vui lòng thử lại."
                 )
                 return
 
-            await update_task_assignee(db, task_db_id, new_assignee["id"], db_user["id"])
-            context.user_data.pop("pending_edit", None)
+            # Remove duplicates
+            seen_ids = set()
+            unique_assignees = []
+            for a in assignees:
+                if a["id"] not in seen_ids:
+                    seen_ids.add(a["id"])
+                    unique_assignees.append(a)
+            assignees = unique_assignees
 
-            assignee_name = new_assignee.get("display_name", assignee_input)
+            is_group = pending.get("is_group", False)
+            task = await get_task_by_public_id(db, task_id)
 
-            await update.message.reply_text(
-                f"✅ Đã cập nhật người nhận {task_id}!\n\n"
-                f"👤 Người nhận mới: {assignee_name}"
-            )
+            if len(assignees) == 1:
+                # Single assignee - update or convert to individual
+                new_assignee = assignees[0]
 
-            # Notify new assignee
-            try:
-                task = await get_task_by_public_id(db, task_id)
-                if task and new_assignee["telegram_id"] != user.id:
-                    from telegram import Bot
-                    bot = context.bot
-                    await bot.send_message(
-                        chat_id=new_assignee["telegram_id"],
-                        text=f"📋 Bạn được giao việc mới!\n\n"
-                             f"ID: {task_id}\n"
-                             f"Nội dung: {task['content']}\n"
-                             f"Từ: {db_user.get('display_name', 'N/A')}"
+                if is_group:
+                    # Convert group to individual - soft delete group and children, create new P-ID
+                    from services import get_child_tasks, soft_delete_task
+
+                    children = await get_child_tasks(db, task_id)
+                    # Delete all children
+                    for child in children:
+                        await soft_delete_task(db, child["id"], db_user["id"])
+                    # Delete parent
+                    await soft_delete_task(db, task_db_id, db_user["id"])
+
+                    # Create new individual task
+                    from services import create_task
+                    new_task = await create_task(
+                        db=db,
+                        content=task["content"],
+                        creator_id=task["creator_id"],
+                        assignee_id=new_assignee["id"],
+                        deadline=task.get("deadline"),
+                        priority=task.get("priority", "normal"),
                     )
-            except Exception as e:
-                logger.warning(f"Could not notify new assignee: {e}")
+
+                    context.user_data.pop("pending_edit", None)
+                    await update.message.reply_text(
+                        f"✅ Đã chuyển việc nhóm {task_id} → việc cá nhân {new_task['public_id']}!\n\n"
+                        f"👤 Người nhận: {new_assignee.get('display_name', '?')}"
+                    )
+                else:
+                    # Simple update
+                    await update_task_assignee(db, task_db_id, new_assignee["id"], db_user["id"])
+                    context.user_data.pop("pending_edit", None)
+                    await update.message.reply_text(
+                        f"✅ Đã cập nhật người nhận {task_id}!\n\n"
+                        f"👤 Người nhận mới: {new_assignee.get('display_name', '?')}"
+                    )
+
+                # Notify new assignee
+                if new_assignee["telegram_id"] != user.id:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=new_assignee["telegram_id"],
+                            text=f"📋 Bạn được giao việc!\n\n"
+                                 f"Nội dung: {task['content']}\n"
+                                 f"Từ: {db_user.get('display_name', 'N/A')}"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not notify assignee: {e}")
+
+            else:
+                # Multiple assignees - convert to group or update group
+                if is_group:
+                    # Update existing group
+                    new_children = await update_group_assignees(db, task_id, assignees, db_user["id"])
+                    context.user_data.pop("pending_edit", None)
+
+                    assignee_names = ", ".join([a.get("display_name", "?") for a in assignees])
+                    await update.message.reply_text(
+                        f"✅ Đã cập nhật việc nhóm {task_id}!\n\n"
+                        f"👥 Người nhận: {assignee_names}"
+                    )
+                else:
+                    # Convert individual to group
+                    parent, children = await convert_individual_to_group(
+                        db, task_db_id, assignees, db_user["id"]
+                    )
+                    context.user_data.pop("pending_edit", None)
+
+                    child_ids = ", ".join([c[0]["public_id"] for c in children])
+                    await update.message.reply_text(
+                        f"✅ Đã chuyển việc cá nhân {task_id} → việc nhóm {parent['public_id']}!\n\n"
+                        f"👥 Việc con: {child_ids}"
+                    )
+
+                # Notify all assignees
+                for assignee in assignees:
+                    if assignee["telegram_id"] != user.id:
+                        try:
+                            await context.bot.send_message(
+                                chat_id=assignee["telegram_id"],
+                                text=f"📋 Bạn được giao việc!\n\n"
+                                     f"Nội dung: {task['content']}\n"
+                                     f"Từ: {db_user.get('display_name', 'N/A')}"
+                            )
+                        except Exception as e:
+                            logger.warning(f"Could not notify assignee: {e}")
 
     except Exception as e:
         logger.error(f"Error handling pending edit: {e}")

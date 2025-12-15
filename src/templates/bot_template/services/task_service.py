@@ -1134,3 +1134,191 @@ async def check_and_complete_group_task(
 async def is_group_task(db: Database, public_id: str) -> bool:
     """Check if task is a group task (G-ID)."""
     return public_id.upper().startswith("G-")
+
+
+async def convert_individual_to_group(
+    db: Database,
+    task_id: int,
+    assignees: List[Dict[str, Any]],
+    modifier_id: int,
+) -> tuple:
+    """
+    Convert individual task to group task with multiple assignees.
+
+    Args:
+        db: Database connection
+        task_id: Task ID (integer)
+        assignees: List of assignee user dicts (must have 2+ assignees)
+        modifier_id: User making the change
+
+    Returns:
+        Tuple of (group_task, list of child_tasks)
+    """
+    # Get original task
+    task = await db.fetch_one("SELECT * FROM tasks WHERE id = $1", task_id)
+    if not task:
+        return None, []
+
+    # Generate G-ID for new parent
+    group_task_id = await generate_task_id(db, prefix="G")
+
+    # Create parent task
+    parent = await db.fetch_one(
+        """
+        INSERT INTO tasks (
+            public_id, content, description, creator_id,
+            deadline, priority, is_personal, group_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, false, $7)
+        RETURNING *
+        """,
+        group_task_id,
+        task["content"],
+        task.get("description"),
+        task["creator_id"],
+        task.get("deadline"),
+        task.get("priority", "normal"),
+        task.get("group_id"),
+    )
+
+    parent_id = parent["id"]
+
+    # Create P-IDs for each assignee
+    child_tasks = []
+    for assignee in assignees:
+        personal_id = await generate_task_id(db, prefix="P")
+        child = await db.fetch_one(
+            """
+            INSERT INTO tasks (
+                public_id, group_task_id, parent_task_id, content, description,
+                creator_id, assignee_id, deadline, priority,
+                is_personal, group_id
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
+            RETURNING *
+            """,
+            personal_id,
+            group_task_id,
+            parent_id,
+            task["content"],
+            task.get("description"),
+            task["creator_id"],
+            assignee["id"],
+            task.get("deadline"),
+            task.get("priority", "normal"),
+            task.get("group_id"),
+        )
+        child_tasks.append((dict(child), assignee))
+
+        # Create reminders
+        if task.get("deadline"):
+            await create_default_reminders(db, child["id"], assignee["id"], task["deadline"])
+
+    # Soft delete original task
+    await db.execute(
+        """
+        UPDATE tasks SET
+            is_deleted = true,
+            deleted_at = NOW(),
+            deleted_by = $2
+        WHERE id = $1
+        """,
+        task_id, modifier_id
+    )
+
+    # Log history
+    await add_task_history(
+        db, parent_id, modifier_id,
+        action="converted",
+        note=f"Converted from {task['public_id']} to group task with {len(assignees)} assignees"
+    )
+
+    logger.info(f"Converted task {task['public_id']} to group task {group_task_id}")
+    return dict(parent), child_tasks
+
+
+async def update_group_assignees(
+    db: Database,
+    group_task_id: str,
+    assignees: List[Dict[str, Any]],
+    modifier_id: int,
+) -> List[tuple]:
+    """
+    Update assignees for a group task (add/remove P-IDs).
+
+    Args:
+        db: Database connection
+        group_task_id: G-ID of parent task
+        assignees: New list of assignee user dicts
+        modifier_id: User making the change
+
+    Returns:
+        List of (child_task, assignee) tuples
+    """
+    # Get parent task
+    parent = await get_task_by_public_id(db, group_task_id)
+    if not parent:
+        return []
+
+    # Get current child tasks
+    current_children = await get_child_tasks(db, group_task_id)
+    current_assignee_ids = {c["assignee_id"] for c in current_children}
+    new_assignee_ids = {a["id"] for a in assignees}
+
+    # Find assignees to add and remove
+    to_remove = current_assignee_ids - new_assignee_ids
+    to_add = [a for a in assignees if a["id"] not in current_assignee_ids]
+
+    # Soft delete removed assignees' tasks
+    for child in current_children:
+        if child["assignee_id"] in to_remove:
+            await db.execute(
+                """
+                UPDATE tasks SET
+                    is_deleted = true,
+                    deleted_at = NOW(),
+                    deleted_by = $2
+                WHERE id = $1
+                """,
+                child["id"], modifier_id
+            )
+
+    # Add new P-IDs
+    new_children = []
+    for assignee in to_add:
+        personal_id = await generate_task_id(db, prefix="P")
+        child = await db.fetch_one(
+            """
+            INSERT INTO tasks (
+                public_id, group_task_id, parent_task_id, content, description,
+                creator_id, assignee_id, deadline, priority,
+                is_personal, group_id
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
+            RETURNING *
+            """,
+            personal_id,
+            group_task_id,
+            parent["id"],
+            parent["content"],
+            parent.get("description"),
+            parent["creator_id"],
+            assignee["id"],
+            parent.get("deadline"),
+            parent.get("priority", "normal"),
+            parent.get("group_id"),
+        )
+        new_children.append((dict(child), assignee))
+
+        if parent.get("deadline"):
+            await create_default_reminders(db, child["id"], assignee["id"], parent["deadline"])
+
+    # Log history
+    await add_task_history(
+        db, parent["id"], modifier_id,
+        action="updated_assignees",
+        note=f"Added {len(to_add)}, removed {len(to_remove)} assignees"
+    )
+
+    logger.info(f"Updated group {group_task_id}: +{len(to_add)}, -{len(to_remove)}")
+    return new_children
