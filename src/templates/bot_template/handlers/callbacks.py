@@ -78,7 +78,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         elif action == "confirm":
             if parts[1] == "delete":
                 task_id = parts[2]
-                await handle_delete(query, db, db_user, task_id, context.bot)
+                await handle_delete(query, db, db_user, task_id, context.bot, context)
 
         # Cancel action
         elif action == "cancel":
@@ -87,7 +87,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Undo delete
         elif action == "task_undo":
             undo_id = int(parts[1])
-            await handle_undo(query, db, undo_id)
+            await handle_undo(query, db, undo_id, context)
 
         # List navigation
         elif action == "list":
@@ -213,23 +213,108 @@ async def handle_delete_confirm(query, task_id: str) -> None:
     )
 
 
-async def handle_delete(query, db, db_user, task_id: str, bot) -> None:
-    """Process task deletion."""
+async def handle_delete(query, db, db_user, task_id: str, bot, context=None) -> None:
+    """Process task deletion with countdown timer."""
     success, result = await process_delete(db, task_id, db_user["id"], bot)
 
     if success:
         undo_id = result
-        await query.edit_message_text(
-            f"Đã xóa việc {task_id}!\n\n"
-            f"Bấm nút bên dưới để hoàn tác (trong 30 giây).",
-            reply_markup=undo_keyboard(undo_id),
+        message = await query.edit_message_text(
+            f"🗑️ Đã xóa việc {task_id}!\n\n"
+            f"Bấm nút bên dưới để hoàn tác.",
+            reply_markup=undo_keyboard(undo_id, 30),
         )
+
+        # Schedule countdown updates if context is available
+        if context and context.job_queue:
+            chat_id = query.message.chat_id
+            message_id = query.message.message_id
+
+            # Schedule countdown updates every 5 seconds
+            for seconds in [25, 20, 15, 10, 5]:
+                context.job_queue.run_once(
+                    countdown_update_job,
+                    when=30 - seconds,
+                    data={
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "task_id": task_id,
+                        "undo_id": undo_id,
+                        "seconds": seconds,
+                    },
+                    name=f"undo_countdown_{undo_id}_{seconds}",
+                )
+
+            # Schedule final expiry message
+            context.job_queue.run_once(
+                countdown_expired_job,
+                when=30,
+                data={
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "task_id": task_id,
+                    "undo_id": undo_id,
+                },
+                name=f"undo_expired_{undo_id}",
+            )
     else:
         await query.edit_message_text(result)
 
 
-async def handle_undo(query, db, undo_id: int) -> None:
+async def countdown_update_job(context) -> None:
+    """Job to update undo button countdown."""
+    job_data = context.job.data
+    chat_id = job_data["chat_id"]
+    message_id = job_data["message_id"]
+    task_id = job_data["task_id"]
+    undo_id = job_data["undo_id"]
+    seconds = job_data["seconds"]
+
+    try:
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=f"🗑️ Đã xóa việc {task_id}!\n\n"
+                 f"Bấm nút bên dưới để hoàn tác.",
+            reply_markup=undo_keyboard(undo_id, seconds),
+        )
+    except Exception as e:
+        # Message may have been modified by user clicking undo
+        logger.debug(f"Could not update countdown: {e}")
+
+
+async def countdown_expired_job(context) -> None:
+    """Job to handle undo expiry."""
+    job_data = context.job.data
+    chat_id = job_data["chat_id"]
+    message_id = job_data["message_id"]
+    task_id = job_data["task_id"]
+    undo_id = job_data["undo_id"]
+
+    try:
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=f"🗑️ Đã xóa việc {task_id}!\n\n"
+                 f"⏰ Đã hết thời gian hoàn tác.",
+        )
+    except Exception as e:
+        logger.debug(f"Could not update expired message: {e}")
+
+
+async def handle_undo(query, db, undo_id: int, context=None) -> None:
     """Handle undo deletion."""
+    # Cancel any pending countdown jobs
+    if context and context.job_queue:
+        for seconds in [25, 20, 15, 10, 5]:
+            jobs = context.job_queue.get_jobs_by_name(f"undo_countdown_{undo_id}_{seconds}")
+            for job in jobs:
+                job.schedule_removal()
+        # Cancel expired job
+        expired_jobs = context.job_queue.get_jobs_by_name(f"undo_expired_{undo_id}")
+        for job in expired_jobs:
+            job.schedule_removal()
+
     success, result = await process_restore(db, undo_id)
 
     if success:

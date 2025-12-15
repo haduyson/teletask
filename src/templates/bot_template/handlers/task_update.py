@@ -12,6 +12,7 @@ from database import get_db
 from services import (
     get_or_create_user,
     get_task_by_public_id,
+    get_task_by_id,
     update_task_status,
     update_task_progress,
     check_and_complete_group_task,
@@ -25,6 +26,7 @@ from utils import (
     ERR_DATABASE,
     format_datetime,
     progress_keyboard,
+    mention_user,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,6 +81,7 @@ async def xong_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             results.append(f"{task_id}: Hoàn thành!")
 
             # Notify creator if different from person completing
+            user_mention = mention_user(db_user)
             if task["creator_id"] != db_user["id"]:
                 try:
                     creator = await db.fetch_one(
@@ -88,21 +91,26 @@ async def xong_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     if creator:
                         await context.bot.send_message(
                             chat_id=creator["telegram_id"],
-                            text=f"Việc {task_id} đã được hoàn thành!\n\n"
-                                 f"Nội dung: {task['content']}\n"
-                                 f"Người thực hiện: {db_user.get('display_name', 'N/A')}",
+                            text=f"✅ Việc {task_id} đã được hoàn thành\\!\n\n"
+                                 f"📋 {task['content']}\n"
+                                 f"👤 Người thực hiện: {user_mention}",
+                            parse_mode="Markdown",
                         )
                 except Exception as e:
                     logger.warning(f"Could not notify creator: {e}")
 
-            # Check if this is a P-ID and auto-complete parent G-ID
-            if task_id.startswith("P-"):
+            # Check if this is a P-ID and handle group progress
+            if task_id.startswith("P-") and task.get("group_task_id"):
+                group_task_id = task["group_task_id"]
+
+                # Check for auto-complete
                 group_result = await check_and_complete_group_task(
                     db, task["id"], db_user["id"]
                 )
+
                 if group_result:
+                    # Group completed - all members done
                     group_completions.append(group_result)
-                    # Notify creator about group completion
                     try:
                         if group_result["creator_id"] != db_user["id"]:
                             creator = await db.fetch_one(
@@ -110,14 +118,39 @@ async def xong_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                                 group_result["creator_id"]
                             )
                             if creator:
+                                progress_info = await get_group_task_progress(db, group_task_id)
                                 await context.bot.send_message(
                                     chat_id=creator["telegram_id"],
-                                    text=f"VIỆC NHÓM ĐÃ HOÀN THÀNH!\n\n"
-                                         f"{group_result['public_id']}: {group_result['content']}\n\n"
-                                         f"Tất cả {group_result.get('total_members', 'N/A')} thành viên đã hoàn thành!",
+                                    text=f"🎉 *VIỆC NHÓM ĐÃ HOÀN THÀNH\\!*\n\n"
+                                         f"📋 *{group_result['public_id']}*: {group_result['content']}\n\n"
+                                         f"✅ Tất cả {progress_info['total']}/{progress_info['total']} thành viên đã hoàn thành\\!\n"
+                                         f"👤 Người hoàn thành cuối: {user_mention}",
+                                    parse_mode="Markdown",
                                 )
                     except Exception as e:
                         logger.warning(f"Could not notify group completion: {e}")
+                else:
+                    # Group not yet complete - notify progress
+                    try:
+                        progress_info = await get_group_task_progress(db, group_task_id)
+                        parent_task = await get_task_by_public_id(db, group_task_id)
+
+                        if parent_task and parent_task["creator_id"] != db_user["id"]:
+                            creator = await db.fetch_one(
+                                "SELECT telegram_id FROM users WHERE id = $1",
+                                parent_task["creator_id"]
+                            )
+                            if creator:
+                                await context.bot.send_message(
+                                    chat_id=creator["telegram_id"],
+                                    text=f"📊 *CẬP NHẬT TIẾN ĐỘ VIỆC NHÓM*\n\n"
+                                         f"📋 *{group_task_id}*: {parent_task['content']}\n\n"
+                                         f"✅ {progress_info['completed']}/{progress_info['total']} người đã hoàn thành\\!\n"
+                                         f"👤 Vừa hoàn thành: {user_mention}",
+                                    parse_mode="Markdown",
+                                )
+                    except Exception as e:
+                        logger.warning(f"Could not notify group progress: {e}")
 
         # Response
         if len(task_ids) == 1 and results[0].endswith("Hoàn thành!"):

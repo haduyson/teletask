@@ -17,16 +17,16 @@ logger = logging.getLogger(__name__)
 TZ = pytz.timezone("Asia/Ho_Chi_Minh")
 
 
-async def generate_task_id(db: Database, is_group: bool = False) -> str:
+async def generate_task_id(db: Database, prefix: str = "T") -> str:
     """
     Generate unique task ID.
 
     Args:
         db: Database connection
-        is_group: True for group task (G-xxx), False for personal (P-xxx)
+        prefix: Task ID prefix - T (regular), G (group parent), P (group child)
 
     Returns:
-        Task ID like P-0001 or G-0001
+        Task ID like T-0001, G-0001, or P-0001
     """
     # Get and increment counter
     result = await db.fetch_one(
@@ -39,7 +39,6 @@ async def generate_task_id(db: Database, is_group: bool = False) -> str:
     )
 
     counter = int(result["value"]) if result else 1
-    prefix = "G" if is_group else "P"
 
     return f"{prefix}-{counter:04d}"
 
@@ -75,7 +74,12 @@ async def create_task(
         Created task record
     """
     # Generate unique public ID
-    public_id = await generate_task_id(db, is_group=not is_personal)
+    # T-xxx for regular tasks, keep existing logic for group children (P-xxx)
+    prefix = "T"
+    if group_task_id:
+        # This is a child task of a group (P-xxx)
+        prefix = "P"
+    public_id = await generate_task_id(db, prefix=prefix)
 
     task = await db.fetch_one(
         """
@@ -222,6 +226,76 @@ async def get_user_created_tasks(
         AND t.assignee_id != $1
         AND t.is_deleted = false
         ORDER BY t.created_at DESC
+        LIMIT $2 OFFSET $3
+        """,
+        user_id, limit, offset
+    )
+    return [dict(t) for t in tasks]
+
+
+async def get_user_received_tasks(
+    db: Database,
+    user_id: int,
+    limit: int = 20,
+    offset: int = 0,
+    include_completed: bool = False,
+) -> List[Dict[str, Any]]:
+    """Get tasks assigned TO the user BY others (not self-created)."""
+    status_filter = "" if include_completed else "AND t.status != 'completed'"
+    tasks = await db.fetch_all(
+        f"""
+        SELECT t.*, c.display_name as creator_name
+        FROM tasks t
+        LEFT JOIN users c ON t.creator_id = c.id
+        WHERE t.assignee_id = $1
+        AND t.creator_id != $1
+        AND t.is_deleted = false
+        {status_filter}
+        ORDER BY
+            CASE t.priority
+                WHEN 'urgent' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'normal' THEN 3
+                WHEN 'low' THEN 4
+            END,
+            t.deadline ASC NULLS LAST,
+            t.created_at DESC
+        LIMIT $2 OFFSET $3
+        """,
+        user_id, limit, offset
+    )
+    return [dict(t) for t in tasks]
+
+
+async def get_all_user_related_tasks(
+    db: Database,
+    user_id: int,
+    limit: int = 20,
+    offset: int = 0,
+    include_completed: bool = False,
+) -> List[Dict[str, Any]]:
+    """Get ALL tasks related to user (created, received, or assigned)."""
+    status_filter = "" if include_completed else "AND t.status != 'completed'"
+    tasks = await db.fetch_all(
+        f"""
+        SELECT t.*,
+            u.display_name as assignee_name,
+            c.display_name as creator_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assignee_id = u.id
+        LEFT JOIN users c ON t.creator_id = c.id
+        WHERE (t.assignee_id = $1 OR t.creator_id = $1)
+        AND t.is_deleted = false
+        {status_filter}
+        ORDER BY
+            CASE t.priority
+                WHEN 'urgent' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'normal' THEN 3
+                WHEN 'low' THEN 4
+            END,
+            t.deadline ASC NULLS LAST,
+            t.created_at DESC
         LIMIT $2 OFFSET $3
         """,
         user_id, limit, offset
@@ -560,7 +634,7 @@ async def create_group_task(
         Tuple of (parent_task, list of (child_task, assignee))
     """
     # Generate G-ID for parent
-    group_task_id = await generate_task_id(db, is_group=True)
+    group_task_id = await generate_task_id(db, prefix="G")
 
     # Create parent task (container)
     parent = await db.fetch_one(
@@ -593,7 +667,7 @@ async def create_group_task(
     parent_id = parent["id"]  # Integer ID for FK
 
     for assignee in assignees:
-        personal_id = await generate_task_id(db, is_group=False)
+        personal_id = await generate_task_id(db, prefix="P")
 
         task = await db.fetch_one(
             """

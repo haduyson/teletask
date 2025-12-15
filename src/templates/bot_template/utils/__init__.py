@@ -73,6 +73,8 @@ from .formatters import (
     format_stats_overview,
     format_weekly_report,
     format_monthly_report,
+    mention_user,
+    mention_user_html,
 )
 
 from .keyboards import (
@@ -154,6 +156,8 @@ __all__ = [
     "format_stats_overview",
     "format_weekly_report",
     "format_monthly_report",
+    "mention_user",
+    "mention_user_html",
     # Keyboards
     "task_actions_keyboard",
     "task_detail_keyboard",

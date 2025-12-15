@@ -18,6 +18,8 @@ from services import (
     is_group_task,
     get_group_task_progress,
     get_child_tasks,
+    get_user_received_tasks,
+    get_all_user_related_tasks,
 )
 from utils import (
     ERR_TASK_NOT_FOUND,
@@ -30,21 +32,26 @@ from utils import (
     format_datetime,
     format_status,
     get_status_icon,
+    mention_user,
 )
 
 logger = logging.getLogger(__name__)
 
 
 def format_group_task_detail(task: dict, progress_info: dict, child_tasks: list) -> str:
-    """Format group task (G-ID) detail with aggregated progress."""
+    """Format group task (G-ID) detail with aggregated progress (Markdown format)."""
     status_icon = get_status_icon(task)  # Pass full dict, not just status string
 
-    # Build member progress list
+    # Build member progress list with mention tags
     member_lines = []
     for child in child_tasks:
         child_icon = get_status_icon(child)  # Pass full dict
-        assignee_name = child.get("assignee_name", "N/A")
-        member_lines.append(f"  {child_icon} {child['public_id']}: {assignee_name}")
+        # Create mention link for assignee
+        assignee_mention = mention_user({
+            "display_name": child.get("assignee_name", "N/A"),
+            "telegram_id": child.get("telegram_id"),
+        })
+        member_lines.append(f"  {child_icon} {child['public_id']}: {assignee_mention}")
 
     members_text = "\n".join(member_lines) if member_lines else "  Không có thành viên"
 
@@ -126,7 +133,7 @@ async def xemviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 msg = format_group_task_detail(task, progress_info, child_tasks)
                 keyboard = group_task_keyboard(task_id, can_edit=can_edit)
 
-                await update.message.reply_text(msg, reply_markup=keyboard)
+                await update.message.reply_text(msg, reply_markup=keyboard, parse_mode="Markdown")
             else:
                 # Regular task (T-ID or P-ID)
                 can_edit = task["creator_id"] == db_user["id"]
@@ -151,12 +158,12 @@ async def xemviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
                 await update.message.reply_text(msg, reply_markup=keyboard)
         else:
-            # List all user tasks
-            tasks = await get_user_tasks(db, db_user["id"], limit=10)
+            # List ALL user-related tasks (created, received, assigned)
+            tasks = await get_all_user_related_tasks(db, db_user["id"], limit=20)
 
             if not tasks:
                 await update.message.reply_text(
-                    "Bạn chưa có việc nào.\n\nTạo việc mới: /taoviec [nội dung]"
+                    "Bạn chưa có việc nào.\n\nTạo việc mới: /taoviec [nội dung]\nXem việc được giao: /viecdanhan\nXem việc đã giao: /viecdagiao"
                 )
                 return
 
@@ -165,7 +172,7 @@ async def xemviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
             msg = format_task_list(
                 tasks=tasks,
-                title="DANH SÁCH VIỆC CỦA BẠN",
+                title="TẤT CẢ VIỆC LIÊN QUAN",
                 page=1,
                 total=total,
             )
@@ -296,6 +303,49 @@ async def timviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await update.message.reply_text(ERR_DATABASE)
 
 
+async def viecdanhan_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /viecdanhan or /viectoinhan command.
+    List tasks assigned TO the user BY others.
+    """
+    user = update.effective_user
+    if not user:
+        return
+
+    try:
+        db = get_db()
+        db_user = await get_or_create_user(db, user)
+        user_id = db_user["id"]
+
+        # Get tasks assigned to user by others
+        tasks = await get_user_received_tasks(db, user_id, limit=20)
+
+        if not tasks:
+            await update.message.reply_text(
+                "Bạn chưa được giao việc nào.\n\nXem tất cả việc: /xemviec"
+            )
+            return
+
+        total = len(tasks)
+        total_pages = (total + 9) // 10
+
+        msg = format_task_list(
+            tasks=tasks,
+            title="VIỆC ĐƯỢC GIAO CHO BẠN",
+            page=1,
+            total=total,
+        )
+
+        await update.message.reply_text(
+            msg,
+            reply_markup=task_list_with_pagination(tasks, 1, total_pages, "received"),
+        )
+
+    except Exception as e:
+        logger.error(f"Error in viecdanhan_command: {e}")
+        await update.message.reply_text(ERR_DATABASE)
+
+
 async def deadline_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Handle /deadline [hours] command.
@@ -341,7 +391,10 @@ async def deadline_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 def get_handlers() -> list:
     """Return list of handlers for this module."""
     return [
+        # /xemviec - View ALL related tasks (created, received, assigned)
         CommandHandler(["xemviec", "vic"], xemviec_command),
+        # /viecdanhan, /viectoinhan - Tasks assigned TO you BY others
+        CommandHandler(["viecdanhan", "viectoinhan"], viecdanhan_command),
         CommandHandler(["viecnhom", "viecduan"], viecnhom_command),
         CommandHandler("timviec", timviec_command),
         CommandHandler("deadline", deadline_command),

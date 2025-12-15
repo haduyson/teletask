@@ -176,6 +176,33 @@ def truncate(text: str, max_length: int = 50) -> str:
     return text[: max_length - 3] + "..."
 
 
+def mention_user(user: Dict[str, Any]) -> str:
+    """
+    Create Telegram mention link for user.
+    Format: [Display Name](tg://user?id=telegram_id)
+    Works even if user has no username.
+    """
+    display_name = user.get("display_name") or user.get("username") or "User"
+    telegram_id = user.get("telegram_id")
+
+    if telegram_id:
+        return f"[{display_name}](tg://user?id={telegram_id})"
+    return display_name
+
+
+def mention_user_html(user: Dict[str, Any]) -> str:
+    """
+    Create Telegram mention link for user (HTML format).
+    Format: <a href="tg://user?id=telegram_id">Display Name</a>
+    """
+    display_name = user.get("display_name") or user.get("username") or "User"
+    telegram_id = user.get("telegram_id")
+
+    if telegram_id:
+        return f'<a href="tg://user?id={telegram_id}">{display_name}</a>'
+    return display_name
+
+
 def escape_markdown(text: str) -> str:
     """Escape markdown special characters."""
     chars = ["_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]

@@ -4,6 +4,7 @@ Handles /giaoviec command for assigning tasks to others
 Supports multi-assignee with G-ID/P-ID system
 """
 
+import re
 import logging
 from typing import List, Dict, Any
 from telegram import Update
@@ -35,32 +36,45 @@ from utils import (
     format_datetime,
     format_priority,
     task_actions_keyboard,
+    mention_user,
 )
 
 logger = logging.getLogger(__name__)
 
-# Group task messages
-MSG_GROUP_TASK_CREATED = """
-Đã tạo việc nhóm thành công!
+# Messages with mention support (Markdown format)
+MSG_TASK_ASSIGNED_MD = """✅ *Đã giao việc thành công\\!*
 
-{task_id}: {content}
-Người nhận: {assignees}
-Deadline: {deadline}
+📋 *{task_id}*: {content}
+👤 Giao cho: {assignee}
+📅 Deadline: {deadline}
 
-Theo dõi tiến độ: /xemviec {task_id}
-"""
+Xem chi tiết: /xemviec {task_id}"""
 
-MSG_GROUP_TASK_RECEIVED = """
-Bạn có việc mới!
+MSG_TASK_RECEIVED_MD = """📬 *Bạn có việc mới\\!*
 
-{task_id}: {content}
-Từ: {creator}
-Deadline: {deadline}
-Thành viên: {total_members} người
+📋 *{task_id}*: {content}
+👤 Từ: {creator}
+📅 Deadline: {deadline}
 
-Đây là việc của bạn: {personal_id}
-Trả lời /xong {personal_id} khi hoàn thành.
-"""
+Trả lời /xong {task_id} khi hoàn thành\\."""
+
+MSG_GROUP_TASK_CREATED_MD = """✅ *Đã tạo việc nhóm thành công\\!*
+
+📋 *{task_id}*: {content}
+👥 Người nhận: {assignees}
+📅 Deadline: {deadline}
+
+Theo dõi tiến độ: /xemviec {task_id}"""
+
+MSG_GROUP_TASK_RECEIVED_MD = """📬 *Bạn có việc nhóm mới\\!*
+
+📋 *{task_id}*: {content}
+👤 Từ: {creator}
+📅 Deadline: {deadline}
+👥 Thành viên: {total_members} người
+
+🔖 Việc của bạn: *{personal_id}*
+Trả lời /xong {personal_id} khi hoàn thành\\."""
 
 
 async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -114,9 +128,54 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 await add_group_member(db, group_id, assignee["id"], "member")
             assignees.append(assignee)
 
-        # Method 2: @mentions in text (supports multiple)
-        if not assignees and text:
-            mentions, remaining_text = extract_mentions(text)
+        # Method 2: Process message entities for mentions
+        # - text_mention: for users without username (has user_id in entity)
+        # - mention: for @username mentions (username is in message text)
+        mention_ranges = []
+        if message.entities:
+            full_text = message.text or ""
+            for entity in message.entities:
+                # Text mention - user clicked on name (most reliable, has user_id)
+                if entity.type == "text_mention" and entity.user:
+                    mentioned_user = await get_or_create_user(db, entity.user)
+                    if not any(a["id"] == mentioned_user["id"] for a in assignees):
+                        assignees.append(mentioned_user)
+                        if is_group:
+                            await add_group_member(db, group_id, mentioned_user["id"], "member")
+                    mention_ranges.append((entity.offset, entity.offset + entity.length))
+                    logger.info(f"Found text_mention: {entity.user.first_name} (id={entity.user.id})")
+
+                # @mention - username mention
+                elif entity.type == "mention":
+                    # Extract username from message text (includes @)
+                    username_with_at = full_text[entity.offset:entity.offset + entity.length]
+                    username = username_with_at.lstrip("@")
+                    found_user = await get_user_by_username(db, username)
+                    if found_user:
+                        if not any(a["id"] == found_user["id"] for a in assignees):
+                            assignees.append(found_user)
+                            if is_group:
+                                await add_group_member(db, group_id, found_user["id"], "member")
+                        mention_ranges.append((entity.offset, entity.offset + entity.length))
+                        logger.info(f"Found @mention entity: @{username} (id={found_user['id']})")
+                    else:
+                        logger.warning(f"User @{username} not found in database")
+
+        # Remove mentions from remaining text
+        if mention_ranges:
+            # Work with full message text, then extract content
+            full_text = message.text or ""
+            # Sort by offset descending to remove from end first
+            for start, end in sorted(mention_ranges, reverse=True):
+                full_text = full_text[:start] + full_text[end:]
+            # Remove command and clean up
+            remaining_text = re.sub(r"^/\w+\s*", "", full_text).strip()
+            remaining_text = re.sub(r"\s+", " ", remaining_text)
+
+        # Method 3: @mentions in text (supports multiple)
+        # Also process @mentions even if text_mentions were found
+        if remaining_text:
+            mentions, remaining_text = extract_mentions(remaining_text)
             if mentions:
                 not_found = []
                 for username in mentions:
@@ -127,6 +186,7 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                             assignees.append(found_user)
                             if is_group:
                                 await add_group_member(db, group_id, found_user["id"], "member")
+                            logger.info(f"Found @mention: @{username} (id={found_user['id']})")
                     else:
                         not_found.append(username)
 
@@ -183,27 +243,31 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 group_id=group_id,
             )
 
-            # Send confirmation to creator
+            # Send confirmation to creator with mention
+            assignee_mention = mention_user(assignee)
             await message.reply_text(
-                MSG_TASK_ASSIGNED.format(
+                MSG_TASK_ASSIGNED_MD.format(
                     task_id=task["public_id"],
                     content=content,
-                    assignee=assignee.get("display_name", "N/A"),
+                    assignee=assignee_mention,
                     deadline=deadline_str,
-                )
+                ),
+                parse_mode="Markdown",
             )
 
-            # Notify assignee
+            # Notify assignee with mention
             try:
                 if assignee.get("telegram_id") != user.id:
+                    creator_mention = mention_user(db_user)
                     await context.bot.send_message(
                         chat_id=assignee["telegram_id"],
-                        text=MSG_TASK_RECEIVED.format(
+                        text=MSG_TASK_RECEIVED_MD.format(
                             task_id=task["public_id"],
                             content=content,
-                            creator=db_user.get("display_name", "N/A"),
+                            creator=creator_mention,
                             deadline=deadline_str,
                         ),
+                        parse_mode="Markdown",
                         reply_markup=task_actions_keyboard(task["public_id"]),
                     )
             except Exception as e:
@@ -225,20 +289,22 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 group_id=group_id,
             )
 
-            # Format assignee names
-            assignee_names = ", ".join(a.get("display_name", "N/A") for a in assignees)
+            # Format assignee mentions
+            assignee_mentions = ", ".join(mention_user(a) for a in assignees)
 
-            # Send confirmation to creator
+            # Send confirmation to creator with mentions
             await message.reply_text(
-                MSG_GROUP_TASK_CREATED.format(
+                MSG_GROUP_TASK_CREATED_MD.format(
                     task_id=group_task["public_id"],
                     content=content,
-                    assignees=assignee_names,
+                    assignees=assignee_mentions,
                     deadline=deadline_str,
-                )
+                ),
+                parse_mode="Markdown",
             )
 
             # Notify each assignee with their personal P-ID
+            creator_mention = mention_user(db_user)
             for i, assignee in enumerate(assignees):
                 try:
                     if assignee.get("telegram_id") != user.id:
@@ -246,14 +312,15 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                         child_task, _ = child_tasks[i]
                         await context.bot.send_message(
                             chat_id=assignee["telegram_id"],
-                            text=MSG_GROUP_TASK_RECEIVED.format(
+                            text=MSG_GROUP_TASK_RECEIVED_MD.format(
                                 task_id=group_task["public_id"],
                                 content=content,
-                                creator=db_user.get("display_name", "N/A"),
+                                creator=creator_mention,
                                 deadline=deadline_str,
                                 total_members=len(assignees),
                                 personal_id=child_task["public_id"],
                             ),
+                            parse_mode="Markdown",
                             reply_markup=task_actions_keyboard(child_task["public_id"]),
                         )
                 except Exception as e:
@@ -318,5 +385,6 @@ def get_handlers() -> list:
     """Return list of handlers for this module."""
     return [
         CommandHandler("giaoviec", giaoviec_command),
-        CommandHandler("viecdagiao", viecdagiao_command),
+        # /viecdagiao and /viectoigiao - Tasks you assigned to others
+        CommandHandler(["viecdagiao", "viectoigiao"], viecdagiao_command),
     ]

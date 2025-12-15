@@ -90,10 +90,10 @@ def progress_keyboard(task_id: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(buttons)
 
 
-def undo_keyboard(undo_id: int) -> InlineKeyboardMarkup:
-    """Create undo button for deleted tasks."""
+def undo_keyboard(undo_id: int, seconds_remaining: int = 30) -> InlineKeyboardMarkup:
+    """Create undo button for deleted tasks with countdown."""
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("↩️ Hoàn tác", callback_data=f"task_undo:{undo_id}")]
+        [InlineKeyboardButton(f"↩️ Hoàn tác ({seconds_remaining}s)", callback_data=f"task_undo:{undo_id}")]
     ])
 
 
