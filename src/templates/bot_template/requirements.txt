@@ -23,6 +23,9 @@ aiohttp>=3.9.0
 # Timezone
 pytz>=2024.1
 
+# Date utilities
+python-dateutil>=2.8.0
+
 # Cache (optional)
 redis>=5.0.0
 

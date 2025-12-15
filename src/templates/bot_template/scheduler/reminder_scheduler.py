@@ -54,6 +54,14 @@ class ReminderScheduler:
             replace_existing=True,
         )
 
+        # Process recurring task templates every 5 minutes
+        self.scheduler.add_job(
+            self._process_recurring_templates,
+            CronTrigger(minute="*/5"),
+            id="process_recurring",
+            replace_existing=True,
+        )
+
         self.scheduler.start()
         logger.info("Reminder scheduler started")
 
@@ -94,6 +102,40 @@ class ReminderScheduler:
             )
         except Exception as e:
             logger.error(f"Error cleaning up undo records: {e}")
+
+    async def _process_recurring_templates(self) -> None:
+        """Process recurring templates and generate tasks."""
+        from services.recurring_service import get_due_templates, generate_task_from_template
+
+        try:
+            templates = await get_due_templates(self.db)
+
+            for template in templates:
+                try:
+                    task = await generate_task_from_template(self.db, template)
+                    if task:
+                        # Notify creator about new task
+                        try:
+                            await self.bot.send_message(
+                                chat_id=template["creator_telegram_id"],
+                                text=(
+                                    f"🔄 *VIỆC LẶP LẠI TỰ ĐỘNG*\n\n"
+                                    f"Đã tạo việc mới từ mẫu `{template['public_id']}`:\n\n"
+                                    f"🆔 `{task['public_id']}`\n"
+                                    f"📝 {task['content'][:100]}\n"
+                                    f"⏰ Deadline: {task['deadline'].strftime('%H:%M %d/%m') if task.get('deadline') else 'N/A'}"
+                                ),
+                                parse_mode="Markdown",
+                            )
+                        except Exception as notify_err:
+                            logger.warning(f"Failed to notify recurring task creation: {notify_err}")
+
+                        logger.info(f"Generated task {task['public_id']} from template {template['public_id']}")
+                except Exception as e:
+                    logger.error(f"Failed to generate task from template {template.get('public_id')}: {e}")
+
+        except Exception as e:
+            logger.error(f"Error processing recurring templates: {e}")
 
     def add_custom_reminder(
         self,

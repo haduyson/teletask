@@ -59,6 +59,8 @@ async def post_init(application: Application) -> None:
         ("xoa", "Xóa việc"),
         ("timviec", "Tìm kiếm việc"),
         ("nhacviec", "Đặt nhắc việc tự động"),
+        ("vieclaplai", "Tạo việc lặp lại tự động"),
+        ("danhsachvieclaplai", "Xem danh sách việc lặp lại"),
         ("thongke", "Xem thống kê tổng hợp"),
         ("thongketuan", "Xem thống kê tuần này"),
         ("thongkethang", "Xem thống kê tháng này"),

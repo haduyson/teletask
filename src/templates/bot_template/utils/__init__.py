@@ -31,6 +31,7 @@ from .messages import (
     MSG_REMINDER_OVERDUE,
     # Error messages
     ERR_NO_PERMISSION,
+    ERR_NOT_FOUND,
     ERR_TASK_NOT_FOUND,
     ERR_USER_NOT_FOUND,
     ERR_INVALID_TIME,
@@ -115,6 +116,7 @@ __all__ = [
     "MSG_REMINDER_1H",
     "MSG_REMINDER_OVERDUE",
     "ERR_NO_PERMISSION",
+    "ERR_NOT_FOUND",
     "ERR_TASK_NOT_FOUND",
     "ERR_USER_NOT_FOUND",
     "ERR_INVALID_TIME",

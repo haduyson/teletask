@@ -34,10 +34,18 @@ Ví dụ:
   /giaoviec @nam Chuẩn bị slide 10h ngày mai
   /giaoviec @linh Review code trước 17h
 
+VIỆC LẶP LẠI:
+/vieclaplai [nội dung] [lịch lặp]
+Ví dụ:
+  /vieclaplai Họp đội hàng tuần thứ 2 9h
+  /vieclaplai Báo cáo hàng tháng ngày 1 10h
+  /vieclaplai Kiểm tra email hàng ngày 8h
+/danhsachvieclaplai - Xem việc lặp lại
+
 QUẢN LÝ VIỆC:
 /vieccanhan - Danh sách việc của bạn
 /viecdagiao - Việc bạn giao cho người khác
-/vic [mã việc] - Xem chi tiết việc
+/xemviec [mã việc] - Xem chi tiết việc
 
 CẬP NHẬT TRẠNG THÁI:
 /xong [mã việc] - Đánh dấu hoàn thành
@@ -168,6 +176,7 @@ Vui lòng cập nhật trạng thái.
 
 # Error messages
 ERR_NO_PERMISSION = "Bạn không có quyền thực hiện thao tác này."
+ERR_NOT_FOUND = "Không tìm thấy mục được yêu cầu."
 ERR_TASK_NOT_FOUND = "Không tìm thấy việc {task_id}."
 ERR_USER_NOT_FOUND = "Không tìm thấy người dùng {user}."
 ERR_INVALID_TIME = "Không thể hiểu thời gian '{time}'. Vui lòng dùng định dạng: 10h30, ngày mai 14h, 15/12 9h..."

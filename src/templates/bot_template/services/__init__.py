@@ -43,6 +43,18 @@ from .task_service import (
     get_tasks_with_deadline,
 )
 
+from .recurring_service import (
+    create_recurring_template,
+    get_recurring_template,
+    get_user_recurring_templates,
+    get_due_templates,
+    generate_task_from_template,
+    toggle_recurring_template,
+    delete_recurring_template,
+    parse_recurrence_pattern,
+    format_recurrence_description,
+)
+
 # Reminder and notification services are imported directly where needed
 # to avoid circular imports with scheduler
 
@@ -74,4 +86,14 @@ __all__ = [
     "add_task_history",
     "create_default_reminders",
     "get_tasks_with_deadline",
+    # Recurring service
+    "create_recurring_template",
+    "get_recurring_template",
+    "get_user_recurring_templates",
+    "get_due_templates",
+    "generate_task_from_template",
+    "toggle_recurring_template",
+    "delete_recurring_template",
+    "parse_recurrence_pattern",
+    "format_recurrence_description",
 ]
