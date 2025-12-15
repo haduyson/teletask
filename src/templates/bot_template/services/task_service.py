@@ -40,6 +40,7 @@ async def generate_task_id(db: Database, prefix: str = "P") -> str:
 
     counter = int(result["value"]) if result else 1
 
+    # Format: P0001-P9999 (4 digits), P10000+ (grows automatically, unlimited)
     return f"{prefix}{counter:04d}"
 
 
