@@ -42,7 +42,7 @@ from utils import (
 logger = logging.getLogger(__name__)
 
 # Messages with mention support (Markdown format)
-MSG_TASK_ASSIGNED_MD = """✅ *Đã giao việc thành công\\!*
+MSG_TASK_ASSIGNED_MD = """✅ *Đã giao việc thành công!*
 
 📋 *{task_id}*: {content}
 👤 Giao cho: {assignee}
@@ -50,15 +50,15 @@ MSG_TASK_ASSIGNED_MD = """✅ *Đã giao việc thành công\\!*
 
 Xem chi tiết: /xemviec {task_id}"""
 
-MSG_TASK_RECEIVED_MD = """📬 *Bạn có việc mới\\!*
+MSG_TASK_RECEIVED_MD = """📬 *Bạn có việc mới!*
 
 📋 *{task_id}*: {content}
 👤 Từ: {creator}
 📅 Deadline: {deadline}
 
-Trả lời /xong {task_id} khi hoàn thành\\."""
+Trả lời /xong {task_id} khi hoàn thành."""
 
-MSG_GROUP_TASK_CREATED_MD = """✅ *Đã tạo việc nhóm thành công\\!*
+MSG_GROUP_TASK_CREATED_MD = """✅ *Đã tạo việc nhóm thành công!*
 
 📋 *{task_id}*: {content}
 👥 Người nhận: {assignees}
@@ -66,7 +66,7 @@ MSG_GROUP_TASK_CREATED_MD = """✅ *Đã tạo việc nhóm thành công\\!*
 
 Theo dõi tiến độ: /xemviec {task_id}"""
 
-MSG_GROUP_TASK_RECEIVED_MD = """📬 *Bạn có việc nhóm mới\\!*
+MSG_GROUP_TASK_RECEIVED_MD = """📬 *Bạn có việc nhóm mới!*
 
 📋 *{task_id}*: {content}
 👤 Từ: {creator}
@@ -74,7 +74,7 @@ MSG_GROUP_TASK_RECEIVED_MD = """📬 *Bạn có việc nhóm mới\\!*
 👥 Thành viên: {total_members} người
 
 🔖 Việc của bạn: *{personal_id}*
-Trả lời /xong {personal_id} khi hoàn thành\\."""
+Trả lời /xong {personal_id} khi hoàn thành."""
 
 
 async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
