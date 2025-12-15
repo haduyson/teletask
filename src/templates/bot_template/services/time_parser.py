@@ -11,6 +11,7 @@ Supported formats:
 """
 
 import re
+import calendar
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 import pytz
@@ -80,6 +81,24 @@ class VietnameseTimeParser:
                 matched_parts.append(keyword)
                 text_lower = text_lower.replace(keyword, " ")
                 break
+
+        # Step 1.5: Try special keywords (cuối tuần, cuối tháng)
+        if not result_dt:
+            # "cuối tuần" = Saturday of current week
+            if re.search(r"cuối\s*tuần", text_lower):
+                days_until_saturday = (5 - now.weekday()) % 7
+                if days_until_saturday == 0 and now.hour >= 12:
+                    days_until_saturday = 7  # Next Saturday if already past noon on Saturday
+                result_dt = now + timedelta(days=days_until_saturday)
+                matched_parts.append("cuối tuần")
+                text_lower = re.sub(r"cuối\s*tuần", " ", text_lower)
+
+            # "cuối tháng" = last day of current month
+            elif re.search(r"cuối\s*tháng", text_lower):
+                last_day = calendar.monthrange(now.year, now.month)[1]
+                result_dt = self.TZ.localize(datetime(now.year, now.month, last_day))
+                matched_parts.append("cuối tháng")
+                text_lower = re.sub(r"cuối\s*tháng", " ", text_lower)
 
         # Step 2: Try weekday patterns
         if not result_dt:

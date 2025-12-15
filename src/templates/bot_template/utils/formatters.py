@@ -97,25 +97,26 @@ def format_datetime(dt: Optional[datetime], relative: bool = False) -> str:
     else:
         dt = dt.astimezone(TZ)
 
+    # Format: HH:MM [weekday], DD/MM/YYYY
+    time_str = dt.strftime("%H:%M")
+    date_str = dt.strftime("%d/%m/%Y")
+    weekdays = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN"]
+    weekday_str = weekdays[dt.weekday()]
+
     if relative:
         now = datetime.now(TZ)
         delta = (dt.date() - now.date()).days
 
-        time_str = dt.strftime("%H:%M")
-
         if delta == 0:
-            return f"Hôm nay {time_str}"
+            return f"{time_str} Hôm nay, {date_str}"
         elif delta == 1:
-            return f"Ngày mai {time_str}"
+            return f"{time_str} Ngày mai, {date_str}"
         elif delta == 2:
-            return f"Ngày kia {time_str}"
+            return f"{time_str} Ngày kia, {date_str}"
         elif delta == -1:
-            return f"Hôm qua {time_str}"
-        elif 2 < delta <= 7:
-            weekdays = ["Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN"]
-            return f"{weekdays[dt.weekday()]} {time_str}"
+            return f"{time_str} Hôm qua, {date_str}"
 
-    return dt.strftime("%H:%M %d/%m/%Y")
+    return f"{time_str} {weekday_str}, {date_str}"
 
 
 def format_task_detail(task: Dict[str, Any]) -> str:
