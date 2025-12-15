@@ -67,6 +67,8 @@ docs/research/*
 logs.txt
 test-ck
 __pycache__
+.venv/
+*.pyc
 prompt.md
 
 # Gemini CLI settings (symlink to .claude/.mcp.json)
