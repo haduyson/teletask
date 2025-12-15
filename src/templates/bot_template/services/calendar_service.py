@@ -91,31 +91,32 @@ async def exchange_code_for_tokens(code: str) -> Optional[Dict[str, str]]:
         return None
 
     try:
-        client_config = {
-            "web": {
-                "client_id": GOOGLE_CLIENT_ID,
-                "client_secret": GOOGLE_CLIENT_SECRET,
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-                "redirect_uris": [GOOGLE_REDIRECT_URI],
-            }
+        import requests
+
+        # Direct token exchange via HTTP (more flexible with scopes)
+        token_url = "https://oauth2.googleapis.com/token"
+        data = {
+            "code": code,
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
+            "redirect_uri": GOOGLE_REDIRECT_URI,
+            "grant_type": "authorization_code",
         }
 
-        flow = Flow.from_client_config(
-            client_config,
-            scopes=SCOPES,
-            redirect_uri=GOOGLE_REDIRECT_URI
-        )
+        response = requests.post(token_url, data=data)
 
-        flow.fetch_token(code=code)
-        credentials = flow.credentials
+        if response.status_code != 200:
+            logger.error(f"Token exchange failed: {response.text}")
+            return None
+
+        tokens = response.json()
 
         return {
-            "access_token": credentials.token,
-            "refresh_token": credentials.refresh_token,
-            "token_uri": credentials.token_uri,
-            "client_id": credentials.client_id,
-            "client_secret": credentials.client_secret,
+            "access_token": tokens.get("access_token"),
+            "refresh_token": tokens.get("refresh_token"),
+            "token_uri": token_url,
+            "client_id": GOOGLE_CLIENT_ID,
+            "client_secret": GOOGLE_CLIENT_SECRET,
         }
 
     except Exception as e:
