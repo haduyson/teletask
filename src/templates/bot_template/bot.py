@@ -16,6 +16,7 @@ import asyncio
 import logging
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -108,6 +109,7 @@ async def main() -> None:
     # Register handlers
     from handlers import register_handlers
     register_handlers(application)
+    application.add_error_handler(error_handler)
     logger.info("Handlers registered")
 
     # Initialize reminder scheduler
@@ -120,6 +122,45 @@ async def main() -> None:
     # Initialize report scheduler (uses same APScheduler instance)
     init_report_scheduler(reminder_scheduler.scheduler, application.bot, db)
     logger.info("Report scheduler started")
+
+    # Initialize monitoring (optional - only if admin IDs configured)
+    health_server = None
+    alert_service = None
+    resource_monitor = None
+    start_time = datetime.now()
+
+    admin_ids_str = os.getenv('ADMIN_IDS', '')
+    admin_ids = [int(x.strip()) for x in admin_ids_str.split(',') if x.strip().isdigit()]
+
+    if admin_ids:
+        try:
+            from monitoring import HealthCheckServer, AlertService, ResourceMonitor
+
+            # Initialize alert service
+            alert_service = AlertService(application.bot, admin_ids)
+
+            # Start health check server
+            health_port = int(os.getenv('HEALTH_PORT', 8080))
+            health_server = HealthCheckServer(application, db, port=health_port)
+            await health_server.start()
+
+            # Start resource monitor
+            resource_monitor = ResourceMonitor(db, alert_service, start_time)
+            await resource_monitor.start()
+
+            # Store alert service in bot_data for error handler
+            application.bot_data['alert_service'] = alert_service
+
+            # Send startup alert
+            await alert_service.alert_bot_start()
+
+            logger.info(f"Monitoring started (health port: {health_port}, admins: {len(admin_ids)})")
+        except ImportError as e:
+            logger.warning(f"Monitoring not available: {e}")
+        except Exception as e:
+            logger.error(f"Failed to start monitoring: {e}")
+    else:
+        logger.info("Monitoring disabled (no ADMIN_IDS configured)")
 
     logger.info("Bot initialization complete")
     logger.info("Starting polling...")
@@ -144,6 +185,13 @@ async def main() -> None:
     finally:
         # Cleanup
         logger.info("Shutting down...")
+
+        # Stop monitoring
+        if resource_monitor:
+            await resource_monitor.stop()
+        if health_server:
+            await health_server.stop()
+
         from scheduler import stop_scheduler
         stop_scheduler()
         await application.updater.stop()
@@ -151,6 +199,27 @@ async def main() -> None:
         await application.shutdown()
         await close_database()
         logger.info("Cleanup complete")
+
+
+async def error_handler(update, context):
+    """Global error handler with monitoring integration."""
+    error = context.error
+    logger.error(f"Error handling update: {error}", exc_info=error)
+
+    # Record error metric
+    try:
+        from monitoring.metrics import record_error
+        record_error(type(error).__name__)
+    except ImportError:
+        pass
+
+    # Send alert to admins
+    alert_service = context.application.bot_data.get('alert_service')
+    if alert_service:
+        try:
+            await alert_service.alert_bot_crash(error)
+        except Exception as e:
+            logger.warning(f"Failed to send error alert: {e}")
 
 
 if __name__ == "__main__":

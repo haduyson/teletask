@@ -1,14 +1,30 @@
 """
-Monitoring Module
-Prometheus metrics and health checks
-
-Monitoring components will be implemented in Phase 10:
-- health_check.py: HTTP /health endpoint
-- metrics.py: Prometheus metrics
-- alert.py: Telegram admin alerts
+Monitoring Package
+Health checks, metrics, alerts, and resource monitoring
 """
 
-# TODO: Phase 10 - Export monitoring components
-# from .health_check import start_health_server
-# from .metrics import setup_metrics
-# from .alert import send_admin_alert
+from monitoring.health_check import HealthCheckServer
+from monitoring.alert import AlertService
+from monitoring.resource_monitor import ResourceMonitor
+from monitoring.metrics import (
+    record_task_created,
+    record_task_completed,
+    record_message_received,
+    record_message_sent,
+    record_error,
+    update_system_metrics,
+    get_metrics_text,
+)
+
+__all__ = [
+    "HealthCheckServer",
+    "AlertService",
+    "ResourceMonitor",
+    "record_task_created",
+    "record_task_completed",
+    "record_message_received",
+    "record_message_sent",
+    "record_error",
+    "update_system_metrics",
+    "get_metrics_text",
+]
