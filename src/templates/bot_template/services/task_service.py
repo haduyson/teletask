@@ -407,6 +407,111 @@ async def update_task_progress(
     return await update_task_status(db, task_id, status, user_id, progress)
 
 
+async def update_task_content(
+    db: Database,
+    task_id: int,
+    content: str,
+    user_id: int,
+) -> Optional[Dict[str, Any]]:
+    """Update task content."""
+    current = await get_task_by_id(db, task_id)
+    if not current:
+        return None
+
+    old_content = current["content"]
+
+    task = await db.fetch_one(
+        """
+        UPDATE tasks SET
+            content = $2,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+        """,
+        task_id, content
+    )
+
+    await add_task_history(
+        db, task_id, user_id,
+        action="content_changed",
+        field_name="content",
+        old_value=old_content[:100] if old_content else None,
+        new_value=content[:100]
+    )
+
+    return dict(task) if task else None
+
+
+async def update_task_deadline(
+    db: Database,
+    task_id: int,
+    deadline: Optional[datetime],
+    user_id: int,
+) -> Optional[Dict[str, Any]]:
+    """Update task deadline."""
+    current = await get_task_by_id(db, task_id)
+    if not current:
+        return None
+
+    old_deadline = current.get("deadline")
+
+    task = await db.fetch_one(
+        """
+        UPDATE tasks SET
+            deadline = $2,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+        """,
+        task_id, deadline
+    )
+
+    await add_task_history(
+        db, task_id, user_id,
+        action="deadline_changed",
+        field_name="deadline",
+        old_value=str(old_deadline) if old_deadline else None,
+        new_value=str(deadline) if deadline else None
+    )
+
+    return dict(task) if task else None
+
+
+async def update_task_priority(
+    db: Database,
+    task_id: int,
+    priority: str,
+    user_id: int,
+) -> Optional[Dict[str, Any]]:
+    """Update task priority."""
+    current = await get_task_by_id(db, task_id)
+    if not current:
+        return None
+
+    old_priority = current.get("priority", "normal")
+
+    task = await db.fetch_one(
+        """
+        UPDATE tasks SET
+            priority = $2,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+        """,
+        task_id, priority
+    )
+
+    await add_task_history(
+        db, task_id, user_id,
+        action="priority_changed",
+        field_name="priority",
+        old_value=old_priority,
+        new_value=priority
+    )
+
+    return dict(task) if task else None
+
+
 async def soft_delete_task(
     db: Database,
     task_id: int,

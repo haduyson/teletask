@@ -198,3 +198,38 @@ def confirm_keyboard(action: str, item_id: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton("❌ Huỷ", callback_data=f"cancel:{action}:{item_id}"),
         ]
     ])
+
+
+def edit_menu_keyboard(task_id: str) -> InlineKeyboardMarkup:
+    """Create edit options menu."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📝 Sửa nội dung", callback_data=f"edit_content:{task_id}"),
+        ],
+        [
+            InlineKeyboardButton("📅 Sửa deadline", callback_data=f"edit_deadline:{task_id}"),
+        ],
+        [
+            InlineKeyboardButton("🔔 Sửa độ ưu tiên", callback_data=f"edit_priority:{task_id}"),
+        ],
+        [
+            InlineKeyboardButton("« Quay lại", callback_data=f"task_detail:{task_id}"),
+        ],
+    ])
+
+
+def edit_priority_keyboard(task_id: str) -> InlineKeyboardMarkup:
+    """Create priority edit buttons."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("⬇️ Thấp", callback_data=f"set_priority:{task_id}:low"),
+            InlineKeyboardButton("➡️ Bình thường", callback_data=f"set_priority:{task_id}:normal"),
+        ],
+        [
+            InlineKeyboardButton("⬆️ Cao", callback_data=f"set_priority:{task_id}:high"),
+            InlineKeyboardButton("🚨 Khẩn cấp", callback_data=f"set_priority:{task_id}:urgent"),
+        ],
+        [
+            InlineKeyboardButton("« Quay lại", callback_data=f"task_edit:{task_id}"),
+        ],
+    ])

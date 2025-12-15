@@ -5,7 +5,7 @@ Routes inline button callbacks to appropriate handlers
 
 import logging
 from telegram import Update
-from telegram.ext import ContextTypes, CallbackQueryHandler
+from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
 
 from database import get_db
 from services import (
@@ -13,7 +13,11 @@ from services import (
     get_task_by_public_id,
     update_task_status,
     update_task_progress,
+    update_task_content,
+    update_task_deadline,
+    update_task_priority,
     restore_task,
+    parse_vietnamese_time,
 )
 from utils import (
     MSG_TASK_RESTORED,
@@ -21,9 +25,13 @@ from utils import (
     ERR_NO_PERMISSION,
     ERR_UNDO_EXPIRED,
     format_task_detail,
+    format_datetime,
+    format_priority,
     task_detail_keyboard,
     progress_keyboard,
     undo_keyboard,
+    edit_menu_keyboard,
+    edit_priority_keyboard,
 )
 from handlers.task_delete import process_delete, process_restore
 
@@ -98,6 +106,32 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # No-op (for pagination display)
         elif action == "noop":
             pass
+
+        # Task edit menu
+        elif action == "task_edit":
+            task_id = parts[1]
+            await handle_edit_menu(query, db, db_user, task_id)
+
+        # Edit content prompt
+        elif action == "edit_content":
+            task_id = parts[1]
+            await handle_edit_content_prompt(query, db, db_user, task_id, context)
+
+        # Edit deadline prompt
+        elif action == "edit_deadline":
+            task_id = parts[1]
+            await handle_edit_deadline_prompt(query, db, db_user, task_id, context)
+
+        # Edit priority menu
+        elif action == "edit_priority":
+            task_id = parts[1]
+            await handle_edit_priority_menu(query, db, db_user, task_id)
+
+        # Set priority
+        elif action == "set_priority":
+            task_id = parts[1]
+            priority = parts[2]
+            await handle_set_priority(query, db, db_user, task_id, priority)
 
         # Statistics callbacks
         elif action in ("stats_weekly", "stats_monthly"):
@@ -364,8 +398,206 @@ async def handle_list_page(query, db, db_user, list_type: str, page: int) -> Non
     )
 
 
+async def handle_edit_menu(query, db, db_user, task_id: str) -> None:
+    """Show edit options menu."""
+    task = await get_task_by_public_id(db, task_id)
+
+    if not task:
+        await query.edit_message_text(ERR_TASK_NOT_FOUND.format(task_id=task_id))
+        return
+
+    # Only creator can edit
+    if task["creator_id"] != db_user["id"]:
+        await query.edit_message_text(ERR_NO_PERMISSION)
+        return
+
+    current_deadline = format_datetime(task.get("deadline")) if task.get("deadline") else "Không có"
+    current_priority = format_priority(task.get("priority", "normal"))
+
+    await query.edit_message_text(
+        f"✏️ SỬA VIỆC {task_id}\n\n"
+        f"📝 Nội dung: {task['content'][:100]}{'...' if len(task['content']) > 100 else ''}\n"
+        f"📅 Deadline: {current_deadline}\n"
+        f"🔔 Độ ưu tiên: {current_priority}\n\n"
+        f"Chọn mục cần sửa:",
+        reply_markup=edit_menu_keyboard(task_id),
+    )
+
+
+async def handle_edit_content_prompt(query, db, db_user, task_id: str, context) -> None:
+    """Prompt user to enter new content."""
+    task = await get_task_by_public_id(db, task_id)
+
+    if not task:
+        await query.edit_message_text(ERR_TASK_NOT_FOUND.format(task_id=task_id))
+        return
+
+    if task["creator_id"] != db_user["id"]:
+        await query.edit_message_text(ERR_NO_PERMISSION)
+        return
+
+    # Store pending edit in user_data
+    context.user_data["pending_edit"] = {
+        "type": "content",
+        "task_id": task_id,
+        "task_db_id": task["id"],
+    }
+
+    await query.edit_message_text(
+        f"📝 SỬA NỘI DUNG {task_id}\n\n"
+        f"Nội dung hiện tại:\n{task['content']}\n\n"
+        f"Hãy gửi nội dung mới cho việc này.\n"
+        f"(Gửi /huy để hủy)"
+    )
+
+
+async def handle_edit_deadline_prompt(query, db, db_user, task_id: str, context) -> None:
+    """Prompt user to enter new deadline."""
+    task = await get_task_by_public_id(db, task_id)
+
+    if not task:
+        await query.edit_message_text(ERR_TASK_NOT_FOUND.format(task_id=task_id))
+        return
+
+    if task["creator_id"] != db_user["id"]:
+        await query.edit_message_text(ERR_NO_PERMISSION)
+        return
+
+    # Store pending edit in user_data
+    context.user_data["pending_edit"] = {
+        "type": "deadline",
+        "task_id": task_id,
+        "task_db_id": task["id"],
+    }
+
+    current_deadline = format_datetime(task.get("deadline")) if task.get("deadline") else "Không có"
+
+    await query.edit_message_text(
+        f"📅 SỬA DEADLINE {task_id}\n\n"
+        f"Deadline hiện tại: {current_deadline}\n\n"
+        f"Hãy gửi deadline mới.\n"
+        f"Ví dụ: ngày mai 9h, thứ 6, 25/12, cuối tuần\n\n"
+        f"(Gửi /huy để hủy, gửi 'xóa' để xóa deadline)"
+    )
+
+
+async def handle_edit_priority_menu(query, db, db_user, task_id: str) -> None:
+    """Show priority selection menu."""
+    task = await get_task_by_public_id(db, task_id)
+
+    if not task:
+        await query.edit_message_text(ERR_TASK_NOT_FOUND.format(task_id=task_id))
+        return
+
+    if task["creator_id"] != db_user["id"]:
+        await query.edit_message_text(ERR_NO_PERMISSION)
+        return
+
+    current_priority = format_priority(task.get("priority", "normal"))
+
+    await query.edit_message_text(
+        f"🔔 SỬA ĐỘ ƯU TIÊN {task_id}\n\n"
+        f"Độ ưu tiên hiện tại: {current_priority}\n\n"
+        f"Chọn độ ưu tiên mới:",
+        reply_markup=edit_priority_keyboard(task_id),
+    )
+
+
+async def handle_set_priority(query, db, db_user, task_id: str, priority: str) -> None:
+    """Set task priority."""
+    task = await get_task_by_public_id(db, task_id)
+
+    if not task:
+        await query.edit_message_text(ERR_TASK_NOT_FOUND.format(task_id=task_id))
+        return
+
+    if task["creator_id"] != db_user["id"]:
+        await query.edit_message_text(ERR_NO_PERMISSION)
+        return
+
+    await update_task_priority(db, task["id"], priority, db_user["id"])
+
+    priority_text = format_priority(priority)
+
+    await query.edit_message_text(
+        f"✅ Đã cập nhật độ ưu tiên {task_id}!\n\n"
+        f"🔔 Độ ưu tiên mới: {priority_text}"
+    )
+
+
+async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle text messages for pending edits (content/deadline)."""
+    pending = context.user_data.get("pending_edit")
+    if not pending:
+        return  # No pending edit, let other handlers process
+
+    user = update.effective_user
+    text = update.message.text.strip()
+
+    # Handle cancel
+    if text.lower() in ("/huy", "/cancel", "hủy"):
+        context.user_data.pop("pending_edit", None)
+        await update.message.reply_text("Đã hủy chỉnh sửa.")
+        return
+
+    try:
+        db = get_db()
+        db_user = await get_or_create_user(db, user)
+        task_id = pending["task_id"]
+        task_db_id = pending["task_db_id"]
+        edit_type = pending["type"]
+
+        if edit_type == "content":
+            # Update content
+            if len(text) < 3:
+                await update.message.reply_text("Nội dung quá ngắn. Vui lòng nhập ít nhất 3 ký tự.")
+                return
+
+            await update_task_content(db, task_db_id, text, db_user["id"])
+            context.user_data.pop("pending_edit", None)
+
+            await update.message.reply_text(
+                f"✅ Đã cập nhật nội dung {task_id}!\n\n"
+                f"📝 Nội dung mới: {text[:200]}{'...' if len(text) > 200 else ''}"
+            )
+
+        elif edit_type == "deadline":
+            # Handle remove deadline
+            if text.lower() in ("xóa", "xoa", "remove", "clear"):
+                await update_task_deadline(db, task_db_id, None, db_user["id"])
+                context.user_data.pop("pending_edit", None)
+                await update.message.reply_text(f"✅ Đã xóa deadline của {task_id}!")
+                return
+
+            # Parse deadline
+            deadline = parse_vietnamese_time(text)
+            if not deadline:
+                await update.message.reply_text(
+                    "Không hiểu được thời gian. Vui lòng thử lại.\n\n"
+                    "Ví dụ: ngày mai 9h, thứ 6, 25/12, cuối tuần"
+                )
+                return
+
+            await update_task_deadline(db, task_db_id, deadline, db_user["id"])
+            context.user_data.pop("pending_edit", None)
+
+            deadline_str = format_datetime(deadline)
+            await update.message.reply_text(
+                f"✅ Đã cập nhật deadline {task_id}!\n\n"
+                f"📅 Deadline mới: {deadline_str}"
+            )
+
+    except Exception as e:
+        logger.error(f"Error handling pending edit: {e}")
+        await update.message.reply_text("Lỗi hệ thống. Vui lòng thử lại.")
+
+
 def get_handlers() -> list:
-    """Return callback query handler."""
+    """Return callback query handler and pending edit message handler."""
     return [
         CallbackQueryHandler(callback_router),
+        MessageHandler(
+            filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
+            handle_pending_edit
+        ),
     ]

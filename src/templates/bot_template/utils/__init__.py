@@ -86,6 +86,8 @@ from .keyboards import (
     task_list_with_pagination,
     priority_keyboard,
     confirm_keyboard,
+    edit_menu_keyboard,
+    edit_priority_keyboard,
 )
 
 from .validators import (
@@ -167,6 +169,8 @@ __all__ = [
     "task_list_with_pagination",
     "priority_keyboard",
     "confirm_keyboard",
+    "edit_menu_keyboard",
+    "edit_priority_keyboard",
     # Validators
     "extract_mentions",
     "validate_task_content",
