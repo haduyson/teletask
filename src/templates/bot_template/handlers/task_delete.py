@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 
 async def xoa_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
-    Handle /xoa [task_id] command.
-    Delete task with confirmation and 30-second undo.
+    Handle /xoa or /xoaviec [task_id] command.
+    Delete task with confirmation and 10-second undo.
     """
     user = update.effective_user
     if not user:
@@ -131,5 +131,5 @@ async def process_restore(db, undo_id: int) -> tuple:
 def get_handlers() -> list:
     """Return list of handlers for this module."""
     return [
-        CommandHandler("xoa", xoa_command),
+        CommandHandler(["xoa", "xoaviec"], xoa_command),
     ]
