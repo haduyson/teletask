@@ -16,6 +16,7 @@ from services import (
     update_task_content,
     update_task_deadline,
     update_task_priority,
+    update_task_assignee,
     restore_task,
     parse_vietnamese_time,
 )
@@ -132,6 +133,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             task_id = parts[1]
             priority = parts[2]
             await handle_set_priority(query, db, db_user, task_id, priority)
+
+        # Edit assignee prompt
+        elif action == "edit_assignee":
+            task_id = parts[1]
+            await handle_edit_assignee_prompt(query, db, db_user, task_id, context)
 
         # Statistics callbacks
         elif action in ("stats_weekly", "stats_monthly"):
@@ -525,6 +531,36 @@ async def handle_set_priority(query, db, db_user, task_id: str, priority: str) -
     )
 
 
+async def handle_edit_assignee_prompt(query, db, db_user, task_id: str, context) -> None:
+    """Prompt user to enter new assignee."""
+    task = await get_task_by_public_id(db, task_id)
+
+    if not task:
+        await query.edit_message_text(ERR_TASK_NOT_FOUND.format(task_id=task_id))
+        return
+
+    if task["creator_id"] != db_user["id"]:
+        await query.edit_message_text(ERR_NO_PERMISSION)
+        return
+
+    # Store pending edit in user_data
+    context.user_data["pending_edit"] = {
+        "type": "assignee",
+        "task_id": task_id,
+        "task_db_id": task["id"],
+    }
+
+    current_assignee = task.get("assignee_name", "Không rõ")
+
+    await query.edit_message_text(
+        f"👤 SỬA NGƯỜI NHẬN {task_id}\n\n"
+        f"Người nhận hiện tại: {current_assignee}\n\n"
+        f"Hãy gửi @username hoặc Telegram ID của người nhận mới.\n"
+        f"Ví dụ: @username hoặc 123456789\n\n"
+        f"(Gửi /huy để hủy)"
+    )
+
+
 async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle text messages for pending edits (content/deadline)."""
     pending = context.user_data.get("pending_edit")
@@ -586,6 +622,61 @@ async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE
                 f"✅ Đã cập nhật deadline {task_id}!\n\n"
                 f"📅 Deadline mới: {deadline_str}"
             )
+
+        elif edit_type == "assignee":
+            # Parse assignee - @username or telegram_id
+            assignee_input = text.strip().lstrip("@")
+
+            # Try to find user by username or telegram_id
+            new_assignee = None
+
+            # Try as telegram_id first
+            if assignee_input.isdigit():
+                new_assignee = await db.fetch_one(
+                    "SELECT id, display_name, telegram_id FROM users WHERE telegram_id = $1",
+                    int(assignee_input)
+                )
+
+            # Try by username if not found
+            if not new_assignee:
+                new_assignee = await db.fetch_one(
+                    "SELECT id, display_name, telegram_id FROM users WHERE LOWER(username) = LOWER($1)",
+                    assignee_input
+                )
+
+            if not new_assignee:
+                await update.message.reply_text(
+                    f"Không tìm thấy người dùng '{text}'.\n\n"
+                    f"Người này cần đã từng tương tác với bot.\n"
+                    f"Vui lòng thử lại với @username hoặc Telegram ID đúng."
+                )
+                return
+
+            await update_task_assignee(db, task_db_id, new_assignee["id"], db_user["id"])
+            context.user_data.pop("pending_edit", None)
+
+            assignee_name = new_assignee.get("display_name", assignee_input)
+
+            await update.message.reply_text(
+                f"✅ Đã cập nhật người nhận {task_id}!\n\n"
+                f"👤 Người nhận mới: {assignee_name}"
+            )
+
+            # Notify new assignee
+            try:
+                task = await get_task_by_public_id(db, task_id)
+                if task and new_assignee["telegram_id"] != user.id:
+                    from telegram import Bot
+                    bot = context.bot
+                    await bot.send_message(
+                        chat_id=new_assignee["telegram_id"],
+                        text=f"📋 Bạn được giao việc mới!\n\n"
+                             f"ID: {task_id}\n"
+                             f"Nội dung: {task['content']}\n"
+                             f"Từ: {db_user.get('display_name', 'N/A')}"
+                    )
+            except Exception as e:
+                logger.warning(f"Could not notify new assignee: {e}")
 
     except Exception as e:
         logger.error(f"Error handling pending edit: {e}")

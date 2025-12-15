@@ -512,6 +512,55 @@ async def update_task_priority(
     return dict(task) if task else None
 
 
+async def update_task_assignee(
+    db: Database,
+    task_id: int,
+    new_assignee_id: int,
+    user_id: int,
+) -> Optional[Dict[str, Any]]:
+    """Update task assignee."""
+    current = await get_task_by_id(db, task_id)
+    if not current:
+        return None
+
+    old_assignee_id = current.get("assignee_id")
+
+    # Get old assignee name
+    old_assignee = await db.fetch_one(
+        "SELECT display_name FROM users WHERE id = $1",
+        old_assignee_id
+    )
+    old_name = old_assignee["display_name"] if old_assignee else str(old_assignee_id)
+
+    # Get new assignee name
+    new_assignee = await db.fetch_one(
+        "SELECT display_name FROM users WHERE id = $1",
+        new_assignee_id
+    )
+    new_name = new_assignee["display_name"] if new_assignee else str(new_assignee_id)
+
+    task = await db.fetch_one(
+        """
+        UPDATE tasks SET
+            assignee_id = $2,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+        """,
+        task_id, new_assignee_id
+    )
+
+    await add_task_history(
+        db, task_id, user_id,
+        action="assignee_changed",
+        field_name="assignee_id",
+        old_value=old_name,
+        new_value=new_name
+    )
+
+    return dict(task) if task else None
+
+
 async def soft_delete_task(
     db: Database,
     task_id: int,
