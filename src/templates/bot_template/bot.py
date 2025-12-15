@@ -66,6 +66,7 @@ async def post_init(application: Application) -> None:
         ("thongketuan", "Xem thống kê tuần này"),
         ("thongkethang", "Xem thống kê tháng này"),
         ("thongtin", "Xem thông tin tài khoản"),
+        ("lichnhatky", "Kết nối Google Calendar"),
     ]
     await application.bot.set_my_commands(commands)
     logger.info("Bot commands registered")
@@ -162,6 +163,15 @@ async def main() -> None:
     else:
         logger.info("Monitoring disabled (no ADMIN_IDS configured)")
 
+    # Start OAuth callback server (for Google Calendar)
+    oauth_runner = None
+    if os.getenv("GOOGLE_CALENDAR_ENABLED", "false").lower() == "true":
+        try:
+            from services.oauth_callback import start_oauth_server
+            oauth_runner = await start_oauth_server()
+        except Exception as e:
+            logger.warning(f"OAuth callback server not started: {e}")
+
     logger.info("Bot initialization complete")
     logger.info("Starting polling...")
 
@@ -191,6 +201,11 @@ async def main() -> None:
             await resource_monitor.stop()
         if health_server:
             await health_server.stop()
+
+        # Stop OAuth server
+        if oauth_runner:
+            from services.oauth_callback import stop_oauth_server
+            await stop_oauth_server(oauth_runner)
 
         from scheduler import stop_scheduler
         stop_scheduler()

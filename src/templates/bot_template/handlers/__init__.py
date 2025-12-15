@@ -11,6 +11,7 @@ Handlers:
 - task_delete: /xoa
 - reminder: /nhacviec, /xemnhac
 - recurring_task: /vieclaplai, /danhsachvieclaplai
+- calendar: /lichnhatky
 - callbacks: Inline button handlers
 """
 
@@ -25,6 +26,7 @@ from .task_delete import get_handlers as get_task_delete_handlers
 from .reminder import get_handlers as get_reminder_handlers
 from .statistics import get_handlers as get_statistics_handlers
 from .recurring_task import get_handlers as get_recurring_handlers
+from .calendar import get_handlers as get_calendar_handlers
 from .callbacks import get_handlers as get_callback_handlers
 
 
@@ -64,6 +66,10 @@ def register_handlers(application: Application) -> None:
 
     # Recurring task handlers
     for handler in get_recurring_handlers():
+        application.add_handler(handler)
+
+    # Calendar handlers
+    for handler in get_calendar_handlers():
         application.add_handler(handler)
 
     # Callback handlers (must be last)

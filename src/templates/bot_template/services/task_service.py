@@ -112,6 +112,34 @@ async def create_task(
     if deadline:
         await create_default_reminders(db, task["id"], assignee_id, deadline)
 
+    # Auto-sync to Google Calendar if enabled
+    if deadline:
+        try:
+            from services.calendar_service import (
+                is_calendar_enabled,
+                get_user_token_data,
+                create_calendar_event,
+            )
+            if is_calendar_enabled():
+                token_data = await get_user_token_data(db, assignee_id)
+                if token_data:
+                    event_id = await create_calendar_event(
+                        token_data,
+                        public_id,
+                        content,
+                        deadline,
+                        description or "",
+                        priority,
+                    )
+                    if event_id:
+                        await db.execute(
+                            "UPDATE tasks SET google_event_id = $2 WHERE id = $1",
+                            task["id"], event_id
+                        )
+                        logger.info(f"Task {public_id} synced to calendar: {event_id}")
+        except Exception as e:
+            logger.warning(f"Calendar sync failed for task {public_id}: {e}")
+
     logger.info(f"Created task {public_id}: {content[:30]}...")
     return dict(task)
 
@@ -379,6 +407,26 @@ async def update_task_status(
         new_value=status
     )
 
+    # Update Google Calendar event if completed
+    if status == "completed" and current.get("google_event_id"):
+        try:
+            from services.calendar_service import (
+                is_calendar_enabled,
+                get_user_token_data,
+                update_calendar_event,
+            )
+            if is_calendar_enabled():
+                token_data = await get_user_token_data(db, current.get("assignee_id"))
+                if token_data and current.get("deadline"):
+                    await update_calendar_event(
+                        token_data, current["google_event_id"],
+                        current["public_id"], current["content"],
+                        current["deadline"], current.get("description", ""),
+                        current.get("priority", "normal"), "completed",
+                    )
+        except Exception as e:
+            logger.warning(f"Calendar update failed for task {task_id}: {e}")
+
     return dict(task) if task else None
 
 
@@ -473,6 +521,45 @@ async def update_task_deadline(
         old_value=str(old_deadline) if old_deadline else None,
         new_value=str(deadline) if deadline else None
     )
+
+    # Sync to Google Calendar
+    if deadline and task:
+        try:
+            from services.calendar_service import (
+                is_calendar_enabled,
+                get_user_token_data,
+                create_calendar_event,
+                update_calendar_event,
+            )
+            if is_calendar_enabled():
+                assignee_id = current.get("assignee_id")
+                token_data = await get_user_token_data(db, assignee_id)
+                if token_data:
+                    event_id = current.get("google_event_id")
+                    if event_id:
+                        # Update existing event
+                        await update_calendar_event(
+                            token_data, event_id,
+                            current["public_id"], current["content"],
+                            deadline, current.get("description", ""),
+                            current.get("priority", "normal"),
+                            current.get("status", "pending"),
+                        )
+                    else:
+                        # Create new event
+                        new_event_id = await create_calendar_event(
+                            token_data,
+                            current["public_id"], current["content"],
+                            deadline, current.get("description", ""),
+                            current.get("priority", "normal"),
+                        )
+                        if new_event_id:
+                            await db.execute(
+                                "UPDATE tasks SET google_event_id = $2 WHERE id = $1",
+                                task_id, new_event_id
+                            )
+        except Exception as e:
+            logger.warning(f"Calendar sync failed for task {task_id}: {e}")
 
     return dict(task) if task else None
 
