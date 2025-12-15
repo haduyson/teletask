@@ -139,6 +139,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             task_id = parts[1]
             await handle_edit_assignee_prompt(query, db, db_user, task_id, context)
 
+        # Back to task list
+        elif action == "task_list":
+            if parts[1] == "back":
+                await handle_list_page(query, db, db_user, "all", 1)
+
         # Statistics callbacks
         elif action in ("stats_weekly", "stats_monthly"):
             from handlers.statistics import handle_stats_callback
