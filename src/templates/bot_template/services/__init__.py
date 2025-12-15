@@ -41,6 +41,12 @@ from .task_service import (
     add_task_history,
     create_default_reminders,
     get_tasks_with_deadline,
+    # Group task functions (G-ID/P-ID system)
+    create_group_task,
+    get_group_task_progress,
+    get_child_tasks,
+    check_and_complete_group_task,
+    is_group_task,
 )
 
 from .recurring_service import (
@@ -86,6 +92,12 @@ __all__ = [
     "add_task_history",
     "create_default_reminders",
     "get_tasks_with_deadline",
+    # Group task functions
+    "create_group_task",
+    "get_group_task_progress",
+    "get_child_tasks",
+    "check_and_complete_group_task",
+    "is_group_task",
     # Recurring service
     "create_recurring_template",
     "get_recurring_template",

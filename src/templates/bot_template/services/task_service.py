@@ -7,10 +7,14 @@ import json
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+import pytz
 
 from database.connection import Database
 
 logger = logging.getLogger(__name__)
+
+# Timezone
+TZ = pytz.timezone("Asia/Ho_Chi_Minh")
 
 
 async def generate_task_id(db: Database, is_group: bool = False) -> str:
@@ -472,7 +476,7 @@ async def create_default_reminders(
     """Create default reminders for a task."""
     # Reminder 24h before
     remind_24h = deadline - timedelta(hours=24)
-    if remind_24h > datetime.now():
+    if remind_24h > datetime.now(TZ):
         await db.execute(
             """
             INSERT INTO reminders (task_id, user_id, remind_at, reminder_type, reminder_offset)
@@ -483,7 +487,7 @@ async def create_default_reminders(
 
     # Reminder 1h before
     remind_1h = deadline - timedelta(hours=1)
-    if remind_1h > datetime.now():
+    if remind_1h > datetime.now(TZ):
         await db.execute(
             """
             INSERT INTO reminders (task_id, user_id, remind_at, reminder_type, reminder_offset)
@@ -499,7 +503,7 @@ async def get_tasks_with_deadline(
     user_id: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Get tasks with deadline within specified hours."""
-    deadline_cutoff = datetime.now() + timedelta(hours=hours)
+    deadline_cutoff = datetime.now(TZ) + timedelta(hours=hours)
 
     conditions = [
         "is_deleted = false",
@@ -523,3 +527,264 @@ async def get_tasks_with_deadline(
 
     tasks = await db.fetch_all(query, *params)
     return [dict(t) for t in tasks]
+
+
+# ============================================
+# GROUP TASK FUNCTIONS (G-ID / P-ID System)
+# ============================================
+
+async def create_group_task(
+    db: Database,
+    content: str,
+    creator_id: int,
+    assignees: List[Dict[str, Any]],
+    deadline: Optional[datetime] = None,
+    priority: str = "normal",
+    group_id: Optional[int] = None,
+    description: str = None,
+) -> tuple:
+    """
+    Create group task with individual assignments.
+
+    Args:
+        db: Database connection
+        content: Task content
+        creator_id: Creator user ID
+        assignees: List of assignee user dicts
+        deadline: Task deadline
+        priority: Task priority
+        group_id: Telegram group ID
+        description: Optional description
+
+    Returns:
+        Tuple of (parent_task, list of (child_task, assignee))
+    """
+    # Generate G-ID for parent
+    group_task_id = await generate_task_id(db, is_group=True)
+
+    # Create parent task (container)
+    parent = await db.fetch_one(
+        """
+        INSERT INTO tasks (
+            public_id, content, description, creator_id,
+            deadline, priority, is_personal, group_id
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, false, $7)
+        RETURNING *
+        """,
+        group_task_id,
+        content,
+        description,
+        creator_id,
+        deadline,
+        priority,
+        group_id,
+    )
+
+    # Log history for parent
+    await add_task_history(
+        db, parent["id"], creator_id,
+        action="created",
+        note=f"Group task created with {len(assignees)} assignees"
+    )
+
+    # Create individual P-IDs for each assignee
+    individual_tasks = []
+    parent_id = parent["id"]  # Integer ID for FK
+
+    for assignee in assignees:
+        personal_id = await generate_task_id(db, is_group=False)
+
+        task = await db.fetch_one(
+            """
+            INSERT INTO tasks (
+                public_id, group_task_id, parent_task_id, content, description,
+                creator_id, assignee_id, deadline, priority,
+                is_personal, group_id
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, false, $10)
+            RETURNING *
+            """,
+            personal_id,
+            group_task_id,
+            parent_id,
+            content,
+            description,
+            creator_id,
+            assignee["id"],
+            deadline,
+            priority,
+            group_id,
+        )
+
+        # Log history
+        await add_task_history(
+            db, task["id"], creator_id,
+            action="created",
+            note=f"Individual task for {assignee.get('display_name', 'user')}"
+        )
+
+        # Create reminders
+        if deadline:
+            await create_default_reminders(db, task["id"], assignee["id"], deadline)
+
+        individual_tasks.append((dict(task), assignee))
+
+    logger.info(f"Created group task {group_task_id} with {len(assignees)} P-IDs")
+    return dict(parent), individual_tasks
+
+
+async def get_group_task_progress(
+    db: Database,
+    group_task_id: str,
+) -> Dict[str, Any]:
+    """
+    Get aggregated progress for group task.
+
+    Args:
+        db: Database connection
+        group_task_id: Parent G-ID
+
+    Returns:
+        Dict with total, completed, progress, members, is_complete
+    """
+    result = await db.fetch_one(
+        """
+        SELECT
+            COUNT(*) as total,
+            COUNT(*) FILTER (WHERE status = 'completed') as completed,
+            COALESCE(AVG(progress), 0) as avg_progress
+        FROM tasks
+        WHERE group_task_id = $1 AND is_deleted = false
+        """,
+        group_task_id,
+    )
+
+    # Get individual member status
+    members = await db.fetch_all(
+        """
+        SELECT t.public_id, t.status, t.progress, t.completed_at,
+               u.display_name as assignee_name, u.telegram_id
+        FROM tasks t
+        JOIN users u ON t.assignee_id = u.id
+        WHERE t.group_task_id = $1 AND t.is_deleted = false
+        ORDER BY t.created_at
+        """,
+        group_task_id,
+    )
+
+    total = result["total"] or 0
+    completed = result["completed"] or 0
+
+    return {
+        "total": total,
+        "completed": completed,
+        "progress": int(result["avg_progress"] or 0),
+        "members": [dict(m) for m in members],
+        "is_complete": total > 0 and completed == total,
+    }
+
+
+async def get_child_tasks(
+    db: Database,
+    group_task_id: str,
+) -> List[Dict[str, Any]]:
+    """
+    Get all child P-ID tasks under a G-ID.
+
+    Args:
+        db: Database connection
+        group_task_id: Parent G-ID
+
+    Returns:
+        List of child task records
+    """
+    tasks = await db.fetch_all(
+        """
+        SELECT t.*, u.display_name as assignee_name, u.telegram_id
+        FROM tasks t
+        JOIN users u ON t.assignee_id = u.id
+        WHERE t.group_task_id = $1 AND t.is_deleted = false
+        ORDER BY t.created_at
+        """,
+        group_task_id,
+    )
+    return [dict(t) for t in tasks]
+
+
+async def check_and_complete_group_task(
+    db: Database,
+    task_id: int,
+    user_id: int,
+) -> Optional[Dict[str, Any]]:
+    """
+    Check if group task should be completed after individual update.
+
+    Args:
+        db: Database connection
+        task_id: Individual task ID
+        user_id: User making the update
+
+    Returns:
+        Group task if completed, None otherwise
+    """
+    # Get task with group_task_id
+    task = await db.fetch_one(
+        "SELECT group_task_id FROM tasks WHERE id = $1",
+        task_id
+    )
+
+    if not task or not task["group_task_id"]:
+        return None
+
+    group_task_id = task["group_task_id"]
+
+    # Get group progress
+    progress = await get_group_task_progress(db, group_task_id)
+
+    if progress["is_complete"]:
+        # Mark parent as complete
+        parent = await db.fetch_one(
+            """
+            UPDATE tasks SET
+                status = 'completed',
+                progress = 100,
+                completed_at = NOW(),
+                updated_at = NOW()
+            WHERE public_id = $1
+            RETURNING *
+            """,
+            group_task_id,
+        )
+
+        await add_task_history(
+            db, parent["id"], user_id,
+            action="status_changed",
+            field_name="status",
+            old_value="in_progress",
+            new_value="completed",
+            note="All members completed"
+        )
+
+        logger.info(f"Group task {group_task_id} completed (all members done)")
+        return dict(parent)
+
+    # Update parent progress
+    await db.execute(
+        """
+        UPDATE tasks SET
+            progress = $2,
+            status = CASE WHEN $2 > 0 THEN 'in_progress' ELSE status END,
+            updated_at = NOW()
+        WHERE public_id = $1
+        """,
+        group_task_id,
+        progress["progress"],
+    )
+
+    return None
+
+
+async def is_group_task(db: Database, public_id: str) -> bool:
+    """Check if task is a group task (G-ID)."""
+    return public_id.upper().startswith("G-")

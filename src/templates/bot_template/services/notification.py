@@ -231,3 +231,212 @@ def format_progress_bar(percent: int, width: int = 10) -> str:
     empty = width - filled
     bar = "█" * filled + "░" * empty
     return f"{bar} {percent}%"
+
+
+# ============================================
+# GROUP TASK NOTIFICATIONS
+# ============================================
+
+async def send_group_task_created_notification(
+    bot: Bot,
+    group_task: Dict[str, Any],
+    child_tasks: list,
+    assignees: list,
+    creator: Dict[str, Any],
+) -> None:
+    """
+    Send notification to all assignees when group task is created.
+
+    Args:
+        bot: Telegram bot instance
+        group_task: Parent G-ID task data
+        child_tasks: List of P-ID child tasks
+        assignees: List of assignee user data
+        creator: Creator user data
+    """
+    content = group_task.get("content", "")
+    if len(content) > 100:
+        content = content[:97] + "..."
+
+    deadline = group_task.get("deadline")
+    deadline_str = deadline.strftime("%H:%M %d/%m") if deadline else "Không có"
+
+    for i, assignee in enumerate(assignees):
+        if assignee.get("telegram_id") == creator.get("telegram_id"):
+            continue  # Skip notifying creator
+
+        child_task = child_tasks[i] if i < len(child_tasks) else None
+        if not child_task:
+            continue
+
+        text = f"""👥 VIỆC NHÓM MỚI!
+
+{group_task['public_id']}: {content}
+
+Từ: {creator.get('display_name', 'N/A')}
+Deadline: {deadline_str}
+Thành viên: {len(assignees)} người
+
+📋 Việc của bạn: {child_task['public_id']}
+
+Trả lời /xong {child_task['public_id']} khi hoàn thành."""
+
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ Xong", callback_data=f"task_complete:{child_task['public_id']}"),
+                InlineKeyboardButton("📊 Tiến độ", callback_data=f"task_progress:{child_task['public_id']}"),
+            ],
+            [
+                InlineKeyboardButton("👥 Xem nhóm", callback_data=f"task_detail:{group_task['public_id']}"),
+            ],
+        ])
+
+        try:
+            await bot.send_message(
+                chat_id=assignee["telegram_id"],
+                text=text,
+                reply_markup=keyboard,
+            )
+        except Exception as e:
+            logger.warning(f"Could not notify assignee {assignee.get('telegram_id')}: {e}")
+
+
+async def send_member_completed_notification(
+    bot: Bot,
+    db,
+    completed_task: Dict[str, Any],
+    completer: Dict[str, Any],
+) -> None:
+    """
+    Notify other group members when someone completes their task.
+
+    Args:
+        bot: Telegram bot instance
+        db: Database connection
+        completed_task: The P-ID task that was completed
+        completer: User who completed the task
+    """
+    # Get parent task
+    parent_id = completed_task.get("parent_task_id")
+    if not parent_id:
+        return
+
+    parent = await db.fetch_one(
+        "SELECT * FROM tasks WHERE id = $1 AND is_deleted = false",
+        parent_id
+    )
+    if not parent:
+        return
+
+    parent = dict(parent)
+
+    # Get all child tasks with assignee info
+    siblings = await db.fetch_all(
+        """
+        SELECT t.*, u.telegram_id, u.display_name
+        FROM tasks t
+        JOIN users u ON t.assignee_id = u.id
+        WHERE t.parent_task_id = $1 AND t.is_deleted = false
+        """,
+        parent_id
+    )
+
+    # Calculate progress
+    total = len(siblings)
+    completed = sum(1 for s in siblings if s["status"] == "completed")
+    progress = int((completed / total) * 100) if total > 0 else 0
+
+    content = parent.get("content", "")
+    if len(content) > 50:
+        content = content[:47] + "..."
+
+    # Notify each sibling (except completer)
+    for sibling in siblings:
+        if sibling["telegram_id"] == completer.get("telegram_id"):
+            continue
+        if sibling["status"] == "completed":
+            continue  # Don't notify already completed members
+
+        text = f"""📊 CẬP NHẬT VIỆC NHÓM
+
+{parent['public_id']}: {content}
+
+✅ {completer.get('display_name', 'Ai đó')} đã hoàn thành!
+
+Tiến độ nhóm: {format_progress_bar(progress)}
+Hoàn thành: {completed}/{total}
+
+Việc của bạn: {sibling['public_id']}"""
+
+        try:
+            await bot.send_message(
+                chat_id=sibling["telegram_id"],
+                text=text,
+            )
+        except Exception as e:
+            logger.warning(f"Could not notify sibling {sibling.get('telegram_id')}: {e}")
+
+
+async def send_group_completed_notification(
+    bot: Bot,
+    db,
+    group_task: Dict[str, Any],
+) -> None:
+    """
+    Notify creator when all group members have completed.
+
+    Args:
+        bot: Telegram bot instance
+        db: Database connection
+        group_task: The G-ID parent task that is now complete
+    """
+    # Get creator
+    creator = await db.fetch_one(
+        "SELECT telegram_id, display_name FROM users WHERE id = $1",
+        group_task["creator_id"]
+    )
+
+    if not creator:
+        return
+
+    # Get child task count
+    children = await db.fetch_all(
+        """
+        SELECT t.public_id, u.display_name
+        FROM tasks t
+        JOIN users u ON t.assignee_id = u.id
+        WHERE t.parent_task_id = $1 AND t.is_deleted = false
+        ORDER BY t.completed_at DESC
+        """,
+        group_task["id"]
+    )
+
+    member_list = "\n".join(f"  ✅ {c['display_name']}" for c in children)
+
+    content = group_task.get("content", "")
+    if len(content) > 100:
+        content = content[:97] + "..."
+
+    text = f"""🎉 VIỆC NHÓM ĐÃ HOÀN THÀNH!
+
+{group_task['public_id']}: {content}
+
+👥 TẤT CẢ {len(children)} THÀNH VIÊN ĐÃ HOÀN THÀNH:
+{member_list}
+
+Xem chi tiết: /xemviec {group_task['public_id']}"""
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📝 Chi tiết", callback_data=f"task_detail:{group_task['public_id']}"),
+        ],
+    ])
+
+    try:
+        await bot.send_message(
+            chat_id=creator["telegram_id"],
+            text=text,
+            reply_markup=keyboard,
+        )
+    except Exception as e:
+        logger.warning(f"Could not notify creator {creator.get('telegram_id')}: {e}")

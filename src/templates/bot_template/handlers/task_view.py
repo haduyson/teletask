@@ -1,10 +1,11 @@
 """
 Task View Handler
 Commands for viewing and searching tasks
+Supports G-ID group task viewing with aggregated progress
 """
 
 import logging
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler
 
 from database import get_db
@@ -14,6 +15,9 @@ from services import (
     get_user_tasks,
     get_group_tasks,
     get_tasks_with_deadline,
+    is_group_task,
+    get_group_task_progress,
+    get_child_tasks,
 )
 from utils import (
     ERR_TASK_NOT_FOUND,
@@ -23,15 +27,76 @@ from utils import (
     format_task_list,
     task_detail_keyboard,
     task_list_with_pagination,
+    format_datetime,
+    format_status,
+    get_status_icon,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def format_group_task_detail(task: dict, progress_info: dict, child_tasks: list) -> str:
+    """Format group task (G-ID) detail with aggregated progress."""
+    status_icon = get_status_icon(task)  # Pass full dict, not just status string
+
+    # Build member progress list
+    member_lines = []
+    for child in child_tasks:
+        child_icon = get_status_icon(child)  # Pass full dict
+        assignee_name = child.get("assignee_name", "N/A")
+        member_lines.append(f"  {child_icon} {child['public_id']}: {assignee_name}")
+
+    members_text = "\n".join(member_lines) if member_lines else "  Không có thành viên"
+
+    # Progress bar
+    pct = progress_info.get("progress", 0)
+    filled = int(pct / 10)
+    bar = "█" * filled + "░" * (10 - filled)
+
+    deadline_str = format_datetime(task.get("deadline"), relative=True) if task.get("deadline") else "Không có"
+    created_str = format_datetime(task.get("created_at"), relative=True) if task.get("created_at") else "N/A"
+
+    return f"""
+{status_icon} VIỆC NHÓM: {task['public_id']}
+
+📋 {task['content']}
+
+📊 TIẾN ĐỘ NHÓM:
+[{bar}] {pct}%
+Hoàn thành: {progress_info['completed']}/{progress_info['total']}
+
+👥 THÀNH VIÊN:
+{members_text}
+
+📅 Deadline: {deadline_str}
+🕐 Tạo: {created_str}
+
+Xem chi tiết từng việc: /xemviec [P-ID]
+""".strip()
+
+
+def group_task_keyboard(task_id: str, can_edit: bool = False) -> InlineKeyboardMarkup:
+    """Keyboard for group task detail."""
+    buttons = []
+
+    if can_edit:
+        buttons.append([
+            InlineKeyboardButton("✏️ Sửa", callback_data=f"edit:{task_id}"),
+            InlineKeyboardButton("🗑️ Xóa", callback_data=f"delete:{task_id}"),
+        ])
+
+    buttons.append([
+        InlineKeyboardButton("🔄 Làm mới", callback_data=f"refresh:{task_id}"),
+    ])
+
+    return InlineKeyboardMarkup(buttons)
 
 
 async def xemviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Handle /xemviec or /vic [task_id] command.
     View task detail by ID or list all tasks.
+    Supports G-ID group tasks with aggregated progress.
     """
     user = update.effective_user
     if not user:
@@ -50,18 +115,41 @@ async def xemviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 await update.message.reply_text(ERR_TASK_NOT_FOUND.format(task_id=task_id))
                 return
 
-            # Check permission (assignee or creator)
-            can_edit = task["creator_id"] == db_user["id"]
-            can_complete = task["assignee_id"] == db_user["id"]
+            # Check if this is a group task (G-ID)
+            if await is_group_task(db, task_id):
+                # Get aggregated progress
+                progress_info = await get_group_task_progress(db, task_id)
+                child_tasks = await get_child_tasks(db, task_id)
 
-            msg = format_task_detail(task)
-            keyboard = task_detail_keyboard(
-                task_id,
-                can_edit=can_edit,
-                can_complete=can_complete and task["status"] != "completed",
-            )
+                can_edit = task["creator_id"] == db_user["id"]
 
-            await update.message.reply_text(msg, reply_markup=keyboard)
+                msg = format_group_task_detail(task, progress_info, child_tasks)
+                keyboard = group_task_keyboard(task_id, can_edit=can_edit)
+
+                await update.message.reply_text(msg, reply_markup=keyboard)
+            else:
+                # Regular task (T-ID or P-ID)
+                can_edit = task["creator_id"] == db_user["id"]
+                can_complete = task["assignee_id"] == db_user["id"]
+
+                msg = format_task_detail(task)
+
+                # Add parent task reference for P-ID tasks
+                if task_id.startswith("P-") and task.get("parent_task_id"):
+                    parent = await db.fetch_one(
+                        "SELECT public_id FROM tasks WHERE id = $1",
+                        task["parent_task_id"]
+                    )
+                    if parent:
+                        msg += f"\n\n👥 Thuộc việc nhóm: {parent['public_id']}"
+
+                keyboard = task_detail_keyboard(
+                    task_id,
+                    can_edit=can_edit,
+                    can_complete=can_complete and task["status"] != "completed",
+                )
+
+                await update.message.reply_text(msg, reply_markup=keyboard)
         else:
             # List all user tasks
             tasks = await get_user_tasks(db, db_user["id"], limit=10)
