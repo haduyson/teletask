@@ -113,6 +113,13 @@ def undo_keyboard(undo_id: int, seconds_remaining: int = 10) -> InlineKeyboardMa
     ])
 
 
+def bulk_undo_keyboard(undo_id: int, count: int, seconds_remaining: int = 10) -> InlineKeyboardMarkup:
+    """Create undo button for bulk deleted tasks with countdown."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"↩️ Hoàn tác {count} việc ({seconds_remaining}s)", callback_data=f"bulk_undo:{undo_id}")]
+    ])
+
+
 def pagination_keyboard(
     prefix: str,
     page: int,
@@ -157,11 +164,11 @@ def task_list_with_pagination(
     """Create task list with pagination."""
     buttons = []
 
-    # Task buttons
+    # Task buttons with longer content display
     for task in tasks:
         task_id = task.get("public_id", "")
-        content = task.get("content", "")[:30]
-        if len(task.get("content", "")) > 30:
+        content = task.get("content", "")[:40]
+        if len(task.get("content", "")) > 40:
             content += "..."
 
         buttons.append([

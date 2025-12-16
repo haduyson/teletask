@@ -193,18 +193,18 @@ Bấm nút bên dưới để hoàn tác (trong 30 giây).
 MSG_TASK_RESTORED = "Đã khôi phục việc {task_id}."
 
 MSG_TASK_DETAIL = """
-{task_id}: {content}
+<b>{task_id}</b>: {content}
 
-Trạng thái: {status}
-Tiến độ: {progress}%
-Ưu tiên: {priority}
+<b>Trạng thái:</b> {status}
+<b>Tiến độ:</b> {progress}%
+<b>Ưu tiên:</b> {priority}
 
-Người tạo: {creator}
-Người nhận: {assignee}
-Deadline: {deadline}
+<b>Người tạo:</b> {creator}
+<b>Người nhận:</b> {assignee}
+<b>Deadline:</b> {deadline}
 {group_line}
-Tạo lúc: {created_at}
-Cập nhật: {updated_at}
+<b>Tạo lúc:</b> {created_at}
+<b>Cập nhật:</b> {updated_at}
 """
 
 MSG_TASK_LIST = """
@@ -221,28 +221,28 @@ MSG_TASK_LIST_ITEM = "{icon} {task_id}: {content} - {deadline}"
 
 # Reminder messages
 MSG_REMINDER_24H = """
-Nhắc nhở: Việc sắp đến hạn!
+⏰ <b>Nhắc nhở:</b> Việc sắp đến hạn!
 
-{task_id}: {content}
-Deadline: {deadline}
+<b>{task_id}</b>: {content}
+<b>Deadline:</b> {deadline}
 
 Còn 24 giờ để hoàn thành.
 """
 
 MSG_REMINDER_1H = """
-KHẨN CẤP: Việc sắp hết hạn!
+🚨 <b>KHẨN CẤP:</b> Việc sắp hết hạn!
 
-{task_id}: {content}
-Deadline: {deadline}
+<b>{task_id}</b>: {content}
+<b>Deadline:</b> {deadline}
 
 Chỉ còn 1 giờ!
 """
 
 MSG_REMINDER_OVERDUE = """
-CẢNH BÁO: Việc đã quá hạn!
+⚠️ <b>CẢNH BÁO:</b> Việc đã quá hạn!
 
-{task_id}: {content}
-Deadline: {deadline}
+<b>{task_id}</b>: {content}
+<b>Deadline:</b> {deadline}
 
 Vui lòng cập nhật trạng thái.
 """

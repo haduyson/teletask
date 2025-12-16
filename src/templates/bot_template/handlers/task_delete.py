@@ -150,9 +150,9 @@ async def delete_specific_task(update: Update, context: ContextTypes.DEFAULT_TYP
         await update.message.reply_text(
             f"⚠️ <b>XÁC NHẬN XÓA VIỆC?</b>\n\n"
             f"📋 <b>{task_id}</b>: {task['content']}\n"
-            f"📊 Trạng thái: {status}\n"
-            f"👤 Người nhận: {assignee_name}\n"
-            f"📅 Deadline: {deadline_str}",
+            f"📊 <b>Trạng thái:</b> {status}\n"
+            f"👤 <b>Người nhận:</b> {assignee_name}\n"
+            f"📅 <b>Deadline:</b> {deadline_str}",
             reply_markup=delete_confirm_keyboard(task_id),
             parse_mode="HTML",
         )
@@ -296,9 +296,9 @@ async def delete_task_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(
             f"⚠️ <b>XÁC NHẬN XÓA VIỆC?</b>\n\n"
             f"📋 <b>{task_id}</b>: {task['content']}\n"
-            f"📊 Trạng thái: {status}\n"
-            f"👤 Người nhận: {assignee_name}\n"
-            f"📅 Deadline: {deadline_str}",
+            f"📊 <b>Trạng thái:</b> {status}\n"
+            f"👤 <b>Người nhận:</b> {assignee_name}\n"
+            f"📅 <b>Deadline:</b> {deadline_str}",
             reply_markup=delete_confirm_keyboard(task_id),
             parse_mode="HTML",
         )

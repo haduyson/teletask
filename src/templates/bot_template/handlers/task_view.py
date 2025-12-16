@@ -158,7 +158,7 @@ async def xemviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                     can_complete=can_complete and task["status"] != "completed",
                 )
 
-                await update.message.reply_text(msg, reply_markup=keyboard)
+                await update.message.reply_text(msg, reply_markup=keyboard, parse_mode="HTML")
         else:
             # Show task category menu
             await update.message.reply_text(

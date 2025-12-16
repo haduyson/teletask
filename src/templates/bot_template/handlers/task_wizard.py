@@ -119,13 +119,13 @@ def format_wizard_summary(data: dict) -> str:
     priority_str = format_priority(priority)
 
     return f"""
-TẠO VIỆC MỚI
+<b>TẠO VIỆC MỚI</b>
 
-Nội dung: {content}
+<b>Nội dung:</b> {content}
 
-Deadline: {deadline_str}
-Người nhận: {assignee_name}
-Độ ưu tiên: {priority_str}
+<b>Deadline:</b> {deadline_str}
+<b>Người nhận:</b> {assignee_name}
+<b>Độ ưu tiên:</b> {priority_str}
 
 Xác nhận tạo việc?
 """.strip()
@@ -586,8 +586,9 @@ async def priority_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     summary = format_wizard_summary(data)
 
     await query.edit_message_text(
-        f"Bước 5/5: Xác nhận\n\n{summary}",
+        f"<b>Bước 5/5:</b> Xác nhận\n\n{summary}",
         reply_markup=wizard_confirm_keyboard(),
+        parse_mode="HTML",
     )
 
     return CONFIRM
@@ -829,8 +830,9 @@ async def edit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         summary = format_wizard_summary(data)
         from utils.keyboards import wizard_confirm_keyboard
         await query.edit_message_text(
-            f"Bước 5/5: Xác nhận\n\n{summary}",
+            f"<b>Bước 5/5:</b> Xác nhận\n\n{summary}",
             reply_markup=wizard_confirm_keyboard(),
+            parse_mode="HTML",
         )
         return CONFIRM
 
@@ -1045,13 +1047,13 @@ def format_assign_summary(data: dict) -> str:
     priority_str = format_priority(priority)
 
     return f"""
-GIAO VIỆC MỚI
+<b>GIAO VIỆC MỚI</b>
 
-Nội dung: {content}
+<b>Nội dung:</b> {content}
 
-Người nhận: {assignee_name}
-Deadline: {deadline_str}
-Độ ưu tiên: {priority_str}
+<b>Người nhận:</b> {assignee_name}
+<b>Deadline:</b> {deadline_str}
+<b>Độ ưu tiên:</b> {priority_str}
 
 Xác nhận giao việc?
 """.strip()
@@ -1435,8 +1437,9 @@ async def assign_priority_callback(update: Update, context: ContextTypes.DEFAULT
     summary = format_assign_summary(data)
 
     await query.edit_message_text(
-        f"Bước 5/5: Xác nhận\n\n{summary}",
+        f"<b>Bước 5/5:</b> Xác nhận\n\n{summary}",
         reply_markup=assign_confirm_keyboard(),
+        parse_mode="HTML",
     )
 
     return ASSIGN_CONFIRM
@@ -1671,8 +1674,9 @@ async def assign_edit_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     if field == "back":
         summary = format_assign_summary(data)
         await query.edit_message_text(
-            f"Bước 5/5: Xác nhận\n\n{summary}",
+            f"<b>Bước 5/5:</b> Xác nhận\n\n{summary}",
             reply_markup=assign_confirm_keyboard(),
+            parse_mode="HTML",
         )
         return ASSIGN_CONFIRM
 

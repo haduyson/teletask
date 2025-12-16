@@ -251,9 +251,10 @@ async def handle_progress_update(query, db, db_user, task_id: str, value: int) -
     status = "Hoàn thành!" if value == 100 else "Đang làm"
 
     await query.edit_message_text(
-        f"Cập nhật tiến độ {task_id}!\n\n"
+        f"Cập nhật tiến độ <b>{task_id}</b>!\n\n"
         f"{bar} {value}%\n"
-        f"Trạng thái: {status}"
+        f"<b>Trạng thái:</b> {status}",
+        parse_mode="HTML",
     )
 
 
@@ -271,7 +272,7 @@ async def handle_detail(query, db, db_user, task_id: str) -> None:
     msg = format_task_detail(task)
     keyboard = task_detail_keyboard(task_id, can_edit=can_edit, can_complete=can_complete)
 
-    await query.edit_message_text(msg, reply_markup=keyboard)
+    await query.edit_message_text(msg, reply_markup=keyboard, parse_mode="HTML")
 
 
 async def handle_delete_confirm(query, task_id: str) -> None:
@@ -431,7 +432,7 @@ async def handle_list_page(query, db, db_user, list_type: str, page: int) -> Non
         get_user_received_tasks,
         get_all_user_related_tasks,
     )
-    from utils import format_task_list, task_list_with_pagination
+    from utils import task_list_with_pagination
 
     page_size = 10
     offset = (page - 1) * page_size
@@ -458,13 +459,10 @@ async def handle_list_page(query, db, db_user, list_type: str, page: int) -> Non
 
     # Estimate total pages (simplified)
     total_pages = page + (1 if len(tasks) == page_size else 0)
+    total_count = len(tasks) + offset
 
-    msg = format_task_list(
-        tasks=tasks,
-        title=title,
-        page=page,
-        total=len(tasks) + offset,
-    )
+    # Show only title with count - task list is in buttons
+    msg = f"{title}\n\nTổng: {total_count} việc | Trang {page}/{total_pages}\n\nChọn việc để xem chi tiết:"
 
     await query.edit_message_text(
         msg,
@@ -480,7 +478,7 @@ async def handle_task_category(query, db, db_user, category: str) -> None:
         get_user_received_tasks,
         get_all_user_related_tasks,
     )
-    from utils import format_task_list, task_list_with_pagination
+    from utils import task_list_with_pagination
 
     page_size = 10
 
@@ -505,7 +503,7 @@ async def handle_task_category(query, db, db_user, category: str) -> None:
             "📤 Việc đã giao - Việc bạn giao cho người khác\n"
             "📥 Việc đã nhận - Việc người khác giao cho bạn\n"
             "📊 Tất cả việc - Toàn bộ việc liên quan\n\n"
-            "🔍 Lọc theo loại: Cá nhân (T/P-ID) | Nhóm (G-ID)",
+            "🔍 Lọc theo loại: Cá nhân (P-ID) | Nhóm (G-ID)",
             reply_markup=keyboard,
         )
         return
@@ -537,12 +535,8 @@ async def handle_task_category(query, db, db_user, category: str) -> None:
     total = len(tasks)
     total_pages = max(1, (total + page_size - 1) // page_size)
 
-    msg = format_task_list(
-        tasks=tasks,
-        title=title,
-        page=1,
-        total=total,
-    )
+    # Show only title with count - task list is in buttons
+    msg = f"{title}\n\nTổng: {total} việc | Trang 1/{total_pages}\n\nChọn việc để xem chi tiết:"
 
     await query.edit_message_text(
         msg,
@@ -553,7 +547,7 @@ async def handle_task_category(query, db, db_user, category: str) -> None:
 async def handle_task_filter(query, db, db_user, filter_type: str, list_type: str) -> None:
     """Handle task type filter (Individual/Group)."""
     from services import get_all_user_related_tasks
-    from utils import format_task_list, task_type_filter_keyboard
+    from utils import task_type_filter_keyboard
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
     # Get all tasks first
@@ -568,7 +562,7 @@ async def handle_task_filter(query, db, db_user, filter_type: str, list_type: st
 
     # Filter by type
     if filter_type == "individual":
-        # T-ID and P-ID tasks (not starting with G)
+        # P-ID tasks (not starting with G)
         tasks = [t for t in all_tasks if not t.get("public_id", "").upper().startswith("G")]
         title = "👤 VIỆC CÁ NHÂN"
     elif filter_type == "group":
@@ -596,19 +590,15 @@ async def handle_task_filter(query, db, db_user, filter_type: str, list_type: st
     total_pages = max(1, (total + 9) // 10)
     tasks = tasks[:10]  # First page
 
-    msg = format_task_list(
-        tasks=tasks,
-        title=title,
-        page=1,
-        total=total,
-    )
+    # Show only title with count - task list is in buttons
+    msg = f"{title}\n\nTổng: {total} việc | Trang 1/{total_pages}\n\nChọn việc để xem chi tiết:"
 
-    # Build task buttons
+    # Build task buttons with longer content display
     task_buttons = []
     for task in tasks:
         task_id = task.get("public_id", "")
-        content = task.get("content", "")[:30]
-        if len(task.get("content", "")) > 30:
+        content = task.get("content", "")[:40]
+        if len(task.get("content", "")) > 40:
             content += "..."
         task_buttons.append([
             InlineKeyboardButton(f"{task_id}: {content}", callback_data=f"task_detail:{task_id}")
@@ -649,12 +639,13 @@ async def handle_edit_menu(query, db, db_user, task_id: str) -> None:
     current_priority = format_priority(task.get("priority", "normal"))
 
     await query.edit_message_text(
-        f"✏️ SỬA VIỆC {task_id}\n\n"
-        f"📝 Nội dung: {task['content'][:100]}{'...' if len(task['content']) > 100 else ''}\n"
-        f"📅 Deadline: {current_deadline}\n"
-        f"🔔 Độ ưu tiên: {current_priority}\n\n"
+        f"✏️ <b>SỬA VIỆC {task_id}</b>\n\n"
+        f"📝 <b>Nội dung:</b> {task['content'][:100]}{'...' if len(task['content']) > 100 else ''}\n"
+        f"📅 <b>Deadline:</b> {current_deadline}\n"
+        f"🔔 <b>Độ ưu tiên:</b> {current_priority}\n\n"
         f"Chọn mục cần sửa:",
         reply_markup=edit_menu_keyboard(task_id),
+        parse_mode="HTML",
     )
 
 

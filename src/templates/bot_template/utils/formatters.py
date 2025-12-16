@@ -121,6 +121,10 @@ def format_datetime(dt: Optional[datetime], relative: bool = False) -> str:
 
 def format_task_detail(task: Dict[str, Any]) -> str:
     """Format task for detailed view."""
+    # Format group line if task belongs to a group
+    group_name = task.get("group_name")
+    group_line = f"<b>Nhóm:</b> {group_name}" if group_name else ""
+
     return MSG_TASK_DETAIL.format(
         task_id=task.get("public_id", ""),
         content=task.get("content", ""),
@@ -130,6 +134,7 @@ def format_task_detail(task: Dict[str, Any]) -> str:
         creator=task.get("creator_name", "N/A"),
         assignee=task.get("assignee_name", "N/A"),
         deadline=format_datetime(task.get("deadline"), relative=True),
+        group_line=group_line,
         created_at=format_datetime(task.get("created_at")),
         updated_at=format_datetime(task.get("updated_at")),
     )
