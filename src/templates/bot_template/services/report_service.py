@@ -430,6 +430,8 @@ async def generate_excel_report(
         for col_idx, value in enumerate(row_data, 1):
             cell = ws_tasks.cell(row=row_idx, column=col_idx, value=value)
             cell.border = thin_border
+            if col_idx == 2:  # Content column - add text wrap
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
             if col_idx == 3:  # Status column
                 cell.fill = status_fills.get(task["status"], PatternFill())
 
@@ -631,32 +633,46 @@ async def generate_pdf_report(
     if tasks:
         elements.append(Paragraph("CHI TIẾT CÔNG VIỆC", section_style))
 
+        # Content style for wrapping text
+        content_style = ParagraphStyle(
+            'ContentStyle',
+            parent=styles['Normal'],
+            fontName=FONT_NAME,
+            fontSize=8,
+            leading=10,
+        )
+
         task_data = [["Mã", "Nội dung", "Trạng thái", "Deadline"]]
         for task in tasks[:30]:
-            content = task["content"][:40] + ("..." if len(task["content"]) > 40 else "")
+            content = task["content"][:60] + ("..." if len(task["content"]) > 60 else "")
             task_data.append([
                 task["public_id"],
-                content,
+                Paragraph(content, content_style),
                 format_status(task["status"]),
                 format_datetime_vn(task.get("deadline"))[:10] if task.get("deadline") else "—"
             ])
 
         if len(tasks) > 30:
-            task_data.append(["...", f"và {len(tasks) - 30} việc khác", "", ""])
+            task_data.append(["...", Paragraph(f"và {len(tasks) - 30} việc khác", content_style), "", ""])
 
-        task_table = Table(task_data, colWidths=[2.5*cm, 8*cm, 3*cm, 3*cm])
+        task_table = Table(task_data, colWidths=[2*cm, 9*cm, 3*cm, 3*cm])
         task_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('ALIGN', (0, 0), (0, -1), 'CENTER'),
             ('ALIGN', (2, 0), (3, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
             ('FONTNAME', (0, 0), (-1, 0), FONT_BOLD),
-            ('FONTNAME', (0, 1), (-1, -1), FONT_NAME),
+            ('FONTNAME', (0, 1), (0, -1), FONT_NAME),
+            ('FONTNAME', (2, 1), (3, -1), FONT_NAME),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('FONTSIZE', (0, 1), (0, -1), 8),
+            ('FONTSIZE', (2, 1), (3, -1), 8),
             ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
             ('TOPPADDING', (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 5),
+            ('TOPPADDING', (0, 1), (-1, -1), 5),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F2F2F2')]),
         ]))

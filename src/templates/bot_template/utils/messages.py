@@ -68,7 +68,7 @@ Ví dụ:
 /start - Bắt đầu sử dụng bot
 /help - Xem hướng dẫn này
 
-💡 Gõ lệnh không tham số để xem hướng dẫn chi tiết.
+📖 Hướng dẫn chi tiết: https://teletask.haduyson.com/hdsdbot.html
 """
 
 MSG_INFO = """
