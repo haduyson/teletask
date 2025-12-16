@@ -534,6 +534,7 @@ async def handle_edit_content_prompt(query, db, db_user, task_id: str, context) 
         f"📝 SỬA NỘI DUNG {task_id}\n\n"
         f"Nội dung hiện tại:\n{task['content']}\n\n"
         f"Hãy gửi nội dung mới cho việc này.\n"
+        f"⚠️ REPLY tin nhắn này khi nhập (vuốt phải)\n"
         f"(Gửi /huy để hủy)"
     )
 
@@ -564,6 +565,7 @@ async def handle_edit_deadline_prompt(query, db, db_user, task_id: str, context)
         f"Deadline hiện tại: {current_deadline}\n\n"
         f"Hãy gửi deadline mới.\n"
         f"Ví dụ: ngày mai 9h, thứ 6, 25/12, cuối tuần\n\n"
+        f"⚠️ REPLY tin nhắn này khi nhập (vuốt phải)\n"
         f"(Gửi /huy để hủy, gửi 'xóa' để xóa deadline)"
     )
 
@@ -635,35 +637,62 @@ async def handle_edit_assignee_prompt(query, db, db_user, task_id: str, context)
         "task_db_id": task["id"],
         "is_group": is_group,
     }
+    logger.info(f"Set pending_edit for assignee: task_id={task_id}, user_id={db_user['id']}")
 
     if is_group:
-        # Get current assignees for group task
+        # Get current assignees for group task with @username mentions
         children = await get_child_tasks(db, task_id)
-        current_assignees = ", ".join([c.get("assignee_name", "?") for c in children])
+        assignee_mentions = []
+        for c in children:
+            username = c.get("assignee_username")
+            name = c.get("assignee_name", "?")
+            if username:
+                assignee_mentions.append(f"@{username} ({name})")
+            else:
+                assignee_mentions.append(name)
+        current_assignees = ", ".join(assignee_mentions)
         await query.edit_message_text(
             f"👥 SỬA NGƯỜI NHẬN VIỆC NHÓM {task_id}\n\n"
             f"Người nhận hiện tại:\n{current_assignees}\n\n"
             f"📝 Nhập danh sách người nhận mới (cách nhau bằng dấu phẩy):\n"
             f"Ví dụ: @user1, @user2, @user3\n\n"
             f"💡 Nhập 1 người để chuyển thành việc cá nhân\n"
+            f"⚠️ REPLY tin nhắn này khi nhập (vuốt phải)\n"
             f"(Gửi /huy để hủy)"
         )
     else:
-        current_assignee = task.get("assignee_name", "Không rõ")
+        # Get username for individual task
+        assignee_info = await db.fetch_one(
+            "SELECT display_name, username FROM users WHERE id = $1",
+            task.get("assignee_id")
+        )
+        if assignee_info:
+            username = assignee_info.get("username")
+            name = assignee_info.get("display_name", "?")
+            current_assignee = f"@{username} ({name})" if username else name
+        else:
+            current_assignee = "Không rõ"
         await query.edit_message_text(
             f"👤 SỬA NGƯỜI NHẬN {task_id}\n\n"
             f"Người nhận hiện tại: {current_assignee}\n\n"
             f"📝 Nhập người nhận mới:\n"
             f"• 1 người: @username → việc cá nhân\n"
             f"• Nhiều người: @user1, @user2 → việc nhóm\n\n"
+            f"⚠️ REPLY tin nhắn này khi nhập (vuốt phải)\n"
             f"(Gửi /huy để hủy)"
         )
 
 
 async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle text messages for pending edits (content/deadline)."""
+    logger.info(f"handle_pending_edit called with text: {update.message.text[:50] if update.message and update.message.text else 'None'}")
+    logger.info(f"user_data keys: {list(context.user_data.keys())}")
+
     pending = context.user_data.get("pending_edit")
+    logger.info(f"pending_edit value: {pending}")
+
     if not pending:
+        logger.info("No pending edit, returning")
         return  # No pending edit, let other handlers process
 
     user = update.effective_user
@@ -874,7 +903,7 @@ def get_handlers() -> list:
     return [
         CallbackQueryHandler(callback_router),
         MessageHandler(
-            filters.TEXT & ~filters.COMMAND & filters.ChatType.PRIVATE,
+            filters.TEXT & ~filters.COMMAND,
             handle_pending_edit
         ),
     ]

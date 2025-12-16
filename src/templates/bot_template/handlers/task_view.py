@@ -89,12 +89,13 @@ def group_task_keyboard(task_id: str, can_edit: bool = False) -> InlineKeyboardM
 
     if can_edit:
         buttons.append([
-            InlineKeyboardButton("✏️ Sửa", callback_data=f"edit:{task_id}"),
-            InlineKeyboardButton("🗑️ Xóa", callback_data=f"delete:{task_id}"),
+            InlineKeyboardButton("✏️ Sửa", callback_data=f"task_edit:{task_id}"),
+            InlineKeyboardButton("🗑️ Xóa", callback_data=f"task_delete:{task_id}"),
         ])
 
     buttons.append([
-        InlineKeyboardButton("🔄 Làm mới", callback_data=f"refresh:{task_id}"),
+        InlineKeyboardButton("🔄 Làm mới", callback_data=f"task_detail:{task_id}"),
+        InlineKeyboardButton("« Quay lại", callback_data="task_category:menu"),
     ])
 
     return InlineKeyboardMarkup(buttons)

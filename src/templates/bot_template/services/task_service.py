@@ -1047,7 +1047,7 @@ async def get_child_tasks(
     """
     tasks = await db.fetch_all(
         """
-        SELECT t.*, u.display_name as assignee_name, u.telegram_id
+        SELECT t.*, u.display_name as assignee_name, u.username as assignee_username, u.telegram_id
         FROM tasks t
         JOIN users u ON t.assignee_id = u.id
         WHERE t.group_task_id = $1 AND t.is_deleted = false
@@ -1132,8 +1132,14 @@ async def check_and_complete_group_task(
 
 
 async def is_group_task(db: Database, public_id: str) -> bool:
-    """Check if task is a group task (G-ID)."""
-    return public_id.upper().startswith("G-")
+    """Check if task is a group task (G-ID or GXXXX)."""
+    upper_id = public_id.upper()
+    # Check G- prefix or G followed by digits (G0041, G-0041, etc.)
+    if upper_id.startswith("G-"):
+        return True
+    if upper_id.startswith("G") and len(upper_id) > 1 and upper_id[1:].lstrip("0").isdigit():
+        return True
+    return False
 
 
 async def convert_individual_to_group(
