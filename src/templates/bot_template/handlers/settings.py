@@ -3,6 +3,9 @@ Settings Handler
 User preference configuration: notifications, timezone, reminder settings
 """
 
+import warnings
+warnings.filterwarnings("ignore", message=".*per_message.*", category=UserWarning)
+
 import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -329,6 +332,7 @@ def get_handlers():
         ],
         name="settings_conversation",
         persistent=False,
+        per_message=False,
     )
 
     return [conv_handler]

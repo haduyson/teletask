@@ -3,6 +3,9 @@ Export Handler
 Step-by-step export wizard for statistical reports
 """
 
+import warnings
+warnings.filterwarnings("ignore", message=".*per_message.*", category=UserWarning)
+
 import os
 import logging
 from datetime import datetime, timedelta
@@ -556,6 +559,7 @@ def get_export_conversation_handler() -> ConversationHandler:
         ],
         per_user=True,
         per_chat=True,
+        per_message=False,
     )
 
 

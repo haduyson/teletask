@@ -3,6 +3,9 @@ Task Wizard Handler
 Step-by-step task creation with ConversationHandler
 """
 
+import warnings
+warnings.filterwarnings("ignore", message=".*per_message.*", category=UserWarning)
+
 import logging
 from datetime import datetime, timedelta
 import pytz
@@ -1027,6 +1030,7 @@ def get_wizard_conversation_handler() -> ConversationHandler:
         ],
         per_user=True,
         per_chat=True,
+        per_message=False,
     )
 
 
@@ -1868,6 +1872,7 @@ def get_assign_wizard_conversation_handler() -> ConversationHandler:
         ],
         per_user=True,
         per_chat=True,
+        per_message=False,
     )
 
 
