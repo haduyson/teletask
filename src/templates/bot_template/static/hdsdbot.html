@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hướng Dẫn Sử Dụng - TeleTask Bot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            color: white;
+            padding: 40px 20px;
+        }
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+        }
+        .card h2 {
+            color: #667eea;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card h2::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 2px;
+        }
+        .command-group {
+            margin-bottom: 25px;
+        }
+        .command-group:last-child {
+            margin-bottom: 0;
+        }
+        .command-group h3 {
+            color: #444;
+            font-size: 1.1em;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+        .command {
+            display: flex;
+            padding: 12px 15px;
+            margin: 8px 0;
+            background: #f8f9ff;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            transition: all 0.2s ease;
+        }
+        .command:hover {
+            background: #f0f2ff;
+            transform: translateX(5px);
+        }
+        .command code {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            color: #667eea;
+            font-weight: 600;
+            min-width: 200px;
+            font-size: 0.95em;
+        }
+        .command span {
+            color: #666;
+        }
+        .example {
+            background: #f0f7ff;
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border: 1px dashed #b3d4fc;
+        }
+        .example-title {
+            font-weight: 600;
+            color: #4a90d9;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+        .example code {
+            display: block;
+            font-family: 'SF Mono', Monaco, monospace;
+            color: #333;
+            padding: 4px 0;
+            font-size: 0.9em;
+        }
+        .tip {
+            background: linear-gradient(135deg, #fff9e6 0%, #fff3cd 100%);
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border-left: 4px solid #ffc107;
+        }
+        .tip strong {
+            color: #856404;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .feature-item {
+            background: #f8f9ff;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .feature-item .icon {
+            font-size: 2em;
+            margin-bottom: 10px;
+        }
+        .feature-item h4 {
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        .feature-item p {
+            color: #666;
+            font-size: 0.9em;
+        }
+        footer {
+            text-align: center;
+            color: rgba(255,255,255,0.8);
+            padding: 30px;
+            font-size: 0.9em;
+        }
+        footer a {
+            color: white;
+            text-decoration: none;
+        }
+        @media (max-width: 600px) {
+            header h1 { font-size: 1.8em; }
+            .command { flex-direction: column; }
+            .command code { min-width: auto; margin-bottom: 5px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>TeleTask Bot</h1>
+            <p>Hệ thống quản lý công việc qua Telegram</p>
+        </header>
+
+        <div class="card">
+            <h2>Tính Năng Chính</h2>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <div class="icon">✅</div>
+                    <h4>Tạo & Giao Việc</h4>
+                    <p>Tạo việc cá nhân hoặc giao cho người khác</p>
+                </div>
+                <div class="feature-item">
+                    <div class="icon">🔄</div>
+                    <h4>Việc Lặp Lại</h4>
+                    <p>Tự động tạo việc hàng ngày/tuần/tháng</p>
+                </div>
+                <div class="feature-item">
+                    <div class="icon">📊</div>
+                    <h4>Thống Kê</h4>
+                    <p>Báo cáo tiến độ tuần, tháng</p>
+                </div>
+                <div class="feature-item">
+                    <div class="icon">📅</div>
+                    <h4>Google Calendar</h4>
+                    <p>Đồng bộ deadline với lịch Google</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Các Lệnh Cơ Bản</h2>
+
+            <div class="command-group">
+                <h3>🚀 Bắt Đầu</h3>
+                <div class="command">
+                    <code>/start</code>
+                    <span>Bắt đầu sử dụng bot, đăng ký tài khoản</span>
+                </div>
+                <div class="command">
+                    <code>/help</code>
+                    <span>Xem hướng dẫn sử dụng nhanh</span>
+                </div>
+                <div class="command">
+                    <code>/thongtin</code>
+                    <span>Xem thông tin tài khoản và thống kê</span>
+                </div>
+            </div>
+
+            <div class="command-group">
+                <h3>📝 Tạo Việc</h3>
+                <div class="command">
+                    <code>/taoviec [nội dung]</code>
+                    <span>Tạo việc cá nhân mới (có wizard hướng dẫn)</span>
+                </div>
+                <div class="command">
+                    <code>/giaoviec @user [nội dung]</code>
+                    <span>Giao việc cho người khác</span>
+                </div>
+                <div class="example">
+                    <div class="example-title">Ví dụ:</div>
+                    <code>/taoviec Họp đội 14h30</code>
+                    <code>/taoviec Nộp báo cáo ngày mai 10h</code>
+                    <code>/giaoviec @nam Chuẩn bị slide ngày mai 15h</code>
+                </div>
+            </div>
+
+            <div class="command-group">
+                <h3>🔄 Việc Lặp Lại</h3>
+                <div class="command">
+                    <code>/vieclaplai [nội dung] [lịch]</code>
+                    <span>Tạo việc tự động lặp lại</span>
+                </div>
+                <div class="command">
+                    <code>/danhsachvieclaplai</code>
+                    <span>Xem danh sách việc lặp lại</span>
+                </div>
+                <div class="example">
+                    <div class="example-title">Ví dụ:</div>
+                    <code>/vieclaplai Họp đội hàng tuần thứ 2 9h</code>
+                    <code>/vieclaplai Báo cáo hàng tháng ngày 1 10h</code>
+                    <code>/vieclaplai Kiểm tra email hàng ngày 8h</code>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Quản Lý Việc</h2>
+
+            <div class="command-group">
+                <h3>👀 Xem Việc</h3>
+                <div class="command">
+                    <code>/vieccanhan</code>
+                    <span>Danh sách việc của bạn</span>
+                </div>
+                <div class="command">
+                    <code>/viecdagiao</code>
+                    <span>Việc bạn đã giao cho người khác</span>
+                </div>
+                <div class="command">
+                    <code>/xemviec [mã việc]</code>
+                    <span>Xem chi tiết một việc</span>
+                </div>
+                <div class="command">
+                    <code>/timviec [từ khóa]</code>
+                    <span>Tìm kiếm việc theo nội dung</span>
+                </div>
+            </div>
+
+            <div class="command-group">
+                <h3>✏️ Cập Nhật</h3>
+                <div class="command">
+                    <code>/xong [mã việc]</code>
+                    <span>Đánh dấu việc hoàn thành</span>
+                </div>
+                <div class="command">
+                    <code>/tiendo [mã] [%]</code>
+                    <span>Cập nhật tiến độ (0-100%)</span>
+                </div>
+                <div class="command">
+                    <code>/xoa [mã việc]</code>
+                    <span>Xóa việc (có thể hoàn tác trong 30s)</span>
+                </div>
+                <div class="command">
+                    <code>/xoanhieu [mã1,mã2,...]</code>
+                    <span>Xóa nhiều việc cùng lúc</span>
+                </div>
+            </div>
+
+            <div class="command-group">
+                <h3>⏰ Nhắc Việc</h3>
+                <div class="command">
+                    <code>/nhacviec [mã] [thời gian]</code>
+                    <span>Đặt nhắc cho việc</span>
+                </div>
+                <div class="command">
+                    <code>/xemnhac</code>
+                    <span>Xem danh sách nhắc đã đặt</span>
+                </div>
+                <div class="example">
+                    <div class="example-title">Ví dụ:</div>
+                    <code>/nhacviec ABC123 15 phút</code>
+                    <code>/nhacviec ABC123 ngày mai 8h</code>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Thống Kê & Báo Cáo</h2>
+
+            <div class="command-group">
+                <h3>📊 Xem Thống Kê</h3>
+                <div class="command">
+                    <code>/thongke</code>
+                    <span>Thống kê tổng hợp của bạn</span>
+                </div>
+                <div class="command">
+                    <code>/thongketuan</code>
+                    <span>Thống kê tuần này</span>
+                </div>
+                <div class="command">
+                    <code>/thongkethang</code>
+                    <span>Thống kê tháng này</span>
+                </div>
+                <div class="command">
+                    <code>/viectrehan</code>
+                    <span>Xem danh sách việc trễ hạn</span>
+                </div>
+            </div>
+
+            <div class="command-group">
+                <h3>📤 Xuất Báo Cáo</h3>
+                <div class="command">
+                    <code>/export</code>
+                    <span>Xuất báo cáo (CSV, Excel, PDF)</span>
+                </div>
+                <div class="tip">
+                    <strong>💡 Mẹo:</strong> Lệnh /export hỗ trợ chọn khoảng thời gian (7 ngày, 30 ngày, tuần này, tháng này, hoặc tùy chọn ngày cụ thể), loại việc, và định dạng file. Báo cáo có mật khẩu bảo vệ và hết hạn sau 72 giờ.
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Tích Hợp</h2>
+
+            <div class="command-group">
+                <h3>📅 Google Calendar</h3>
+                <div class="command">
+                    <code>/lichgoogle</code>
+                    <span>Kết nối với Google Calendar</span>
+                </div>
+                <div class="tip">
+                    <strong>💡 Mẹo:</strong> Sau khi kết nối, các việc có deadline sẽ tự động được thêm vào Google Calendar của bạn. Bạn sẽ nhận thông báo từ cả bot và Google Calendar.
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Mẹo Sử Dụng</h2>
+            <div class="tip" style="margin-top: 0; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border-left-color: #4caf50;">
+                <strong>✨ Thời gian linh hoạt:</strong> Bot hiểu các cách viết thời gian như: "14h30", "ngày mai 10h", "thứ 2 tuần sau", "15/12 9h", "2 ngày nữa"...
+            </div>
+            <div class="tip" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left-color: #2196f3;">
+                <strong>🎯 Ưu tiên:</strong> Khi tạo việc, bạn có thể chọn mức ưu tiên: Khẩn cấp > Cao > Bình thường > Thấp. Việc khẩn cấp sẽ được nhắc thường xuyên hơn.
+            </div>
+            <div class="tip" style="background: linear-gradient(135deg, #fce4ec 0%, #f8bbd9 100%); border-left-color: #e91e63;">
+                <strong>🔔 Nhắc tự động:</strong> Bot tự động nhắc trước deadline 24 giờ và 1 giờ. Bạn có thể đặt thêm nhắc tùy chỉnh với /nhacviec.
+            </div>
+        </div>
+
+        <footer>
+            <p>TeleTask Bot - Quản lý công việc hiệu quả</p>
+            <p style="margin-top: 10px; opacity: 0.7;">Liên hệ hỗ trợ qua Telegram</p>
+        </footer>
+    </div>
+</body>
+</html>

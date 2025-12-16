@@ -19,46 +19,56 @@ Gõ /help để xem hướng dẫn chi tiết.
 """
 
 MSG_HELP = """
-Hướng dẫn sử dụng TeleTask Bot
+📖 HƯỚNG DẪN SỬ DỤNG TELETASK BOT
 
-TẠO VIỆC CÁ NHÂN:
-/taoviec [nội dung] [thời gian]
+━━━━━ TẠO VIỆC ━━━━━
+/taoviec - Tạo việc cá nhân (wizard)
+/giaoviec - Giao việc cho người khác
+
 Ví dụ:
   /taoviec Họp đội 14h30
-  /taoviec Nộp báo cáo ngày mai 10h
-  /taoviec Mua quà sinh nhật 15/12
+  /giaoviec @nam Chuẩn bị slide ngày mai 10h
 
-GIAO VIỆC CHO NGƯỜI KHÁC:
-/giaoviec @username [nội dung] [thời gian]
-Ví dụ:
-  /giaoviec @nam Chuẩn bị slide 10h ngày mai
-  /giaoviec @linh Review code trước 17h
+━━━━━ VIỆC LẶP LẠI ━━━━━
+/vieclaplai - Tạo việc lặp lại tự động
+/danhsachvieclaplai - Xem danh sách việc lặp
 
-VIỆC LẶP LẠI:
-/vieclaplai [nội dung] [lịch lặp]
 Ví dụ:
   /vieclaplai Họp đội hàng tuần thứ 2 9h
   /vieclaplai Báo cáo hàng tháng ngày 1 10h
-  /vieclaplai Kiểm tra email hàng ngày 8h
-/danhsachvieclaplai - Xem việc lặp lại
 
-QUẢN LÝ VIỆC:
-/vieccanhan - Danh sách việc của bạn
-/viecdagiao - Việc bạn giao cho người khác
-/xemviec [mã việc] - Xem chi tiết việc
+━━━━━ XEM VIỆC ━━━━━
+/vieccanhan - Việc của bạn
+/viecdagiao - Việc bạn đã giao
+/xemviec [mã] - Chi tiết việc
+/timviec [từ khóa] - Tìm kiếm việc
 
-CẬP NHẬT TRẠNG THÁI:
-/xong [mã việc] - Đánh dấu hoàn thành
-/tiendo [mã việc] [%] - Cập nhật tiến độ
-/xoa [mã việc] - Xóa việc (có thể hoàn tác)
+━━━━━ CẬP NHẬT ━━━━━
+/xong [mã] - Hoàn thành việc
+/tiendo [mã] [%] - Cập nhật tiến độ
+/xoa [mã] - Xóa việc (hoàn tác 30s)
+/xoanhieu [mã1,mã2,...] - Xóa nhiều việc
 
-NHÓM:
-/viecduan - Việc trong nhóm
-/thongke - Thống kê nhóm
+━━━━━ NHẮC VIỆC ━━━━━
+/nhacviec [mã] [thời gian] - Đặt nhắc
+/xemnhac - Xem nhắc đã đặt
 
-CÀI ĐẶT:
+━━━━━ THỐNG KÊ ━━━━━
+/thongke - Thống kê tổng hợp
+/thongketuan - Thống kê tuần này
+/thongkethang - Thống kê tháng này
+/viectrehan - Xem việc trễ hạn
+/export - Xuất báo cáo (CSV/Excel/PDF)
+
+━━━━━ TÍCH HỢP ━━━━━
+/lichgoogle - Kết nối Google Calendar
+
+━━━━━ TÀI KHOẢN ━━━━━
 /thongtin - Thông tin tài khoản
-/caidat - Cài đặt thông báo, ngôn ngữ
+/start - Bắt đầu sử dụng bot
+/help - Xem hướng dẫn này
+
+💡 Gõ lệnh không tham số để xem hướng dẫn chi tiết.
 """
 
 MSG_INFO = """
@@ -129,7 +139,7 @@ Tiến độ: {progress}%
 Người tạo: {creator}
 Người nhận: {assignee}
 Deadline: {deadline}
-
+{group_line}
 Tạo lúc: {created_at}
 Cập nhật: {updated_at}
 """
