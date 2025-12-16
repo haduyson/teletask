@@ -74,6 +74,15 @@ from .recurring_service import (
     format_recurrence_description,
 )
 
+from .report_service import (
+    create_export_report,
+    get_report_by_id,
+    increment_download_count,
+    cleanup_expired_reports,
+    verify_password as verify_report_password,
+    REPORT_TTL_HOURS,
+)
+
 # Reminder and notification services are imported directly where needed
 # to avoid circular imports with scheduler
 
@@ -134,4 +143,11 @@ __all__ = [
     "delete_recurring_template",
     "parse_recurrence_pattern",
     "format_recurrence_description",
+    # Report service
+    "create_export_report",
+    "get_report_by_id",
+    "increment_download_count",
+    "cleanup_expired_reports",
+    "verify_report_password",
+    "REPORT_TTL_HOURS",
 ]

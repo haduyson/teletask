@@ -29,6 +29,7 @@ from .reminder import get_handlers as get_reminder_handlers
 from .statistics import get_handlers as get_statistics_handlers
 from .recurring_task import get_handlers as get_recurring_handlers
 from .calendar import get_handlers as get_calendar_handlers
+from .export import get_handlers as get_export_handlers
 from .callbacks import get_handlers as get_callback_handlers
 
 
@@ -76,6 +77,10 @@ def register_handlers(application: Application) -> None:
 
     # Calendar handlers
     for handler in get_calendar_handlers():
+        application.add_handler(handler)
+
+    # Export handlers
+    for handler in get_export_handlers():
         application.add_handler(handler)
 
     # Callback handlers (must be last)

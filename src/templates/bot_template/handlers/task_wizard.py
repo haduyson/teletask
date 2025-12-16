@@ -25,6 +25,7 @@ from services import (
     create_group_task,
     parse_vietnamese_time,
 )
+from handlers.calendar import sync_task_to_calendar
 from utils import (
     ERR_DATABASE,
     MSG_TASK_CREATED,
@@ -73,6 +74,39 @@ def clear_wizard_data(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Clear wizard data from user_data."""
     if "wizard" in context.user_data:
         del context.user_data["wizard"]
+
+
+async def send_private_notification(
+    context: ContextTypes.DEFAULT_TYPE,
+    telegram_id: int,
+    message: str,
+    parse_mode: str = "Markdown",
+    reply_markup=None,
+) -> bool:
+    """
+    Send private DM notification to a user.
+
+    Args:
+        context: Telegram context
+        telegram_id: User's Telegram ID
+        message: Message text
+        parse_mode: Message parse mode
+        reply_markup: Optional inline keyboard
+
+    Returns:
+        True if sent successfully, False otherwise
+    """
+    try:
+        await context.bot.send_message(
+            chat_id=telegram_id,
+            text=message,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
+        return True
+    except Exception as e:
+        logger.warning(f"Could not send private notification to {telegram_id}: {e}")
+        return False
 
 
 def format_wizard_summary(data: dict) -> str:
@@ -577,7 +611,9 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         try:
             db = get_db()
             user = update.effective_user
+            chat = update.effective_chat
             db_user = await get_or_create_user(db, user)
+            is_group_chat = chat.type in ["group", "supergroup"]
 
             assignee_ids = data.get("assignee_ids", [db_user["id"]])
             content = data.get("content", "")
@@ -611,6 +647,25 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                         ),
                         reply_markup=task_actions_keyboard(task["public_id"]),
                     )
+
+                    # Sync to Google Calendar if connected
+                    calendar_synced = False
+                    if deadline:
+                        calendar_synced = await sync_task_to_calendar(db, task, db_user["id"])
+
+                    # Send private notification if created in group
+                    if is_group_chat:
+                        calendar_note = "\n📅 *Đã thêm vào Google Calendar*" if calendar_synced else ""
+                        await send_private_notification(
+                            context,
+                            user.id,
+                            f"📋 *Việc cá nhân đã tạo*\n\n"
+                            f"*{task['public_id']}*: {content}\n"
+                            f"📅 Deadline: {deadline_str}\n"
+                            f"⚡ Ưu tiên: {priority_str}{calendar_note}\n\n"
+                            f"Xem chi tiết: /xemviec {task['public_id']}",
+                            reply_markup=task_actions_keyboard(task["public_id"]),
+                        )
                 else:
                     # Task assigned to someone else - show mention
                     assignee = await get_user_by_id(db, assignee_ids[0])
@@ -625,6 +680,40 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                         parse_mode="Markdown",
                         reply_markup=task_actions_keyboard(task["public_id"]),
                     )
+
+                    # Send private notification to creator if in group
+                    if is_group_chat:
+                        await send_private_notification(
+                            context,
+                            user.id,
+                            f"✅ *Đã giao việc*\n\n"
+                            f"📋 *{task['public_id']}*: {content}\n"
+                            f"👤 Giao cho: {assignee_mention}\n"
+                            f"📅 Deadline: {deadline_str}\n\n"
+                            f"Xem chi tiết: /xemviec {task['public_id']}",
+                            reply_markup=task_actions_keyboard(task["public_id"]),
+                        )
+
+                    # Send private notification to assignee and sync calendar
+                    if assignee and assignee.get("telegram_id") != user.id:
+                        creator_mention = mention_user(db_user)
+
+                        # Sync to assignee's Google Calendar if connected
+                        calendar_synced = False
+                        if deadline:
+                            calendar_synced = await sync_task_to_calendar(db, task, assignee_ids[0])
+                        calendar_note = "\n📅 *Đã thêm vào Google Calendar*" if calendar_synced else ""
+
+                        await send_private_notification(
+                            context,
+                            assignee["telegram_id"],
+                            f"📬 *Bạn có việc mới!*\n\n"
+                            f"📋 *{task['public_id']}*: {content}\n"
+                            f"👤 Từ: {creator_mention}\n"
+                            f"📅 Deadline: {deadline_str}{calendar_note}\n\n"
+                            f"Trả lời /xong {task['public_id']} khi hoàn thành.",
+                            reply_markup=task_actions_keyboard(task["public_id"]),
+                        )
 
                 logger.info(f"Wizard: User {user.id} created task {task['public_id']}")
 
@@ -641,7 +730,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     clear_wizard_data(context)
                     return ConversationHandler.END
 
-                group_task, _ = await create_group_task(
+                group_task, child_tasks = await create_group_task(
                     db=db,
                     content=content,
                     creator_id=db_user["id"],
@@ -665,6 +754,35 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     f"Xem chi tiết: /xemviec {group_task['public_id']}",
                     parse_mode="Markdown",
                 )
+
+                # Send private notification to creator if in group
+                if is_group_chat:
+                    await send_private_notification(
+                        context,
+                        user.id,
+                        f"✅ *Đã tạo việc nhóm*\n\n"
+                        f"📋 *{group_task['public_id']}*: {content}\n"
+                        f"👥 Người nhận: {assignee_mentions}\n"
+                        f"📅 Deadline: {deadline_str}\n\n"
+                        f"Xem chi tiết: /xemviec {group_task['public_id']}",
+                    )
+
+                # Send private notification to each assignee with their P-ID
+                creator_mention = mention_user(db_user)
+                for child_task, assignee in child_tasks:
+                    if assignee.get("telegram_id") != user.id:
+                        await send_private_notification(
+                            context,
+                            assignee["telegram_id"],
+                            f"📬 *Bạn có việc nhóm mới!*\n\n"
+                            f"📋 *{group_task['public_id']}*: {content}\n"
+                            f"👤 Từ: {creator_mention}\n"
+                            f"📅 Deadline: {deadline_str}\n"
+                            f"👥 Thành viên: {len(assignees)} người\n\n"
+                            f"🔖 Việc của bạn: *{child_task['public_id']}*\n"
+                            f"Trả lời /xong {child_task['public_id']} khi hoàn thành.",
+                            reply_markup=task_actions_keyboard(child_task['public_id']),
+                        )
 
                 logger.info(f"Wizard: User {user.id} created group task {group_task['public_id']}")
 
@@ -1325,7 +1443,9 @@ async def assign_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
         try:
             db = get_db()
             user = update.effective_user
+            chat = update.effective_chat
             db_user = await get_or_create_user(db, user)
+            is_group_chat = chat.type in ["group", "supergroup"]
 
             assignee_ids = data.get("assignee_ids", [])
             content = data.get("content", "")
@@ -1364,6 +1484,40 @@ async def assign_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                     parse_mode="Markdown",
                 )
 
+                # Send private notification to creator if in group
+                if is_group_chat:
+                    await send_private_notification(
+                        context,
+                        user.id,
+                        f"✅ *Đã giao việc*\n\n"
+                        f"📋 *{task['public_id']}*: {content}\n"
+                        f"👤 Giao cho: {assignee_mention}\n"
+                        f"📅 Deadline: {deadline_str}\n\n"
+                        f"Xem chi tiết: /xemviec {task['public_id']}",
+                        reply_markup=task_actions_keyboard(task['public_id']),
+                    )
+
+                # Send private notification to assignee and sync calendar
+                if assignee and assignee.get("telegram_id") != user.id:
+                    creator_mention = mention_user(db_user)
+
+                    # Sync to assignee's Google Calendar if connected
+                    calendar_synced = False
+                    if deadline:
+                        calendar_synced = await sync_task_to_calendar(db, task, assignee_ids[0])
+                    calendar_note = "\n📅 *Đã thêm vào Google Calendar*" if calendar_synced else ""
+
+                    await send_private_notification(
+                        context,
+                        assignee["telegram_id"],
+                        f"📬 *Bạn có việc mới!*\n\n"
+                        f"📋 *{task['public_id']}*: {content}\n"
+                        f"👤 Từ: {creator_mention}\n"
+                        f"📅 Deadline: {deadline_str}{calendar_note}\n\n"
+                        f"Trả lời /xong {task['public_id']} khi hoàn thành.",
+                        reply_markup=task_actions_keyboard(task['public_id']),
+                    )
+
                 logger.info(f"Assign wizard: User {user.id} assigned task {task['public_id']}")
 
             else:
@@ -1379,7 +1533,7 @@ async def assign_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                     clear_wizard_data(context)
                     return ConversationHandler.END
 
-                group_task, _ = await create_group_task(
+                group_task, child_tasks = await create_group_task(
                     db=db,
                     content=content,
                     creator_id=db_user["id"],
@@ -1399,6 +1553,41 @@ async def assign_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                     f"Xem chi tiết: /xemviec {group_task['public_id']}",
                     parse_mode="Markdown",
                 )
+
+                # Send private notification to creator if in group
+                if is_group_chat:
+                    await send_private_notification(
+                        context,
+                        user.id,
+                        f"✅ *Đã tạo việc nhóm*\n\n"
+                        f"📋 *{group_task['public_id']}*: {content}\n"
+                        f"👥 Người nhận: {assignee_mentions}\n"
+                        f"📅 Deadline: {deadline_str}\n\n"
+                        f"Xem chi tiết: /xemviec {group_task['public_id']}",
+                    )
+
+                # Send private notification to each assignee with their P-ID and sync calendar
+                creator_mention = mention_user(db_user)
+                for child_task, assignee in child_tasks:
+                    if assignee.get("telegram_id") != user.id:
+                        # Sync to assignee's Google Calendar if connected
+                        calendar_synced = False
+                        if deadline:
+                            calendar_synced = await sync_task_to_calendar(db, child_task, assignee["id"])
+                        calendar_note = "\n📅 *Đã thêm vào Google Calendar*" if calendar_synced else ""
+
+                        await send_private_notification(
+                            context,
+                            assignee["telegram_id"],
+                            f"📬 *Bạn có việc nhóm mới!*\n\n"
+                            f"📋 *{group_task['public_id']}*: {content}\n"
+                            f"👤 Từ: {creator_mention}\n"
+                            f"📅 Deadline: {deadline_str}\n"
+                            f"👥 Thành viên: {len(assignees)} người{calendar_note}\n\n"
+                            f"🔖 Việc của bạn: *{child_task['public_id']}*\n"
+                            f"Trả lời /xong {child_task['public_id']} khi hoàn thành.",
+                            reply_markup=task_actions_keyboard(child_task['public_id']),
+                        )
 
                 logger.info(f"Assign wizard: User {user.id} created group task {group_task['public_id']}")
 

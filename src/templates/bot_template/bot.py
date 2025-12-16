@@ -65,6 +65,8 @@ async def post_init(application: Application) -> None:
         ("thongke", "Xem thống kê tổng hợp"),
         ("thongketuan", "Xem thống kê tuần này"),
         ("thongkethang", "Xem thống kê tháng này"),
+        ("viectrehan", "Xem việc trễ hạn"),
+        ("export", "Xuất báo cáo thống kê"),
         ("thongtin", "Xem thông tin tài khoản"),
         ("lichnhatky", "Kết nối Google Calendar"),
     ]
