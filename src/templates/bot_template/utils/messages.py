@@ -82,7 +82,7 @@ Ví dụ:
 /start - Bắt đầu sử dụng bot
 /help - Xem hướng dẫn này
 
-📖 Hướng dẫn chi tiết: https://teletask.haduyson.com/hdsdbot.html
+📖 Hướng dẫn chi tiết: https://teletask.haduyson.com
 """
 
 MSG_HELP_GROUP = """
@@ -139,7 +139,7 @@ Ví dụ:
 /start - Bắt đầu sử dụng bot
 /help - Xem hướng dẫn này
 
-📖 Hướng dẫn chi tiết: https://teletask.haduyson.com/hdsdbot.html
+📖 Hướng dẫn chi tiết: https://teletask.haduyson.com
 """
 
 MSG_INFO = """
