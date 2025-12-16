@@ -5,6 +5,7 @@ Step-by-step task creation with ConversationHandler
 
 import logging
 from datetime import datetime, timedelta
+import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ContextTypes,
@@ -19,17 +20,19 @@ from database import get_db
 from services import (
     get_or_create_user,
     get_user_by_id,
+    get_user_by_username,
     create_task,
     create_group_task,
-    find_users_by_mention,
     parse_vietnamese_time,
 )
 from utils import (
     ERR_DATABASE,
     MSG_TASK_CREATED,
     validate_task_content,
+    extract_mentions,
     format_datetime,
     format_priority,
+    mention_user,
     task_actions_keyboard,
     wizard_deadline_keyboard,
     wizard_assignee_keyboard,
@@ -115,10 +118,16 @@ async def wizard_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     data = get_wizard_data(context)
     data["creator_id"] = None  # Will be set when accessing DB
 
+    # Check if group chat - need REPLY instruction
+    chat = update.effective_chat
+    is_group = chat and chat.type in ["group", "supergroup"]
+
+    reply_hint = "\n\n⚠️ REPLY tin nhắn này khi nhập (vuốt phải)" if is_group else ""
+
     await update.message.reply_text(
-        "TẠO VIỆC TỪNG BƯỚC\n\n"
-        "Bước 1/5: Nhập nội dung việc\n\n"
-        "Nhập nội dung việc cần làm:",
+        f"TẠO VIỆC TỪNG BƯỚC\n\n"
+        f"Bước 1/5: Nhập nội dung việc\n\n"
+        f"Nhập nội dung việc cần làm:{reply_hint}",
         reply_markup=wizard_cancel_keyboard(),
     )
 
@@ -227,7 +236,9 @@ async def deadline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     data = get_wizard_data(context)
     action = query.data.split(":")[1] if ":" in query.data else ""
 
-    now = datetime.now()
+    # Use timezone-aware datetime
+    tz = pytz.timezone("Asia/Ho_Chi_Minh")
+    now = datetime.now(tz)
 
     if action == "today":
         # End of today (23:59)
@@ -244,14 +255,19 @@ async def deadline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     elif action == "skip":
         data["deadline"] = None
     elif action == "custom":
+        # Check if group chat
+        chat = update.effective_chat
+        is_group = chat and chat.type in ["group", "supergroup"]
+        reply_hint = "\n\n⚠️ REPLY tin nhắn này khi nhập" if is_group else ""
+
         await query.edit_message_text(
-            "Nhập thời gian deadline:\n\n"
-            "Ví dụ:\n"
-            "• `14h30` - hôm nay 14:30\n"
-            "• `ngày mai 10h` - ngày mai 10:00\n"
-            "• `thứ 6 15h` - thứ 6 tuần này 15:00\n"
-            "• `20/12 9h` - ngày 20/12\n\n"
-            "Hoặc /huy để hủy",
+            f"Nhập thời gian deadline:\n\n"
+            f"Ví dụ:\n"
+            f"• `14h30` - hôm nay 14:30\n"
+            f"• `ngày mai 10h` - ngày mai 10:00\n"
+            f"• `thứ 6 15h` - thứ 6 tuần này 15:00\n"
+            f"• `20/12 9h` - ngày 20/12{reply_hint}\n\n"
+            f"Hoặc /huy để hủy",
             parse_mode="Markdown",
         )
         return DEADLINE_CUSTOM
@@ -380,13 +396,18 @@ async def assignee_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             return ConversationHandler.END
 
     elif action == "others":
+        # Check if group chat
+        chat = update.effective_chat
+        is_group = chat and chat.type in ["group", "supergroup"]
+        reply_hint = "\n\n⚠️ REPLY tin nhắn này khi nhập" if is_group else ""
+
         # Ask for @mention input
         await query.edit_message_text(
-            "Nhập @username hoặc tag người nhận:\n\n"
-            "Ví dụ:\n"
-            "• `@username` - một người\n"
-            "• `@user1 @user2` - nhiều người (tạo việc nhóm)\n\n"
-            "Hoặc /huy để hủy",
+            f"Nhập @username hoặc tag người nhận:\n\n"
+            f"Ví dụ:\n"
+            f"• `@username` - một người\n"
+            f"• `@user1 @user2` - nhiều người (tạo việc nhóm){reply_hint}\n\n"
+            f"Hoặc /huy để hủy",
             parse_mode="Markdown",
         )
         return ASSIGNEE_INPUT
@@ -417,8 +438,9 @@ async def assignee_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def receive_assignee_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Receive assignee @mention input."""
+    """Receive assignee mention input (supports both @username and text_mention)."""
     text = update.message.text.strip()
+    message = update.message
 
     if text.lower() in ["/huy", "/cancel"]:
         clear_wizard_data(context)
@@ -429,14 +451,52 @@ async def receive_assignee_input(update: Update, context: ContextTypes.DEFAULT_T
 
     try:
         db = get_db()
+        users = []
 
-        # Find users by mention
-        users = await find_users_by_mention(db, text)
+        # Method 1: Check message entities for text_mention (users without username)
+        if message.entities:
+            for entity in message.entities:
+                if entity.type == "text_mention" and entity.user:
+                    # User without username - register/get from entity.user
+                    mentioned_user = await get_or_create_user(db, entity.user)
+                    if not any(u["id"] == mentioned_user["id"] for u in users):
+                        users.append(mentioned_user)
+                        logger.info(f"Found text_mention: {entity.user.first_name} (id={entity.user.id})")
+
+                elif entity.type == "mention":
+                    # @username mention - extract from text
+                    full_text = message.text or ""
+                    username_with_at = full_text[entity.offset:entity.offset + entity.length]
+                    username = username_with_at.lstrip("@")
+                    found_user = await get_user_by_username(db, username)
+                    if found_user and not any(u["id"] == found_user["id"] for u in users):
+                        users.append(found_user)
+                        logger.info(f"Found @mention: @{username} (id={found_user['id']})")
+
+        # Method 2: Fallback to extract_mentions for @username in plain text
+        if not users:
+            usernames, _ = extract_mentions(text)
+            not_found = []
+            for username in usernames:
+                user = await get_user_by_username(db, username)
+                if user and not any(u["id"] == user["id"] for u in users):
+                    users.append(user)
+                else:
+                    not_found.append(username)
+
+            if not users and not_found:
+                await update.message.reply_text(
+                    f"Không tìm thấy: @{', @'.join(not_found)}\n\n"
+                    "Người nhận cần /start bot trước.\n"
+                    "Vui lòng tag tên hoặc nhập @username:",
+                )
+                return ASSIGNEE_INPUT
 
         if not users:
             await update.message.reply_text(
-                "Không tìm thấy người dùng.\n\n"
-                "Vui lòng nhập @username chính xác hoặc /huy để hủy:",
+                "Vui lòng tag tên người nhận hoặc nhập @username.\n\n"
+                "💡 Tip: Tag tên (vuốt phải reply) hoặc gõ @username\n"
+                "Hoặc /huy để hủy:",
             )
             return ASSIGNEE_INPUT
 
@@ -526,6 +586,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
             if len(assignee_ids) == 1:
                 # Single assignee - create regular task
+                is_personal = (assignee_ids[0] == db_user["id"])
                 task = await create_task(
                     db=db,
                     content=content,
@@ -533,31 +594,58 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                     assignee_id=assignee_ids[0],
                     deadline=deadline,
                     priority=priority,
-                    is_personal=(assignee_ids[0] == db_user["id"]),
+                    is_personal=is_personal,
                 )
 
                 deadline_str = format_datetime(deadline, relative=True) if deadline else "Không có"
                 priority_str = format_priority(priority)
 
-                await query.edit_message_text(
-                    MSG_TASK_CREATED.format(
-                        task_id=task["public_id"],
-                        content=content,
-                        deadline=deadline_str,
-                        priority=priority_str,
-                    ),
-                    reply_markup=task_actions_keyboard(task["public_id"]),
-                )
+                if is_personal:
+                    # Personal task - no mention needed
+                    await query.edit_message_text(
+                        MSG_TASK_CREATED.format(
+                            task_id=task["public_id"],
+                            content=content,
+                            deadline=deadline_str,
+                            priority=priority_str,
+                        ),
+                        reply_markup=task_actions_keyboard(task["public_id"]),
+                    )
+                else:
+                    # Task assigned to someone else - show mention
+                    assignee = await get_user_by_id(db, assignee_ids[0])
+                    assignee_mention = mention_user(assignee) if assignee else data.get("assignee_name", "?")
+                    await query.edit_message_text(
+                        f"✅ ĐÃ TẠO VIỆC\n\n"
+                        f"📋 *{task['public_id']}*: {content}\n"
+                        f"👤 Người nhận: {assignee_mention}\n"
+                        f"📅 Deadline: {deadline_str}\n"
+                        f"⚡ Ưu tiên: {priority_str}\n\n"
+                        f"Xem chi tiết: /xemviec {task['public_id']}",
+                        parse_mode="Markdown",
+                        reply_markup=task_actions_keyboard(task["public_id"]),
+                    )
 
                 logger.info(f"Wizard: User {user.id} created task {task['public_id']}")
 
             else:
-                # Multiple assignees - create group task
-                group_task = await create_group_task(
+                # Multiple assignees - fetch user objects and create group task
+                assignees = []
+                for aid in assignee_ids:
+                    assignee = await get_user_by_id(db, aid)
+                    if assignee:
+                        assignees.append(assignee)
+
+                if not assignees:
+                    await query.edit_message_text("Không tìm thấy người nhận.")
+                    clear_wizard_data(context)
+                    return ConversationHandler.END
+
+                group_task, _ = await create_group_task(
                     db=db,
                     content=content,
                     creator_id=db_user["id"],
-                    assignee_ids=assignee_ids,
+                    assignees=assignees,
                     deadline=deadline,
                     priority=priority,
                 )
@@ -565,14 +653,17 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 deadline_str = format_datetime(deadline, relative=True) if deadline else "Không có"
                 priority_str = format_priority(priority)
 
+                # Create mention tags for assignees
+                assignee_mentions = ", ".join(mention_user(a) for a in assignees)
+
                 await query.edit_message_text(
-                    f"VIỆC NHÓM ĐÃ TẠO\n\n"
-                    f"ID: {group_task['public_id']}\n"
-                    f"Nội dung: {content}\n"
-                    f"Deadline: {deadline_str}\n"
-                    f"Ưu tiên: {priority_str}\n"
-                    f"Số người nhận: {len(assignee_ids)}\n\n"
+                    f"✅ VIỆC NHÓM ĐÃ TẠO\n\n"
+                    f"📋 *{group_task['public_id']}*: {content}\n"
+                    f"👥 Người nhận: {assignee_mentions}\n"
+                    f"📅 Deadline: {deadline_str}\n"
+                    f"⚡ Ưu tiên: {priority_str}\n\n"
                     f"Xem chi tiết: /xemviec {group_task['public_id']}",
+                    parse_mode="Markdown",
                 )
 
                 logger.info(f"Wizard: User {user.id} created group task {group_task['public_id']}")
@@ -836,10 +927,15 @@ async def assign_wizard_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     data = get_wizard_data(context)
     data["wizard_type"] = "assign"
 
+    # Check if group chat - need REPLY instruction
+    chat = update.effective_chat
+    is_group = chat and chat.type in ["group", "supergroup"]
+    reply_hint = "\n\n⚠️ REPLY tin nhắn này khi nhập (vuốt phải)" if is_group else ""
+
     await update.message.reply_text(
-        "GIAO VIỆC TỪNG BƯỚC\n\n"
-        "Bước 1/5: Nhập nội dung việc\n\n"
-        "Nhập nội dung việc cần giao:",
+        f"GIAO VIỆC TỪNG BƯỚC\n\n"
+        f"Bước 1/5: Nhập nội dung việc\n\n"
+        f"Nhập nội dung việc cần giao:{reply_hint}",
         reply_markup=wizard_cancel_keyboard(),
     )
 
@@ -928,12 +1024,17 @@ async def assign_recipient_callback(update: Update, context: ContextTypes.DEFAUL
     action = query.data
 
     if action == "assign_input":
+        # Check if group chat
+        chat = update.effective_chat
+        is_group = chat and chat.type in ["group", "supergroup"]
+        reply_hint = "\n\n⚠️ REPLY tin nhắn này khi nhập" if is_group else ""
+
         await query.edit_message_text(
-            "Nhập @username người nhận:\n\n"
-            "Ví dụ:\n"
-            "• `@username` - một người\n"
-            "• `@user1 @user2` - nhiều người (tạo việc nhóm)\n\n"
-            "Hoặc /huy để hủy",
+            f"Nhập @username người nhận:\n\n"
+            f"Ví dụ:\n"
+            f"• `@username` - một người\n"
+            f"• `@user1 @user2` - nhiều người (tạo việc nhóm){reply_hint}\n\n"
+            f"Hoặc /huy để hủy",
             parse_mode="Markdown",
         )
         return ASSIGN_RECIPIENT  # Stay in same state but wait for text
@@ -974,8 +1075,9 @@ async def assign_recipient_callback(update: Update, context: ContextTypes.DEFAUL
 
 
 async def assign_receive_recipient(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Receive recipient @mention input."""
+    """Receive recipient mention input (supports both @username and text_mention)."""
     text = update.message.text.strip()
+    message = update.message
 
     if text.lower() in ["/huy", "/cancel"]:
         clear_wizard_data(context)
@@ -986,13 +1088,51 @@ async def assign_receive_recipient(update: Update, context: ContextTypes.DEFAULT
 
     try:
         db = get_db()
-        users = await find_users_by_mention(db, text)
+        users = []
+
+        # Method 1: Check message entities for text_mention (users without username)
+        if message.entities:
+            for entity in message.entities:
+                if entity.type == "text_mention" and entity.user:
+                    # User without username - register/get from entity.user
+                    mentioned_user = await get_or_create_user(db, entity.user)
+                    if not any(u["id"] == mentioned_user["id"] for u in users):
+                        users.append(mentioned_user)
+                        logger.info(f"Found text_mention: {entity.user.first_name} (id={entity.user.id})")
+
+                elif entity.type == "mention":
+                    # @username mention - extract from text
+                    full_text = message.text or ""
+                    username_with_at = full_text[entity.offset:entity.offset + entity.length]
+                    username = username_with_at.lstrip("@")
+                    found_user = await get_user_by_username(db, username)
+                    if found_user and not any(u["id"] == found_user["id"] for u in users):
+                        users.append(found_user)
+                        logger.info(f"Found @mention: @{username} (id={found_user['id']})")
+
+        # Method 2: Fallback to extract_mentions for @username in plain text
+        if not users:
+            usernames, _ = extract_mentions(text)
+            not_found = []
+            for username in usernames:
+                user = await get_user_by_username(db, username)
+                if user and not any(u["id"] == user["id"] for u in users):
+                    users.append(user)
+                else:
+                    not_found.append(username)
+
+            if not users and not_found:
+                await update.message.reply_text(
+                    f"Không tìm thấy: @{', @'.join(not_found)}\n\n"
+                    "Người nhận cần /start bot trước.\n"
+                    "Vui lòng tag tên hoặc nhập @username:",
+                )
+                return ASSIGN_RECIPIENT
 
         if not users:
             await update.message.reply_text(
-                "Không tìm thấy người dùng.\n\n"
-                "Vui lòng nhập @username chính xác.\n"
-                "Người nhận cần /start bot trước.\n\n"
+                "Vui lòng tag tên người nhận hoặc nhập @username.\n\n"
+                "💡 Tip: Tag tên (vuốt phải reply) hoặc gõ @username\n"
                 "Hoặc /huy để hủy:",
             )
             return ASSIGN_RECIPIENT
@@ -1050,7 +1190,9 @@ async def assign_deadline_callback(update: Update, context: ContextTypes.DEFAULT
     data = get_wizard_data(context)
     action = query.data.split(":")[1] if ":" in query.data else ""
 
-    now = datetime.now()
+    # Use timezone-aware datetime
+    tz = pytz.timezone("Asia/Ho_Chi_Minh")
+    now = datetime.now(tz)
 
     if action == "today":
         data["deadline"] = now.replace(hour=23, minute=59, second=0, microsecond=0)
@@ -1061,10 +1203,15 @@ async def assign_deadline_callback(update: Update, context: ContextTypes.DEFAULT
     elif action == "skip":
         data["deadline"] = None
     elif action == "custom":
+        # Check if group chat
+        chat = update.effective_chat
+        is_group = chat and chat.type in ["group", "supergroup"]
+        reply_hint = "\n\n⚠️ REPLY tin nhắn này khi nhập" if is_group else ""
+
         await query.edit_message_text(
-            "Nhập thời gian deadline:\n\n"
-            "Ví dụ: `14h30`, `ngày mai 10h`, `20/12 9h`\n\n"
-            "Hoặc /huy để hủy",
+            f"Nhập thời gian deadline:\n\n"
+            f"Ví dụ: `14h30`, `ngày mai 10h`, `20/12 9h`{reply_hint}\n\n"
+            f"Hoặc /huy để hủy",
             parse_mode="Markdown",
         )
         return ASSIGN_DEADLINE_CUSTOM
@@ -1204,35 +1351,53 @@ async def assign_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                     is_personal=False,
                 )
 
+                # Get assignee for mention
+                assignee = await get_user_by_id(db, assignee_ids[0])
+                assignee_mention = mention_user(assignee) if assignee else data.get("assignee_name", "?")
+
                 await query.edit_message_text(
                     f"✅ ĐÃ GIAO VIỆC\n\n"
-                    f"ID: {task['public_id']}\n"
-                    f"Nội dung: {content}\n"
-                    f"Người nhận: {data.get('assignee_name', '?')}\n"
-                    f"Deadline: {deadline_str}\n\n"
+                    f"📋 *{task['public_id']}*: {content}\n"
+                    f"👤 Người nhận: {assignee_mention}\n"
+                    f"📅 Deadline: {deadline_str}\n\n"
                     f"Xem chi tiết: /xemviec {task['public_id']}",
+                    parse_mode="Markdown",
                 )
 
                 logger.info(f"Assign wizard: User {user.id} assigned task {task['public_id']}")
 
             else:
-                # Multiple assignees - group task
-                group_task = await create_group_task(
+                # Multiple assignees - fetch user objects and create group task
+                assignees = []
+                for aid in assignee_ids:
+                    assignee = await get_user_by_id(db, aid)
+                    if assignee:
+                        assignees.append(assignee)
+
+                if not assignees:
+                    await query.edit_message_text("Không tìm thấy người nhận.")
+                    clear_wizard_data(context)
+                    return ConversationHandler.END
+
+                group_task, _ = await create_group_task(
                     db=db,
                     content=content,
                     creator_id=db_user["id"],
-                    assignee_ids=assignee_ids,
+                    assignees=assignees,
                     deadline=deadline,
                     priority=priority,
                 )
 
+                # Create mention tags for assignees
+                assignee_mentions = ", ".join(mention_user(a) for a in assignees)
+
                 await query.edit_message_text(
                     f"✅ ĐÃ TẠO VIỆC NHÓM\n\n"
-                    f"ID: {group_task['public_id']}\n"
-                    f"Nội dung: {content}\n"
-                    f"Số người nhận: {len(assignee_ids)}\n"
-                    f"Deadline: {deadline_str}\n\n"
+                    f"📋 *{group_task['public_id']}*: {content}\n"
+                    f"👥 Người nhận: {assignee_mentions}\n"
+                    f"📅 Deadline: {deadline_str}\n\n"
                     f"Xem chi tiết: /xemviec {group_task['public_id']}",
+                    parse_mode="Markdown",
                 )
 
                 logger.info(f"Assign wizard: User {user.id} created group task {group_task['public_id']}")
