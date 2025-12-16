@@ -1,147 +1,126 @@
-# TeleTask
+# TeleTask Bot
 
-Vietnamese Task Management Bot for Telegram - Manage tasks in groups and personal chats with Vietnamese language support.
+Bot quản lý công việc qua Telegram - Hỗ trợ tiếng Việt hoàn toàn.
 
-## Features
+## Giới thiệu
 
-- **Task Creation Wizard** - Step-by-step task creation with button navigation
-- **Task Assignment** - Assign tasks to individuals or groups
-- **Vietnamese Time Parsing** - Natural language time input (`ngày mai 10h`, `thứ 6 15h`)
-- **Text Mention Support** - Mention users with or without @username
-- **Group Task Management** - Create tasks for multiple assignees (G-ID/P-ID system)
-- **Reminders** - Set task reminders with Vietnamese time expressions
-- **Progress Tracking** - Track task status and completion
+TeleTask là hệ thống quản lý công việc thông minh cho Telegram, giúp bạn:
+- Tạo và theo dõi công việc cá nhân
+- Giao việc cho thành viên trong nhóm
+- Nhận thông báo nhắc nhở tự động
+- Xem báo cáo thống kê tiến độ
+- Đồng bộ với Google Calendar
 
-## Quick Start
+## Tính năng chính
 
-```bash
-# Clone repository
-git clone https://github.com/haduyson/teletask.git
-cd teletask
+### Quản lý công việc
+- **Wizard tạo việc** - Tạo việc từng bước với nút bấm hướng dẫn
+- **Giao việc nhóm** - Giao việc cho nhiều người (hệ thống G-ID/P-ID)
+- **Xóa hàng loạt** - Xóa tất cả việc với nút hoàn tác 10 giây
+- **Tìm kiếm** - Tìm việc theo từ khóa hoặc mã việc
+- **Lọc việc** - Lọc theo loại: Cá nhân (P-ID) / Nhóm (G-ID)
 
-# Copy template to deployment
-cp -r src/templates/bot_template /home/botpanel/bots/bot_001
+### Giao diện người dùng
+- **Menu tương tác** (`/menu`) - Các nút bấm tính năng
+- **Danh mục việc** (`/xemviec`) - Menu phân loại việc
+- **Nhãn in đậm** - Thông tin việc dễ đọc
+- **Đếm ngược hoàn tác** - 10 giây để khôi phục việc đã xóa
 
-# Configure environment
-cd /home/botpanel/bots/bot_001
-cp .env.example .env
-# Edit .env with your bot token and database credentials
+### Thống kê & Báo cáo
+- **Thống kê tổng hợp** - Tuần, tháng, tổng thể
+- **Việc trễ hạn** - Theo dõi và lọc theo tháng
+- **Xuất báo cáo** - PDF/Excel/CSV với chọn khoảng thời gian
 
-# Install dependencies
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+### Nhắc nhở
+- **Cài đặt nhắc** (`/caidat`) - Bật/tắt nhắc 24h và 1h trước deadline
+- **Nhắc tùy chỉnh** - Đặt nhắc theo thời gian cụ thể
+- **Thông báo tự động** - Nhắc việc sắp hết hạn
 
-# Run database migrations
-alembic upgrade head
+### Tích hợp
+- **Google Calendar** (`/lichgoogle`) - Đồng bộ deadline với lịch Google
+- **OAuth 2.0** - Xác thực an toàn
 
-# Start bot
-python bot.py
-```
+## Lệnh Bot
 
-## Bot Commands
+### Tạo việc
+| Lệnh | Mô tả |
+|------|-------|
+| `/taoviec` | Tạo việc cá nhân (wizard) |
+| `/giaoviec @user <nội dung>` | Giao việc cho người khác |
+| `/vieclaplai <nội dung> <lịch>` | Tạo việc lặp lại |
 
-### Task Creation
-| Command | Description |
-|---------|-------------|
-| `/taoviec` | Create task (wizard mode) |
-| `/taoviec <content>` | Create task (quick mode) |
-| `/vieccanhan <content>` | Create personal task |
+### Xem việc
+| Lệnh | Mô tả |
+|------|-------|
+| `/menu` | Menu tính năng (nút bấm) |
+| `/xemviec` | Danh mục việc |
+| `/xemviec <mã>` | Chi tiết việc |
+| `/viecdagiao` | Việc đã giao |
+| `/viecdanhan` | Việc được giao |
+| `/timviec <từ khóa>` | Tìm kiếm |
 
-### Task Assignment
-| Command | Description |
-|---------|-------------|
-| `/giaoviec` | Assign task (wizard mode) |
-| `/giaoviec @user <content>` | Assign to single user |
-| `/giaoviec @user1 @user2 <content>` | Assign to multiple users |
-| `/viecdagiao` | View tasks you assigned |
+### Cập nhật
+| Lệnh | Mô tả |
+|------|-------|
+| `/xong <mã>` | Hoàn thành việc |
+| `/tiendo <mã> <%>` | Cập nhật tiến độ |
+| `/xoa <mã>` | Xóa việc (hoàn tác 10s) |
+| `/xoanhieu <mã1,mã2,...>` | Xóa nhiều việc |
+| `/xoatatca` | Xóa tất cả việc |
 
-### Task Management
-| Command | Description |
-|---------|-------------|
-| `/xemviec` | View tasks with category menu |
-| `/xemviec <ID>` | View specific task details |
-| `/xong <ID>` | Mark task as completed |
-| `/danglam <ID>` | Mark task as in progress |
-| `/xoa <ID>` | Delete a task |
+### Nhắc việc
+| Lệnh | Mô tả |
+|------|-------|
+| `/nhacviec <mã> <thời gian>` | Đặt nhắc |
+| `/xemnhac` | Xem nhắc đã đặt |
+| `/caidat` | Cài đặt nhắc nhở |
 
-### Reminders
-| Command | Description |
-|---------|-------------|
-| `/nhacviec <ID> <time>` | Set reminder |
-| `/xemnhac` | View active reminders |
+### Thống kê
+| Lệnh | Mô tả |
+|------|-------|
+| `/thongke` | Thống kê tổng hợp |
+| `/thongketuan` | Thống kê tuần |
+| `/thongkethang` | Thống kê tháng |
+| `/viectrehan` | Việc trễ hạn |
+| `/export` | Xuất báo cáo |
 
-### Other
-| Command | Description |
-|---------|-------------|
-| `/start` | Start bot / Show help |
-| `/thongtin` | Bot information |
-| `/timviec <keyword>` | Search tasks |
+### Khác
+| Lệnh | Mô tả |
+|------|-------|
+| `/start` | Bắt đầu sử dụng |
+| `/help` | Hướng dẫn |
+| `/thongtin` | Thông tin tài khoản |
+| `/lichgoogle` | Kết nối Google Calendar |
 
-## Task ID System
+## Hệ thống mã việc
 
-| Format | Type | Description |
-|--------|------|-------------|
-| `T-xxx` | Individual | Single assignee task |
-| `G-xxx` | Group | Multi-assignee parent task |
-| `P-xxx` | Personal | Child task of group task |
+| Mã | Loại | Mô tả |
+|----|------|-------|
+| `P-xxx` | Cá nhân | Việc một người |
+| `G-xxx` | Nhóm | Việc nhiều người (cha) |
 
-## Project Structure
+## Công nghệ
 
-```
-teletask/
-├── src/
-│   └── templates/
-│       └── bot_template/       # Bot source code
-│           ├── bot.py          # Main entry point
-│           ├── handlers/       # Command handlers
-│           │   ├── task_wizard.py    # Wizard flows
-│           │   ├── task_create.py    # Task creation
-│           │   ├── task_assign.py    # Task assignment
-│           │   ├── task_view.py      # Task viewing
-│           │   ├── task_update.py    # Task updates
-│           │   └── callbacks.py      # Button callbacks
-│           ├── services/       # Business logic
-│           │   ├── task_service.py   # Task operations
-│           │   ├── user_service.py   # User management
-│           │   └── time_parser.py    # Vietnamese time parsing
-│           ├── database/       # Database layer
-│           │   ├── connection.py     # DB connection
-│           │   └── migrations/       # Alembic migrations
-│           ├── utils/          # Utilities
-│           │   ├── keyboards.py      # Inline keyboards
-│           │   ├── formatters.py     # Message formatting
-│           │   └── validators.py     # Input validation
-│           └── scheduler/      # Background jobs
-├── docs/                       # Documentation
-│   └── user-guide.md          # User guide
-└── plans/                      # Development plans
-```
+- **Python 3.10+** - Ngôn ngữ lập trình
+- **python-telegram-bot** - Thư viện Telegram Bot
+- **PostgreSQL** - Cơ sở dữ liệu
+- **Alembic** - Quản lý migration
+- **APScheduler** - Lập lịch nhắc nhở
+- **Google OAuth 2.0** - Xác thực Calendar
 
-## Configuration
+## Tài liệu
 
-Create `.env` file with:
+- **Hướng dẫn sử dụng:** https://teletask.haduyson.com
+- **Release Notes:** [docs/release-notes-2025-12-16.md](docs/release-notes-2025-12-16.md)
 
-```env
-BOT_TOKEN=your_telegram_bot_token
-DATABASE_URL=postgresql://user:pass@localhost:5432/teletask
-ADMIN_IDS=123456789,987654321
-TIMEZONE=Asia/Ho_Chi_Minh
-```
+## Phiên bản
 
-## Tech Stack
+- **v1.0.0** - 16/12/2025 - Phiên bản đầu tiên
 
-- **Python 3.10+**
-- **python-telegram-bot** - Telegram Bot API wrapper
-- **PostgreSQL** - Database
-- **Alembic** - Database migrations
-- **APScheduler** - Background job scheduling
-- **pytz** - Timezone handling
+## Tác giả
 
-## Documentation
+Ha Duy Son - [@haduyson](https://github.com/haduyson)
 
-- [User Guide](docs/user-guide.md) - How to use the bot
-
-## License
+## Giấy phép
 
 MIT License
