@@ -157,10 +157,12 @@ async def get_task_by_public_id(db: Database, public_id: str) -> Optional[Dict[s
     """
     task = await db.fetch_one(
         """
-        SELECT t.*, u.display_name as assignee_name, c.display_name as creator_name
+        SELECT t.*, u.display_name as assignee_name, c.display_name as creator_name,
+               g.title as group_name
         FROM tasks t
         LEFT JOIN users u ON t.assignee_id = u.id
         LEFT JOIN users c ON t.creator_id = c.id
+        LEFT JOIN groups g ON t.group_id = g.id
         WHERE t.public_id = $1 AND t.is_deleted = false
         """,
         public_id.upper()
@@ -172,10 +174,12 @@ async def get_task_by_id(db: Database, task_id: int) -> Optional[Dict[str, Any]]
     """Get task by internal ID."""
     task = await db.fetch_one(
         """
-        SELECT t.*, u.display_name as assignee_name, c.display_name as creator_name
+        SELECT t.*, u.display_name as assignee_name, c.display_name as creator_name,
+               g.title as group_name
         FROM tasks t
         LEFT JOIN users u ON t.assignee_id = u.id
         LEFT JOIN users c ON t.creator_id = c.id
+        LEFT JOIN groups g ON t.group_id = g.id
         WHERE t.id = $1 AND t.is_deleted = false
         """,
         task_id
