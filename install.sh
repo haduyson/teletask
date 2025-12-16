@@ -314,8 +314,13 @@ create_botpanel_cli() {
     # Check if botpanel already exists
     if [ -f /usr/local/bin/botpanel ]; then
         log_warn "botpanel CLI already exists at /usr/local/bin/botpanel"
-        log_info "Skipping CLI creation to preserve existing configuration"
-        return 0
+        read -p "Do you want to overwrite it? (y/N): " OVERWRITE
+        if [[ ! "$OVERWRITE" =~ ^[Yy]$ ]]; then
+            log_info "Skipping CLI creation to preserve existing configuration"
+            return 0
+        fi
+        log_info "Backing up existing botpanel to /usr/local/bin/botpanel.bak"
+        cp /usr/local/bin/botpanel /usr/local/bin/botpanel.bak
     fi
 
     log_info "Creating botpanel CLI tool..."
