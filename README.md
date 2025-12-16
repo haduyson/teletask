@@ -11,6 +11,23 @@ TeleTask là hệ thống quản lý công việc thông minh cho Telegram, giú
 - Xem báo cáo thống kê tiến độ
 - Đồng bộ với Google Calendar
 
+## Cài đặt nhanh
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/haduyson/teletask/main/install.sh | sudo bash
+```
+
+Sau khi cài đặt, quản lý bot bằng lệnh `botpanel`:
+
+```bash
+botpanel status    # Xem trạng thái
+botpanel logs      # Xem logs
+botpanel restart   # Restart bot
+botpanel help      # Xem tất cả lệnh
+```
+
+📖 [Hướng dẫn cài đặt chi tiết](installation.md)
+
 ## Tính năng chính
 
 ### Quản lý công việc
@@ -115,6 +132,8 @@ TeleTask là hệ thống quản lý công việc thông minh cho Telegram, giú
 
 ## Phiên bản
 
+- **v1.1.1** - 17/12/2025 - Automated installation script
+- **v1.1.0** - 16/12/2025 - Reminder source & Google Calendar sync
 - **v1.0.0** - 16/12/2025 - Phiên bản đầu tiên
 
 ## Tác giả
