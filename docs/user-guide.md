@@ -132,6 +132,43 @@ In group chats, you must **REPLY** to the bot's message when entering text:
 
 ---
 
+## Editing Tasks
+
+After viewing a task with `/xemviec T-123`, use the edit menu buttons.
+
+### Edit Options
+
+| Button | Function |
+|--------|----------|
+| 📝 Sửa nội dung | Edit task content |
+| 📅 Sửa deadline | Change deadline |
+| 👤 Sửa người nhận | Change assignee(s) |
+| 🔔 Sửa độ ưu tiên | Change priority |
+
+### Editing Assignee ("Sửa người nhận")
+
+**Two ways to change assignee:**
+
+1. **@username** - Type username directly
+   ```
+   @newuser
+   ```
+
+2. **Text mention** - For users WITHOUT @username
+   - Tap on member's name in group
+   - Select "Mention" from popup
+   - Reply to bot's edit prompt
+
+**Converting task types:**
+- 1 assignee → Individual task (P-ID)
+- Multiple assignees → Group task (G-ID with P-IDs)
+
+**Notes:**
+- Reply (vuốt phải) to bot message when entering text
+- Clickable mention links in confirmation messages
+
+---
+
 ## Tips
 
 1. **Use wizard mode** for complex tasks with multiple options
