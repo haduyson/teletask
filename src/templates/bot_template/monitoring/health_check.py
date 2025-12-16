@@ -220,8 +220,8 @@ class HealthCheckServer:
             )
 
     def _password_page(self, report_id: str, file_format: str, error: str = None) -> str:
-        """Generate password entry HTML page."""
-        error_html = f'<p class="error">{error}</p>' if error else ''
+        """Generate MacOS-style password entry HTML page."""
+        error_html = f'<div class="error-banner"><span class="error-icon">⚠️</span>{error}</div>' if error else ''
         format_icons = {'csv': '📄', 'xlsx': '📊', 'pdf': '📑'}
         format_names = {'csv': 'CSV', 'xlsx': 'Excel', 'pdf': 'PDF'}
 
@@ -234,125 +234,221 @@ class HealthCheckServer:
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+            background: linear-gradient(180deg, #f5f5f7 0%, #e8e8ed 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            -webkit-font-smoothing: antialiased;
         }}
-        .container {{
-            background: white;
-            border-radius: 16px;
-            padding: 40px;
-            max-width: 400px;
-            width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        }}
-        .logo {{
-            text-align: center;
-            margin-bottom: 30px;
-        }}
-        .logo h1 {{
-            font-size: 28px;
-            color: #333;
-            margin-bottom: 5px;
-        }}
-        .logo p {{
-            color: #666;
-            font-size: 14px;
-        }}
-        .file-info {{
-            background: #f8f9fa;
+        .macos-window {{
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 25px;
-            text-align: center;
+            max-width: 380px;
+            width: 100%;
+            box-shadow: 0 22px 70px 4px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
+            overflow: hidden;
         }}
-        .file-icon {{
-            font-size: 48px;
-            margin-bottom: 10px;
-        }}
-        .file-type {{
-            font-weight: 600;
-            color: #333;
-        }}
-        form {{
+        .window-header {{
+            background: linear-gradient(180deg, #e8e8e8 0%, #d6d6d6 100%);
+            padding: 12px 16px;
             display: flex;
-            flex-direction: column;
-            gap: 15px;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
         }}
-        label {{
+        .traffic-lights {{
+            display: flex;
+            gap: 8px;
+        }}
+        .traffic-light {{
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+        }}
+        .light-close {{ background: #ff5f57; }}
+        .light-minimize {{ background: #febc2e; }}
+        .light-maximize {{ background: #28c840; }}
+        .window-title {{
+            flex: 1;
+            text-align: center;
+            font-size: 13px;
             font-weight: 500;
-            color: #333;
-            font-size: 14px;
+            color: #4d4d4d;
+            margin-right: 52px;
         }}
-        input[type="password"] {{
-            padding: 15px;
-            border: 2px solid #e1e5eb;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: border-color 0.3s;
+        .window-content {{
+            padding: 30px;
         }}
-        input[type="password"]:focus {{
-            outline: none;
-            border-color: #667eea;
+        .app-icon {{
+            text-align: center;
+            margin-bottom: 16px;
         }}
-        button {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 15px;
-            border-radius: 10px;
-            font-size: 16px;
+        .app-icon-img {{
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(180deg, #007aff 0%, #0055d4 100%);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            margin: 0 auto;
+            box-shadow: 0 4px 12px rgba(0,122,255,0.3);
+        }}
+        .app-title {{
+            text-align: center;
+            margin-bottom: 24px;
+        }}
+        .app-title h1 {{
+            font-size: 18px;
             font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            color: #1d1d1f;
+            margin-bottom: 4px;
         }}
-        button:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        .app-title p {{
+            font-size: 13px;
+            color: #86868b;
         }}
-        .error {{
-            background: #fee2e2;
-            color: #dc2626;
-            padding: 12px;
+        .file-badge {{
+            background: #f5f5f7;
             border-radius: 8px;
-            font-size: 14px;
-            text-align: center;
+            padding: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(0,0,0,0.04);
         }}
-        .footer {{
+        .file-badge-icon {{
+            font-size: 28px;
+        }}
+        .file-badge-info {{
+            flex: 1;
+        }}
+        .file-badge-type {{
+            font-size: 13px;
+            font-weight: 600;
+            color: #1d1d1f;
+        }}
+        .file-badge-desc {{
+            font-size: 11px;
+            color: #86868b;
+        }}
+        .error-banner {{
+            background: #fff2f2;
+            border: 1px solid #ffcdd2;
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #c62828;
+        }}
+        .error-icon {{
+            font-size: 14px;
+        }}
+        .form-group {{
+            margin-bottom: 16px;
+        }}
+        .form-label {{
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: #1d1d1f;
+            margin-bottom: 6px;
+        }}
+        .form-input {{
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 15px;
+            border: 1px solid #d2d2d7;
+            border-radius: 8px;
+            background: #fff;
+            transition: all 0.2s;
+            font-family: inherit;
+        }}
+        .form-input:focus {{
+            outline: none;
+            border-color: #007aff;
+            box-shadow: 0 0 0 3px rgba(0,122,255,0.2);
+        }}
+        .btn-primary {{
+            width: 100%;
+            padding: 10px 20px;
+            font-size: 15px;
+            font-weight: 500;
+            color: #fff;
+            background: linear-gradient(180deg, #007aff 0%, #0055d4 100%);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }}
+        .btn-primary:hover {{
+            background: linear-gradient(180deg, #0077ed 0%, #004fc4 100%);
+            transform: scale(1.01);
+        }}
+        .btn-primary:active {{
+            transform: scale(0.99);
+        }}
+        .footer-note {{
             text-align: center;
-            margin-top: 20px;
-            color: #999;
-            font-size: 12px;
+            margin-top: 16px;
+            font-size: 11px;
+            color: #86868b;
         }}
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="logo">
-            <h1>📋 TeleTask</h1>
-            <p>Báo cáo thống kê công việc</p>
+    <div class="macos-window">
+        <div class="window-header">
+            <div class="traffic-lights">
+                <div class="traffic-light light-close"></div>
+                <div class="traffic-light light-minimize"></div>
+                <div class="traffic-light light-maximize"></div>
+            </div>
+            <div class="window-title">TeleTask Report</div>
         </div>
-        <div class="file-info">
-            <div class="file-icon">{format_icons.get(file_format, '📄')}</div>
-            <div class="file-type">File {format_names.get(file_format, file_format.upper())}</div>
+        <div class="window-content">
+            <div class="app-icon">
+                <div class="app-icon-img">📋</div>
+            </div>
+            <div class="app-title">
+                <h1>Tải báo cáo</h1>
+                <p>Nhập mật khẩu để tải xuống file</p>
+            </div>
+            <div class="file-badge">
+                <div class="file-badge-icon">{format_icons.get(file_format, '📄')}</div>
+                <div class="file-badge-info">
+                    <div class="file-badge-type">Báo cáo {format_names.get(file_format, file_format.upper())}</div>
+                    <div class="file-badge-desc">Thống kê công việc TeleTask</div>
+                </div>
+            </div>
+            {error_html}
+            <form method="post">
+                <div class="form-group">
+                    <label class="form-label" for="password">Mật khẩu</label>
+                    <input type="password" id="password" name="password" class="form-input" placeholder="Nhập mật khẩu..." required autofocus>
+                </div>
+                <button type="submit" class="btn-primary">Tải xuống</button>
+            </form>
+            <p class="footer-note">Link hết hạn sau 72 giờ</p>
         </div>
-        {error_html}
-        <form method="post">
-            <label for="password">Nhập mật khẩu để tải file:</label>
-            <input type="password" id="password" name="password" placeholder="Mật khẩu" required autofocus>
-            <button type="submit">⬇️ Tải xuống</button>
-        </form>
-        <p class="footer">Báo cáo sẽ hết hạn sau 72 giờ</p>
     </div>
 </body>
 </html>'''
 
     def _error_page(self, title: str, message: str) -> str:
-        """Generate error HTML page."""
+        """Generate MacOS-style error HTML page."""
         return f'''<!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -362,43 +458,98 @@ class HealthCheckServer:
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+            background: linear-gradient(180deg, #f5f5f7 0%, #e8e8ed 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            -webkit-font-smoothing: antialiased;
         }}
-        .container {{
-            background: white;
-            border-radius: 16px;
-            padding: 40px;
-            max-width: 400px;
+        .macos-window {{
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 12px;
+            max-width: 340px;
             width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 22px 70px 4px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }}
+        .window-header {{
+            background: linear-gradient(180deg, #e8e8e8 0%, #d6d6d6 100%);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+        }}
+        .traffic-lights {{
+            display: flex;
+            gap: 8px;
+        }}
+        .traffic-light {{
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            box-shadow: inset 0 0 0 1px rgba(0,0,0,0.1);
+        }}
+        .light-close {{ background: #ff5f57; }}
+        .light-minimize {{ background: #febc2e; }}
+        .light-maximize {{ background: #28c840; }}
+        .window-title {{
+            flex: 1;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 500;
+            color: #4d4d4d;
+            margin-right: 52px;
+        }}
+        .window-content {{
+            padding: 30px;
             text-align: center;
         }}
-        .icon {{
-            font-size: 64px;
-            margin-bottom: 20px;
+        .error-icon {{
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(180deg, #ff3b30 0%, #d32f2f 100%);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            margin: 0 auto 16px;
+            box-shadow: 0 4px 12px rgba(255,59,48,0.3);
         }}
         h1 {{
-            color: #dc2626;
-            font-size: 24px;
-            margin-bottom: 10px;
+            font-size: 18px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 8px;
         }}
-        p {{
-            color: #666;
-            font-size: 14px;
+        .message {{
+            font-size: 13px;
+            color: #86868b;
+            line-height: 1.5;
         }}
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="icon">❌</div>
-        <h1>{title}</h1>
-        <p>{message}</p>
+    <div class="macos-window">
+        <div class="window-header">
+            <div class="traffic-lights">
+                <div class="traffic-light light-close"></div>
+                <div class="traffic-light light-minimize"></div>
+                <div class="traffic-light light-maximize"></div>
+            </div>
+            <div class="window-title">TeleTask</div>
+        </div>
+        <div class="window-content">
+            <div class="error-icon">❌</div>
+            <h1>{title}</h1>
+            <p class="message">{message}</p>
+        </div>
     </div>
 </body>
 </html>'''
