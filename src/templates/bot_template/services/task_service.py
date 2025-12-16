@@ -837,6 +837,9 @@ async def get_tasks_assigned_to_others(
 ) -> List[Dict[str, Any]]:
     """
     Get tasks created by user but assigned to others (not self).
+    Includes:
+    - Group tasks (G-IDs) that have child tasks assigned to others
+    - Individual tasks (T-IDs) assigned to others
 
     Args:
         db: Database connection
@@ -847,13 +850,25 @@ async def get_tasks_assigned_to_others(
     """
     tasks = await db.fetch_all(
         """
-        SELECT t.*, u.display_name as assignee_name
+        SELECT DISTINCT t.*,
+               COALESCE(u.display_name, 'Nhóm') as assignee_name
         FROM tasks t
         LEFT JOIN users u ON t.assignee_id = u.id
         WHERE t.creator_id = $1
-          AND t.assignee_id != $1
           AND t.is_deleted = false
           AND t.parent_task_id IS NULL
+          AND (
+              -- Individual tasks assigned to others
+              (t.assignee_id IS NOT NULL AND t.assignee_id != $1)
+              OR
+              -- Group tasks (have children assigned to others)
+              EXISTS (
+                  SELECT 1 FROM tasks child
+                  WHERE child.parent_task_id = t.id
+                    AND child.assignee_id != $1
+                    AND child.is_deleted = false
+              )
+          )
         ORDER BY t.created_at DESC
         """,
         creator_id

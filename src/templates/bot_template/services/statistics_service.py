@@ -44,9 +44,9 @@ async def calculate_user_stats(
 
     if group_id:
         base_query += " AND group_id = $4"
-        row = await db.fetchrow(base_query, user_id, period_start, period_end, group_id)
+        row = await db.fetch_one(base_query, user_id, period_start, period_end, group_id)
     else:
-        row = await db.fetchrow(base_query, user_id, period_start, period_end)
+        row = await db.fetch_one(base_query, user_id, period_start, period_end)
 
     if row:
         return {
@@ -64,7 +64,7 @@ async def calculate_user_stats(
 
 async def calculate_all_time_stats(db, user_id: int) -> Dict[str, int]:
     """Calculate all-time stats for user."""
-    row = await db.fetchrow(
+    row = await db.fetch_one(
         """
         SELECT
             COUNT(*) FILTER (WHERE creator_id = $1) as total_assigned,
@@ -179,7 +179,7 @@ async def get_group_rankings(
     db, group_id: int, period_type: str, period_start: date
 ) -> List[Dict[str, Any]]:
     """Get user rankings in group."""
-    rows = await db.fetch(
+    rows = await db.fetch_all(
         """
         SELECT us.*, u.display_name, u.username,
                CASE
@@ -205,7 +205,7 @@ async def get_active_users_for_report(db, report_type: str = "weekly") -> List[D
     """Get users who have report notification enabled."""
     column = "notify_weekly_report" if report_type == "weekly" else "notify_monthly_report"
 
-    rows = await db.fetch(
+    rows = await db.fetch_all(
         f"""
         SELECT id, telegram_id, display_name, username
         FROM users
@@ -217,7 +217,7 @@ async def get_active_users_for_report(db, report_type: str = "weekly") -> List[D
 
 async def get_user_groups(db, user_id: int) -> List[Dict]:
     """Get groups user belongs to."""
-    rows = await db.fetch(
+    rows = await db.fetch_all(
         """
         SELECT g.id, g.title
         FROM groups g
@@ -227,3 +227,113 @@ async def get_user_groups(db, user_id: int) -> List[Dict]:
         user_id,
     )
     return [dict(r) for r in rows]
+
+
+async def get_overdue_tasks(
+    db,
+    user_id: int,
+    period: str = "all",
+) -> List[Dict[str, Any]]:
+    """
+    Get overdue tasks for user.
+
+    Args:
+        db: Database connection
+        user_id: User ID
+        period: Filter period - 'day' (today), 'week', 'month', 'all'
+
+    Returns:
+        List of overdue task records
+    """
+    now = datetime.now(TZ)
+
+    # Build date filter based on period
+    if period == "day":
+        # Today only
+        period_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        period_filter = "AND deadline >= $3"
+    elif period == "week":
+        # This week (Mon-Sun)
+        today = now.date()
+        week_start = today - timedelta(days=today.weekday())
+        period_start = datetime.combine(week_start, datetime.min.time()).replace(tzinfo=TZ)
+        period_filter = "AND deadline >= $3"
+    elif period == "month":
+        # This month
+        period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        period_filter = "AND deadline >= $3"
+    else:
+        # All overdue
+        period_start = None
+        period_filter = ""
+
+    base_query = f"""
+        SELECT t.*, u.display_name as creator_name,
+               g.title as group_name
+        FROM tasks t
+        LEFT JOIN users u ON t.creator_id = u.id
+        LEFT JOIN groups g ON t.group_id = g.id
+        WHERE (t.assignee_id = $1 OR t.creator_id = $1)
+          AND t.is_deleted = false
+          AND t.status != 'completed'
+          AND t.deadline IS NOT NULL
+          AND t.deadline < $2
+          {period_filter}
+        ORDER BY t.deadline ASC
+    """
+
+    if period_start:
+        rows = await db.fetch_all(base_query, user_id, now, period_start)
+    else:
+        rows = await db.fetch_all(base_query.replace("$3", ""), user_id, now)
+
+    return [dict(r) for r in rows]
+
+
+async def get_overdue_stats(
+    db,
+    user_id: int,
+) -> Dict[str, int]:
+    """
+    Get overdue task counts by period.
+
+    Args:
+        db: Database connection
+        user_id: User ID
+
+    Returns:
+        Dict with overdue counts: today, this_week, this_month, total
+    """
+    now = datetime.now(TZ)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = datetime.combine(
+        now.date() - timedelta(days=now.date().weekday()),
+        datetime.min.time()
+    ).replace(tzinfo=TZ)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    row = await db.fetch_one(
+        """
+        SELECT
+            COUNT(*) FILTER (WHERE deadline >= $3) as today,
+            COUNT(*) FILTER (WHERE deadline >= $4) as this_week,
+            COUNT(*) FILTER (WHERE deadline >= $5) as this_month,
+            COUNT(*) as total
+        FROM tasks
+        WHERE (assignee_id = $1 OR creator_id = $1)
+          AND is_deleted = false
+          AND status != 'completed'
+          AND deadline IS NOT NULL
+          AND deadline < $2
+        """,
+        user_id, now, today_start, week_start, month_start,
+    )
+
+    if row:
+        return {
+            "today": row["today"] or 0,
+            "this_week": row["this_week"] or 0,
+            "this_month": row["this_month"] or 0,
+            "total": row["total"] or 0,
+        }
+    return {"today": 0, "this_week": 0, "this_month": 0, "total": 0}

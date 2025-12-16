@@ -92,21 +92,23 @@ class ResourceMonitor:
                 process.cpu_percent()
             )
 
-            # Check overdue tasks
-            await self._check_overdue_tasks()
+            # Overdue task check disabled - use /viectrehan command instead
+            # await self._check_overdue_tasks()
 
         except Exception as e:
             logger.error(f"Error checking resources: {e}")
 
     async def _check_overdue_tasks(self):
-        """Check and alert for overdue tasks."""
+        """Check and alert for overdue tasks (current month only)."""
         try:
+            # Only count overdue tasks from current month
             result = await self.db.fetch_one("""
                 SELECT COUNT(*) as count
                 FROM tasks
                 WHERE is_deleted = false
                 AND status != 'completed'
                 AND deadline < NOW()
+                AND deadline >= DATE_TRUNC('month', NOW())
             """)
             overdue_count = result['count'] if result else 0
 

@@ -174,14 +174,14 @@ class AlertService:
             )
 
     async def alert_overdue_tasks(self, count: int):
-        """Alert on overdue tasks (daily summary)."""
+        """Alert on overdue tasks for current month (daily summary)."""
         if count > 0:
             await self.send_alert(
                 'info',
                 'OVERDUE TASKS',
-                f"""📋 Có {count} việc quá hạn
+                f"""📋 Có {count} việc quá hạn trong tháng này
 
-Xem chi tiết: /deadline 0""",
+Xem chi tiết: /viectrehan""",
                 cooldown_key='overdue_tasks',
                 cooldown_seconds=86400  # Once per day
             )

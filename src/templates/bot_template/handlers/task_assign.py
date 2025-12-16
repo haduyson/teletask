@@ -121,12 +121,15 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         remaining_text = text
 
         # Method 1: Reply to message (single assignee)
+        # Skip if replying to own message (creator should not auto-assign to self)
         if message.reply_to_message and message.reply_to_message.from_user:
             assignee_tg_user = message.reply_to_message.from_user
-            assignee = await get_or_create_user(db, assignee_tg_user)
-            if is_group:
-                await add_group_member(db, group_id, assignee["id"], "member")
-            assignees.append(assignee)
+            # Only add if NOT the creator (avoid auto-assigning to self)
+            if assignee_tg_user.id != user.id:
+                assignee = await get_or_create_user(db, assignee_tg_user)
+                if is_group:
+                    await add_group_member(db, group_id, assignee["id"], "member")
+                assignees.append(assignee)
 
         # Method 2: Process message entities for mentions
         # - text_mention: for users without username (has user_id in entity)
