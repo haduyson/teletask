@@ -376,3 +376,18 @@ def task_type_filter_keyboard(current_filter: str = "all") -> InlineKeyboardMark
             InlineKeyboardButton(grp_label, callback_data="task_filter:group"),
         ],
     ])
+
+
+def bulk_delete_confirm_keyboard(action: str, count: int) -> InlineKeyboardMarkup:
+    """Create bulk delete confirmation buttons."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                f"✅ Xác nhận xóa {count} việc",
+                callback_data=f"bulk_delete:{action}:confirm"
+            ),
+        ],
+        [
+            InlineKeyboardButton("❌ Hủy", callback_data=f"bulk_delete:{action}:cancel"),
+        ],
+    ])

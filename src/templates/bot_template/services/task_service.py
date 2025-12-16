@@ -793,6 +793,122 @@ async def restore_task(db: Database, undo_id: int) -> Optional[Dict[str, Any]]:
     return await get_task_by_id(db, task_id)
 
 
+async def get_tasks_created_by_user(
+    db: Database,
+    user_id: int,
+    include_assigned_to_others: bool = True,
+) -> List[Dict[str, Any]]:
+    """
+    Get all non-deleted tasks created by user.
+
+    Args:
+        db: Database connection
+        user_id: Creator user ID
+        include_assigned_to_others: Include tasks assigned to others
+
+    Returns:
+        List of tasks
+    """
+    if include_assigned_to_others:
+        query = """
+            SELECT t.*, u.display_name as assignee_name
+            FROM tasks t
+            LEFT JOIN users u ON t.assignee_id = u.id
+            WHERE t.creator_id = $1 AND t.is_deleted = false
+            ORDER BY t.created_at DESC
+        """
+    else:
+        # Only tasks assigned to self
+        query = """
+            SELECT t.*, u.display_name as assignee_name
+            FROM tasks t
+            LEFT JOIN users u ON t.assignee_id = u.id
+            WHERE t.creator_id = $1 AND t.assignee_id = $1 AND t.is_deleted = false
+            ORDER BY t.created_at DESC
+        """
+
+    tasks = await db.fetch_all(query, user_id)
+    return [dict(t) for t in tasks]
+
+
+async def get_tasks_assigned_to_others(
+    db: Database,
+    creator_id: int,
+) -> List[Dict[str, Any]]:
+    """
+    Get tasks created by user but assigned to others (not self).
+
+    Args:
+        db: Database connection
+        creator_id: Creator user ID
+
+    Returns:
+        List of tasks assigned to others
+    """
+    tasks = await db.fetch_all(
+        """
+        SELECT t.*, u.display_name as assignee_name
+        FROM tasks t
+        LEFT JOIN users u ON t.assignee_id = u.id
+        WHERE t.creator_id = $1
+          AND t.assignee_id != $1
+          AND t.is_deleted = false
+          AND t.parent_task_id IS NULL
+        ORDER BY t.created_at DESC
+        """,
+        creator_id
+    )
+    return [dict(t) for t in tasks]
+
+
+async def bulk_delete_tasks(
+    db: Database,
+    task_ids: List[int],
+    user_id: int,
+) -> int:
+    """
+    Bulk delete multiple tasks (no undo).
+
+    Args:
+        db: Database connection
+        task_ids: List of task IDs to delete
+        user_id: User performing deletion
+
+    Returns:
+        Number of tasks deleted
+    """
+    if not task_ids:
+        return 0
+
+    # Mark tasks as deleted
+    result = await db.execute(
+        """
+        UPDATE tasks SET
+            is_deleted = true,
+            deleted_at = NOW(),
+            deleted_by = $2,
+            updated_at = NOW()
+        WHERE id = ANY($1) AND is_deleted = false
+        """,
+        task_ids, user_id
+    )
+
+    # Also delete child tasks (for group tasks)
+    await db.execute(
+        """
+        UPDATE tasks SET
+            is_deleted = true,
+            deleted_at = NOW(),
+            deleted_by = $2,
+            updated_at = NOW()
+        WHERE parent_task_id = ANY($1) AND is_deleted = false
+        """,
+        task_ids, user_id
+    )
+
+    return len(task_ids)
+
+
 async def add_task_history(
     db: Database,
     task_id: int,

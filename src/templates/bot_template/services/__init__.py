@@ -56,6 +56,10 @@ from .task_service import (
     is_group_task,
     convert_individual_to_group,
     update_group_assignees,
+    # Bulk delete functions
+    get_tasks_created_by_user,
+    get_tasks_assigned_to_others,
+    bulk_delete_tasks,
 )
 
 from .recurring_service import (
@@ -116,6 +120,10 @@ __all__ = [
     "is_group_task",
     "convert_individual_to_group",
     "update_group_assignees",
+    # Bulk delete functions
+    "get_tasks_created_by_user",
+    "get_tasks_assigned_to_others",
+    "bulk_delete_tasks",
     # Recurring service
     "create_recurring_template",
     "get_recurring_template",

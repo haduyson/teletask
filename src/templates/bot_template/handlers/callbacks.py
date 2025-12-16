@@ -20,6 +20,7 @@ from services import (
     restore_task,
     parse_vietnamese_time,
     get_user_by_username,
+    bulk_delete_tasks,
 )
 from utils import (
     MSG_TASK_RESTORED,
@@ -157,6 +158,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         elif action in ("stats_weekly", "stats_monthly"):
             from handlers.statistics import handle_stats_callback
             await handle_stats_callback(update, context)
+
+        # Bulk delete callbacks
+        elif action == "bulk_delete":
+            delete_type = parts[1]  # "all" or "assigned"
+            confirm_action = parts[2]  # "confirm" or "cancel"
+            await handle_bulk_delete(query, db, db_user, delete_type, confirm_action, context)
 
         else:
             logger.warning(f"Unknown callback action: {action}")
@@ -1031,6 +1038,41 @@ async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.error(f"Error handling pending edit: {e}")
         await update.message.reply_text("Lỗi hệ thống. Vui lòng thử lại.")
+
+
+async def handle_bulk_delete(query, db, db_user, delete_type: str, action: str, context) -> None:
+    """Handle bulk delete confirmation/cancellation."""
+    if action == "cancel":
+        await query.edit_message_text("Đã hủy xóa hàng loạt.")
+        return
+
+    if action == "confirm":
+        # Get task IDs from context
+        task_ids = context.user_data.get("bulk_delete_ids", [])
+        stored_type = context.user_data.get("bulk_delete_type", "")
+
+        if not task_ids:
+            await query.edit_message_text("Không tìm thấy danh sách việc cần xóa.")
+            return
+
+        if stored_type != delete_type:
+            await query.edit_message_text("Lỗi xác thực. Vui lòng thử lại.")
+            return
+
+        # Process bulk deletion
+        count = await bulk_delete_tasks(db, task_ids, db_user["id"])
+
+        # Clear context data
+        context.user_data.pop("bulk_delete_ids", None)
+        context.user_data.pop("bulk_delete_type", None)
+
+        if delete_type == "all":
+            msg = f"✅ Đã xóa *{count}* việc thành công."
+        else:
+            msg = f"✅ Đã xóa *{count}* việc đã giao thành công."
+
+        await query.edit_message_text(msg, parse_mode="Markdown")
+        logger.info(f"Bulk deleted {count} tasks for user {db_user['id']} (type: {delete_type})")
 
 
 def get_handlers() -> list:

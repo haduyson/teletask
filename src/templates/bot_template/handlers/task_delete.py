@@ -13,6 +13,9 @@ from services import (
     get_task_by_public_id,
     soft_delete_task,
     restore_task,
+    get_tasks_created_by_user,
+    get_tasks_assigned_to_others,
+    bulk_delete_tasks,
 )
 from utils import (
     MSG_TASK_DELETED,
@@ -22,6 +25,7 @@ from utils import (
     ERR_DATABASE,
     undo_keyboard,
     confirm_keyboard,
+    bulk_delete_confirm_keyboard,
     format_datetime,
     format_status,
 )
@@ -135,8 +139,129 @@ async def process_restore(db, undo_id: int) -> tuple:
     return True, task
 
 
+# =============================================================================
+# Bulk Delete Commands
+# =============================================================================
+
+async def xoahet_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /xoahet command - Delete all tasks created by user.
+    Shows confirmation before deletion.
+    """
+    user = update.effective_user
+    if not user:
+        return
+
+    try:
+        db = get_db()
+        db_user = await get_or_create_user(db, user)
+
+        # Get all tasks created by user (including assigned to self)
+        tasks = await get_tasks_created_by_user(db, db_user["id"], include_assigned_to_others=True)
+
+        if not tasks:
+            await update.message.reply_text("Bạn không có việc nào để xóa.")
+            return
+
+        # Store task IDs in context for callback
+        task_ids = [t["id"] for t in tasks]
+        context.user_data["bulk_delete_ids"] = task_ids
+        context.user_data["bulk_delete_type"] = "all"
+
+        # Build task list preview
+        preview_lines = []
+        for t in tasks[:5]:  # Show max 5 tasks
+            content_short = t["content"][:30] + "..." if len(t["content"]) > 30 else t["content"]
+            preview_lines.append(f"• {t['public_id']}: {content_short}")
+
+        if len(tasks) > 5:
+            preview_lines.append(f"... và {len(tasks) - 5} việc khác")
+
+        preview = "\n".join(preview_lines)
+
+        await update.message.reply_text(
+            f"⚠️ XÁC NHẬN XÓA TẤT CẢ VIỆC?\n\n"
+            f"Bạn có *{len(tasks)}* việc sẽ bị xóa:\n\n"
+            f"{preview}\n\n"
+            f"⚠️ *Lưu ý:* Hành động này không thể hoàn tác!",
+            reply_markup=bulk_delete_confirm_keyboard("all", len(tasks)),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error in xoahet_command: {e}")
+        await update.message.reply_text(ERR_DATABASE)
+
+
+async def xoaviecdagiao_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /xoaviecdagiao command - Delete tasks assigned to others.
+    Only deletes tasks where creator != assignee.
+    """
+    user = update.effective_user
+    if not user:
+        return
+
+    try:
+        db = get_db()
+        db_user = await get_or_create_user(db, user)
+
+        # Get tasks assigned to others (creator != assignee)
+        tasks = await get_tasks_assigned_to_others(db, db_user["id"])
+
+        if not tasks:
+            await update.message.reply_text("Bạn không có việc đã giao cho người khác.")
+            return
+
+        # Store task IDs in context for callback
+        task_ids = [t["id"] for t in tasks]
+        context.user_data["bulk_delete_ids"] = task_ids
+        context.user_data["bulk_delete_type"] = "assigned"
+
+        # Build task list preview
+        preview_lines = []
+        for t in tasks[:5]:  # Show max 5 tasks
+            content_short = t["content"][:25] + "..." if len(t["content"]) > 25 else t["content"]
+            assignee = t.get("assignee_name", "?")
+            preview_lines.append(f"• {t['public_id']}: {content_short} → {assignee}")
+
+        if len(tasks) > 5:
+            preview_lines.append(f"... và {len(tasks) - 5} việc khác")
+
+        preview = "\n".join(preview_lines)
+
+        await update.message.reply_text(
+            f"⚠️ XÁC NHẬN XÓA VIỆC ĐÃ GIAO?\n\n"
+            f"Bạn có *{len(tasks)}* việc đã giao:\n\n"
+            f"{preview}\n\n"
+            f"⚠️ *Lưu ý:* Hành động này không thể hoàn tác!",
+            reply_markup=bulk_delete_confirm_keyboard("assigned", len(tasks)),
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error(f"Error in xoaviecdagiao_command: {e}")
+        await update.message.reply_text(ERR_DATABASE)
+
+
+async def process_bulk_delete(
+    db,
+    user_id: int,
+    task_ids: list,
+    bot,
+) -> int:
+    """
+    Process bulk deletion.
+    Returns count of deleted tasks.
+    """
+    count = await bulk_delete_tasks(db, task_ids, user_id)
+    return count
+
+
 def get_handlers() -> list:
     """Return list of handlers for this module."""
     return [
         CommandHandler(["xoa", "xoaviec"], xoa_command),
+        CommandHandler("xoahet", xoahet_command),
+        CommandHandler("xoaviecdagiao", xoaviecdagiao_command),
     ]

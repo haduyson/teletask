@@ -89,6 +89,7 @@ from .keyboards import (
     confirm_keyboard,
     edit_menu_keyboard,
     edit_priority_keyboard,
+    bulk_delete_confirm_keyboard,
     # Wizard keyboards
     wizard_deadline_keyboard,
     wizard_assignee_keyboard,
@@ -180,6 +181,7 @@ __all__ = [
     "confirm_keyboard",
     "edit_menu_keyboard",
     "edit_priority_keyboard",
+    "bulk_delete_confirm_keyboard",
     # Wizard keyboards
     "wizard_deadline_keyboard",
     "wizard_assignee_keyboard",
