@@ -119,10 +119,12 @@ async def create_task(
                 is_calendar_enabled,
                 get_user_token_data,
                 create_calendar_event,
+                get_user_reminder_source,
             )
             if is_calendar_enabled():
                 token_data = await get_user_token_data(db, assignee_id)
                 if token_data:
+                    reminder_source = await get_user_reminder_source(db, assignee_id)
                     event_id = await create_calendar_event(
                         token_data,
                         public_id,
@@ -130,6 +132,7 @@ async def create_task(
                         deadline,
                         description or "",
                         priority,
+                        reminder_source,
                     )
                     if event_id:
                         await db.execute(
@@ -568,11 +571,13 @@ async def update_task_deadline(
                 get_user_token_data,
                 create_calendar_event,
                 update_calendar_event,
+                get_user_reminder_source,
             )
             if is_calendar_enabled():
                 assignee_id = current.get("assignee_id")
                 token_data = await get_user_token_data(db, assignee_id)
                 if token_data:
+                    reminder_source = await get_user_reminder_source(db, assignee_id)
                     event_id = current.get("google_event_id")
                     if event_id:
                         # Update existing event
@@ -590,6 +595,7 @@ async def update_task_deadline(
                             current["public_id"], current["content"],
                             deadline, current.get("description", ""),
                             current.get("priority", "normal"),
+                            reminder_source,
                         )
                         if new_event_id:
                             await db.execute(
@@ -923,6 +929,154 @@ async def bulk_delete_tasks(
         WHERE parent_task_id = ANY($1) AND is_deleted = false
         """,
         task_ids, user_id
+    )
+
+    return len(task_ids)
+
+
+async def bulk_soft_delete_with_undo(
+    db: Database,
+    task_ids: List[int],
+    user_id: int,
+) -> Optional[int]:
+    """
+    Bulk soft delete tasks with undo support.
+
+    Creates a single undo record for all tasks.
+
+    Args:
+        db: Database connection
+        task_ids: List of task IDs to delete
+        user_id: User performing deletion
+
+    Returns:
+        Undo ID for restoring all tasks
+    """
+    if not task_ids:
+        return None
+
+    # Get all tasks data for undo
+    tasks = await db.fetch_all(
+        "SELECT * FROM tasks WHERE id = ANY($1) AND is_deleted = false",
+        task_ids
+    )
+
+    if not tasks:
+        return None
+
+    # Store in undo buffer (store all task IDs and data)
+    expires_at = datetime.now() + timedelta(seconds=30)
+    undo = await db.fetch_one(
+        """
+        INSERT INTO deleted_tasks_undo (task_id, task_data, deleted_by, expires_at)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+        """,
+        task_ids[0],  # Store first task ID as reference
+        json.dumps({
+            "bulk": True,
+            "task_ids": task_ids,
+            "tasks": [dict(t) for t in tasks]
+        }, default=str),
+        user_id,
+        expires_at
+    )
+
+    # Mark all tasks as deleted
+    await db.execute(
+        """
+        UPDATE tasks SET
+            is_deleted = true,
+            deleted_at = NOW(),
+            deleted_by = $2,
+            updated_at = NOW()
+        WHERE id = ANY($1) AND is_deleted = false
+        """,
+        task_ids, user_id
+    )
+
+    # Also delete child tasks
+    await db.execute(
+        """
+        UPDATE tasks SET
+            is_deleted = true,
+            deleted_at = NOW(),
+            deleted_by = $2,
+            updated_at = NOW()
+        WHERE parent_task_id = ANY($1) AND is_deleted = false
+        """,
+        task_ids, user_id
+    )
+
+    return undo["id"] if undo else None
+
+
+async def bulk_restore_tasks(db: Database, undo_id: int) -> int:
+    """
+    Restore bulk deleted tasks from undo buffer.
+
+    Args:
+        db: Database connection
+        undo_id: Undo record ID
+
+    Returns:
+        Number of tasks restored
+    """
+    # Get undo record
+    undo = await db.fetch_one(
+        """
+        SELECT * FROM deleted_tasks_undo
+        WHERE id = $1 AND is_restored = false AND expires_at > NOW()
+        """,
+        undo_id
+    )
+
+    if not undo:
+        return 0
+
+    try:
+        task_data = json.loads(undo["task_data"])
+    except (json.JSONDecodeError, TypeError):
+        return 0
+
+    # Check if this is a bulk delete record
+    if not task_data.get("bulk"):
+        return 0
+
+    task_ids = task_data.get("task_ids", [])
+    if not task_ids:
+        return 0
+
+    # Restore all tasks
+    await db.execute(
+        """
+        UPDATE tasks SET
+            is_deleted = false,
+            deleted_at = NULL,
+            deleted_by = NULL,
+            updated_at = NOW()
+        WHERE id = ANY($1)
+        """,
+        task_ids
+    )
+
+    # Also restore child tasks
+    await db.execute(
+        """
+        UPDATE tasks SET
+            is_deleted = false,
+            deleted_at = NULL,
+            deleted_by = NULL,
+            updated_at = NOW()
+        WHERE parent_task_id = ANY($1)
+        """,
+        task_ids
+    )
+
+    # Mark undo record as used
+    await db.execute(
+        "UPDATE deleted_tasks_undo SET is_restored = true WHERE id = $1",
+        undo_id
     )
 
     return len(task_ids)

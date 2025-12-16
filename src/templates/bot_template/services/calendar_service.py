@@ -158,6 +158,7 @@ async def create_calendar_event(
     deadline: datetime,
     description: str = "",
     priority: str = "normal",
+    reminder_source: str = "both",
 ) -> Optional[str]:
     """
     Create a calendar event for a task.
@@ -169,6 +170,7 @@ async def create_calendar_event(
         deadline: Task deadline
         description: Optional description
         priority: Task priority for color coding
+        reminder_source: User's reminder source setting (telegram/google_calendar/both)
 
     Returns:
         Google Calendar event ID or None
@@ -199,14 +201,25 @@ async def create_calendar_event(
                 "timeZone": "Asia/Ho_Chi_Minh",
             },
             "colorId": color_map.get(priority, "7"),
-            "reminders": {
+        }
+
+        # Set Google Calendar reminders based on user preference
+        if reminder_source in ("google_calendar", "both"):
+            event["reminders"] = {
                 "useDefault": False,
                 "overrides": [
-                    {"method": "popup", "minutes": 60},
-                    {"method": "popup", "minutes": 1440},  # 24h
+                    {"method": "popup", "minutes": 5},     # 5 minutes before
+                    {"method": "popup", "minutes": 30},    # 30 minutes before
+                    {"method": "popup", "minutes": 60},    # 1 hour before
+                    {"method": "popup", "minutes": 1440},  # 24 hours before
                 ],
-            },
-        }
+            }
+        else:
+            # telegram only - no Google Calendar reminders
+            event["reminders"] = {
+                "useDefault": False,
+                "overrides": [],
+            }
 
         result = service.events().insert(
             calendarId="primary",
@@ -364,6 +377,29 @@ async def get_user_token_data(db, user_id: int) -> Optional[Dict[str, str]]:
     except Exception as e:
         logger.error(f"Error getting user token data: {e}")
         return None
+
+
+async def get_user_reminder_source(db, user_id: int) -> str:
+    """
+    Get user's reminder source setting.
+
+    Args:
+        db: Database connection
+        user_id: Database user ID
+
+    Returns:
+        Reminder source: 'telegram', 'google_calendar', or 'both'
+    """
+    try:
+        user = await db.fetch_one(
+            "SELECT reminder_source FROM users WHERE id = $1",
+            user_id
+        )
+        return user["reminder_source"] if user and user["reminder_source"] else "both"
+
+    except Exception as e:
+        logger.error(f"Error getting user reminder source: {e}")
+        return "both"
 
 
 async def save_user_tokens(

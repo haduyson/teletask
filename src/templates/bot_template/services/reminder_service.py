@@ -19,6 +19,8 @@ TZ = pytz.timezone("Asia/Ho_Chi_Minh")
 BEFORE_DEADLINE = [
     ("24h", timedelta(hours=24)),
     ("1h", timedelta(hours=1)),
+    ("30m", timedelta(minutes=30)),
+    ("5m", timedelta(minutes=5)),
 ]
 
 # Default reminder offsets after deadline (for overdue tasks)
@@ -109,7 +111,7 @@ async def create_reminder(
 
 async def get_pending_reminders(db: Database) -> List[Dict[str, Any]]:
     """
-    Get all reminders due now.
+    Get all reminders due now, respecting user's reminder preferences.
 
     Args:
         db: Database connection
@@ -121,7 +123,8 @@ async def get_pending_reminders(db: Database) -> List[Dict[str, Any]]:
         """
         SELECT r.*,
                t.content, t.public_id, t.status, t.priority, t.progress, t.deadline,
-               u.telegram_id, u.display_name
+               u.telegram_id, u.display_name, u.reminder_source,
+               u.remind_24h, u.remind_1h, u.remind_30m, u.remind_5m, u.remind_overdue
         FROM reminders r
         JOIN tasks t ON r.task_id = t.id
         JOIN users u ON r.user_id = u.id
@@ -129,11 +132,41 @@ async def get_pending_reminders(db: Database) -> List[Dict[str, Any]]:
           AND r.remind_at <= CURRENT_TIMESTAMP
           AND t.is_deleted = false
           AND t.status != 'completed'
+          AND (u.reminder_source IS NULL OR u.reminder_source IN ('telegram', 'both'))
         ORDER BY r.remind_at
         LIMIT 50
         """
     )
-    return [dict(r) for r in reminders]
+
+    # Filter based on user's individual reminder preferences
+    filtered = []
+    for r in reminders:
+        reminder = dict(r)
+        offset = reminder.get("reminder_offset", "")
+        reminder_type = reminder.get("reminder_type", "")
+
+        # Map reminder_offset to user setting
+        if reminder_type == "after_deadline":
+            # Overdue reminders
+            if reminder.get("remind_overdue", True):
+                filtered.append(reminder)
+        elif offset == "24h":
+            if reminder.get("remind_24h", True):
+                filtered.append(reminder)
+        elif offset == "1h":
+            if reminder.get("remind_1h", True):
+                filtered.append(reminder)
+        elif offset == "30m":
+            if reminder.get("remind_30m", True):
+                filtered.append(reminder)
+        elif offset == "5m":
+            if reminder.get("remind_5m", True):
+                filtered.append(reminder)
+        else:
+            # Custom reminders always go through
+            filtered.append(reminder)
+
+    return filtered
 
 
 async def mark_reminder_sent(

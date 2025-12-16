@@ -18,6 +18,7 @@ from services.calendar_service import (
     disconnect_calendar,
     get_user_token_data,
     create_calendar_event,
+    get_user_reminder_source,
 )
 
 logger = logging.getLogger(__name__)
@@ -154,6 +155,7 @@ async def sync_all_tasks_to_calendar(db, db_user: dict) -> int:
         )
 
         synced = 0
+        reminder_source = await get_user_reminder_source(db, db_user["id"])
         for task in tasks:
             event_id = await create_calendar_event(
                 token_data,
@@ -162,6 +164,7 @@ async def sync_all_tasks_to_calendar(db, db_user: dict) -> int:
                 task["deadline"],
                 task.get("description", ""),
                 task.get("priority", "normal"),
+                reminder_source,
             )
 
             if event_id:
@@ -203,6 +206,7 @@ async def sync_task_to_calendar(db, task: dict, user_id: int) -> Optional[str]:
         if not token_data:
             return None
 
+        reminder_source = await get_user_reminder_source(db, user_id)
         event_id = await create_calendar_event(
             token_data,
             task["public_id"],
@@ -210,6 +214,7 @@ async def sync_task_to_calendar(db, task: dict, user_id: int) -> Optional[str]:
             task["deadline"],
             task.get("description", ""),
             task.get("priority", "normal"),
+            reminder_source,
         )
 
         if event_id:
