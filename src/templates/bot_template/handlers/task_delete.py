@@ -308,19 +308,16 @@ async def delete_task_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 async def delete_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle deletion confirmation with 10s countdown."""
     query = update.callback_query
-    logger.info(f"delete_confirm_callback triggered: {query.data}")
     await query.answer()
 
     user = update.effective_user
     task_id = query.data.split(":")[1] if ":" in query.data else ""
-    logger.info(f"Processing delete confirmation for task: {task_id}")
 
     try:
         db = get_db()
         db_user = await get_or_create_user(db, user)
 
         success, result = await process_delete(db, task_id, db_user["id"], context.bot)
-        logger.info(f"process_delete result: success={success}, result={result}")
 
         if success:
             undo_id = result
@@ -338,7 +335,6 @@ async def delete_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
             job_queue = context.application.job_queue
 
             if job_queue:
-                logger.info(f"Scheduling countdown for task {task_id}, undo_id {undo_id}")
 
                 # Schedule countdown updates every second (9s -> 1s)
                 for seconds in range(9, 0, -1):
@@ -367,9 +363,6 @@ async def delete_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                     },
                     name=f"undo_expired_{undo_id}",
                 )
-                logger.info(f"Countdown jobs scheduled for {task_id}")
-            else:
-                logger.warning("job_queue is not available - countdown disabled")
         else:
             await query.edit_message_text(f"❌ {result}")
 
@@ -387,8 +380,6 @@ async def _countdown_update_job(context) -> None:
     undo_id = job_data["undo_id"]
     seconds = job_data["seconds"]
 
-    logger.info(f"Countdown update: task {task_id}, {seconds}s remaining")
-
     try:
         await context.bot.edit_message_text(
             chat_id=chat_id,
@@ -398,7 +389,7 @@ async def _countdown_update_job(context) -> None:
             reply_markup=undo_keyboard(undo_id, seconds),
         )
     except Exception as e:
-        logger.warning(f"Could not update countdown: {e}")
+        logger.debug(f"Could not update countdown: {e}")
 
 
 async def _countdown_expired_job(context) -> None:
@@ -408,8 +399,6 @@ async def _countdown_expired_job(context) -> None:
     message_id = job_data["message_id"]
     task_id = job_data["task_id"]
 
-    logger.info(f"Countdown expired for task {task_id}")
-
     try:
         await context.bot.edit_message_text(
             chat_id=chat_id,
@@ -418,7 +407,7 @@ async def _countdown_expired_job(context) -> None:
                  f"⏰ Đã hết thời gian hoàn tác.",
         )
     except Exception as e:
-        logger.warning(f"Could not update expired message: {e}")
+        logger.debug(f"Could not update expired message: {e}")
 
 
 async def delete_all_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
