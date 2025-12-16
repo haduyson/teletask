@@ -12,7 +12,7 @@ Handlers:
 - task_delete: /xoa
 - reminder: /nhacviec, /xemnhac
 - recurring_task: /vieclaplai, /danhsachvieclaplai
-- calendar: /lichnhatky
+- calendar: /lichgoogle
 - callbacks: Inline button handlers
 """
 

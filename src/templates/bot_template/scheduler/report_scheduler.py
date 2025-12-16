@@ -3,8 +3,9 @@ Report Scheduler
 Weekly and monthly report jobs
 """
 
+import os
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from apscheduler.triggers.cron import CronTrigger
 import pytz
@@ -34,12 +35,20 @@ class ReportScheduler:
         self.scheduler = None
         self.bot = None
         self.db = None
+        self.admin_ids = []
 
     def start(self, scheduler, bot, db) -> None:
         """Register report jobs with the scheduler."""
         self.scheduler = scheduler
         self.bot = bot
         self.db = db
+
+        # Parse admin IDs (support both personal and group IDs)
+        admin_ids_str = os.getenv('ADMIN_IDS', '')
+        for x in admin_ids_str.split(','):
+            x = x.strip()
+            if x.lstrip('-').isdigit() and x:
+                self.admin_ids.append(int(x))
 
         # Weekly report: Saturday 17:00
         self.scheduler.add_job(
@@ -56,6 +65,16 @@ class ReportScheduler:
             id="monthly_reports",
             replace_existing=True,
         )
+
+        # Admin daily summary: Every day at 08:00
+        if self.admin_ids:
+            self.scheduler.add_job(
+                self._send_admin_summary,
+                CronTrigger(hour=8, minute=0, timezone=TZ),
+                id="admin_daily_summary",
+                replace_existing=True,
+            )
+            logger.info(f"Admin summary scheduled for {len(self.admin_ids)} recipients")
 
         logger.info("Report scheduler jobs registered")
 
@@ -161,6 +180,71 @@ class ReportScheduler:
                 logger.error(f"Error sending monthly report to user {user['id']}: {e}")
 
         logger.info(f"Monthly reports sent: {success_count}/{len(users)}")
+
+    async def _send_admin_summary(self) -> None:
+        """Send daily summary report to admins (personal or group)."""
+        if not self.admin_ids:
+            return
+
+        logger.info("Starting admin daily summary generation")
+
+        try:
+            now = datetime.now(TZ)
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+            # Get overall statistics
+            total_stats = await self.db.fetch_one("""
+                SELECT
+                    COUNT(*) as total_tasks,
+                    COUNT(*) FILTER (WHERE status = 'pending') as pending_tasks,
+                    COUNT(*) FILTER (WHERE status = 'completed') as completed_tasks,
+                    COUNT(*) FILTER (WHERE status != 'completed' AND deadline < NOW()) as overdue_tasks,
+                    COUNT(*) FILTER (WHERE created_at >= $1) as today_tasks,
+                    COUNT(*) FILTER (WHERE completed_at >= $1) as today_completed
+                FROM tasks
+                WHERE is_deleted = false
+            """, today_start)
+
+            total_users = await self.db.fetch_one(
+                "SELECT COUNT(*) as count FROM users"
+            )
+
+            # Calculate completion rate
+            total = total_stats['total_tasks'] or 0
+            completed = total_stats['completed_tasks'] or 0
+            completion_rate = (completed / total * 100) if total > 0 else 0
+
+            # Format message
+            bot_name = os.getenv('BOT_NAME', 'TeleTask')
+            message = f"""📊 BÁO CÁO TỔNG HỢP - {bot_name}
+📅 Ngày: {now.strftime('%d/%m/%Y')}
+
+👥 Tổng người dùng: {total_users['count']}
+📋 Tổng số việc: {total}
+
+📅 Hôm nay:
+• Việc mới: {total_stats['today_tasks'] or 0}
+• Đã hoàn thành: {total_stats['today_completed'] or 0}
+
+📊 Trạng thái tổng:
+• Đang chờ: {total_stats['pending_tasks'] or 0}
+• Đã hoàn thành: {completed}
+• Quá hạn: {total_stats['overdue_tasks'] or 0}
+• Tỷ lệ hoàn thành: {completion_rate:.1f}%"""
+
+            # Send to all admin IDs (personal or group)
+            sent_count = 0
+            for admin_id in self.admin_ids:
+                try:
+                    await self.bot.send_message(chat_id=admin_id, text=message)
+                    sent_count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to send admin summary to {admin_id}: {e}")
+
+            logger.info(f"Admin summary sent to {sent_count}/{len(self.admin_ids)} recipients")
+
+        except Exception as e:
+            logger.error(f"Error generating admin summary: {e}")
 
 
 # Global instance

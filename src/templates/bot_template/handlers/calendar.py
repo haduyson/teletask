@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
-    /lichnhatky - Show calendar connection status and options.
+    /lichgoogle - Show calendar connection status and options.
     """
     user = update.effective_user
 
@@ -99,7 +99,7 @@ async def calendar_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
             await query.edit_message_text(
                 "✅ Đã ngắt kết nối Google Calendar.\n\n"
-                "Sử dụng /lichnhatky để kết nối lại."
+                "Sử dụng /lichgoogle để kết nối lại."
             )
 
         elif data == "cal_sync_all":
@@ -113,7 +113,7 @@ async def calendar_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
             await query.edit_message_text(
                 f"✅ Đã đồng bộ {synced} việc vào Google Calendar!\n\n"
-                f"Sử dụng /lichnhatky để xem tùy chọn."
+                f"Sử dụng /lichgoogle để xem tùy chọn."
             )
 
     except Exception as e:
@@ -228,6 +228,6 @@ async def sync_task_to_calendar(db, task: dict, user_id: int) -> Optional[str]:
 def get_handlers() -> list:
     """Return calendar handlers."""
     return [
-        CommandHandler("lichnhatky", calendar_command),
+        CommandHandler("lichgoogle", calendar_command),
         CallbackQueryHandler(calendar_callback, pattern="^cal_"),
     ]

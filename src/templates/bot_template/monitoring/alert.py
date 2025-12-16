@@ -185,3 +185,35 @@ Xem chi tiết: /viectrehan""",
                 cooldown_key='overdue_tasks',
                 cooldown_seconds=86400  # Once per day
             )
+
+    async def send_admin_summary_report(self, stats: dict):
+        """Send daily/weekly summary report to admins."""
+        total_tasks = stats.get('total_tasks', 0)
+        total_users = stats.get('total_users', 0)
+        today_tasks = stats.get('today_tasks', 0)
+        today_completed = stats.get('today_completed', 0)
+        pending_tasks = stats.get('pending_tasks', 0)
+        overdue_tasks = stats.get('overdue_tasks', 0)
+        completion_rate = stats.get('completion_rate', 0)
+
+        message = f"""📈 BÁO CÁO TỔNG HỢP
+
+👥 Tổng người dùng: {total_users}
+📋 Tổng số việc: {total_tasks}
+
+📅 Hôm nay:
+• Việc mới: {today_tasks}
+• Đã hoàn thành: {today_completed}
+
+📊 Trạng thái:
+• Đang chờ: {pending_tasks}
+• Quá hạn: {overdue_tasks}
+• Tỷ lệ hoàn thành: {completion_rate:.1f}%"""
+
+        await self.send_alert(
+            'info',
+            'ADMIN SUMMARY',
+            message,
+            cooldown_key='admin_summary',
+            cooldown_seconds=86400  # Once per day
+        )

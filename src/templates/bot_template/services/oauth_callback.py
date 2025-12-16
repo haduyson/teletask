@@ -115,7 +115,7 @@ async def oauth_callback_handler(request: web.Request) -> web.Response:
                     <h2>✅ Kết nối thành công!</h2>
                     <p>Google Calendar đã được kết nối với tài khoản Telegram của bạn.</p>
                     <p>Bạn có thể đóng trang này và quay lại Telegram.</p>
-                    <p>Sử dụng <code>/lichnhatky</code> để xem tùy chọn.</p>
+                    <p>Sử dụng <code>/lichgoogle</code> để xem tùy chọn.</p>
                 </body>
                 </html>
                 """,

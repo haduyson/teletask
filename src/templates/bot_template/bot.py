@@ -68,7 +68,7 @@ async def post_init(application: Application) -> None:
         ("viectrehan", "Xem việc trễ hạn"),
         ("export", "Xuất báo cáo thống kê"),
         ("thongtin", "Xem thông tin tài khoản"),
-        ("lichnhatky", "Kết nối Google Calendar"),
+        ("lichgoogle", "Kết nối Google Calendar"),
     ]
     await application.bot.set_my_commands(commands)
     logger.info("Bot commands registered")
@@ -133,7 +133,12 @@ async def main() -> None:
     start_time = datetime.now()
 
     admin_ids_str = os.getenv('ADMIN_IDS', '')
-    admin_ids = [int(x.strip()) for x in admin_ids_str.split(',') if x.strip().isdigit()]
+    # Support both personal IDs (positive) and group IDs (negative)
+    admin_ids = []
+    for x in admin_ids_str.split(','):
+        x = x.strip()
+        if x.lstrip('-').isdigit() and x:
+            admin_ids.append(int(x))
 
     if admin_ids:
         try:

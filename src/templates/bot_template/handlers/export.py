@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 TZ = pytz.timezone("Asia/Ho_Chi_Minh")
 
 # Conversation states
-PERIOD, TASK_FILTER, FILE_FORMAT, CONFIRM = range(200, 204)
+PERIOD, CUSTOM_DATE, TASK_FILTER, FILE_FORMAT, CONFIRM = range(200, 205)
 
 # Period options
 PERIOD_OPTIONS = {
@@ -37,6 +37,7 @@ PERIOD_OPTIONS = {
     "last_week": "Tuần trước",
     "this_month": "Tháng này",
     "last_month": "Tháng trước",
+    "custom": "Tùy chọn ngày",
     "all": "Tất cả",
 }
 
@@ -86,6 +87,9 @@ def period_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton("📋 Tất cả thời gian", callback_data="export_period:all"),
+        ],
+        [
+            InlineKeyboardButton("📆 Tùy chọn ngày", callback_data="export_period:custom"),
         ],
         [
             InlineKeyboardButton("❌ Hủy", callback_data="export_cancel"),
@@ -147,7 +151,11 @@ def confirm_keyboard() -> InlineKeyboardMarkup:
 
 def format_summary(data: dict) -> str:
     """Format export settings summary."""
-    period = PERIOD_OPTIONS.get(data.get("period", ""), "?")
+    period_key = data.get("period", "")
+    if period_key == "custom":
+        period = data.get("custom_display", "Tùy chọn ngày")
+    else:
+        period = PERIOD_OPTIONS.get(period_key, "?")
     task_filter = FILTER_OPTIONS.get(data.get("filter", ""), "?")
     file_format = FORMAT_OPTIONS.get(data.get("format", ""), "?")
 
@@ -203,6 +211,22 @@ async def period_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     data["period"] = action
 
+    # Handle custom date range
+    if action == "custom":
+        await query.edit_message_text(
+            "📅 NHẬP KHOẢNG THỜI GIAN TÙY CHỌN\n\n"
+            "Nhập ngày bắt đầu và kết thúc theo định dạng:\n"
+            "`DD/MM/YYYY - DD/MM/YYYY`\n\n"
+            "Ví dụ: `01/12/2025 - 15/12/2025`\n\n"
+            "Hoặc nhấn nút bên dưới để quay lại:",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("« Quay lại", callback_data="export_back:period")],
+                [InlineKeyboardButton("❌ Hủy", callback_data="export_cancel")],
+            ]),
+        )
+        return CUSTOM_DATE
+
     await query.edit_message_text(
         f"Khoảng thời gian: {PERIOD_OPTIONS[action]}\n\n"
         "Bước 2/4: Chọn loại việc\n\n"
@@ -211,6 +235,66 @@ async def period_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
 
     return TASK_FILTER
+
+
+# =============================================================================
+# Step 1b: Custom Date Input
+# =============================================================================
+
+
+async def custom_date_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Handle custom date input."""
+    text = update.message.text.strip()
+    data = get_export_data(context)
+
+    try:
+        # Parse format: DD/MM/YYYY - DD/MM/YYYY
+        if " - " not in text:
+            raise ValueError("Thiếu dấu ' - ' phân cách")
+
+        parts = text.split(" - ")
+        if len(parts) != 2:
+            raise ValueError("Định dạng không hợp lệ")
+
+        start_str, end_str = parts[0].strip(), parts[1].strip()
+
+        # Parse dates
+        start_date = datetime.strptime(start_str, "%d/%m/%Y")
+        end_date = datetime.strptime(end_str, "%d/%m/%Y")
+
+        # Validate date range
+        if end_date < start_date:
+            raise ValueError("Ngày kết thúc phải sau ngày bắt đầu")
+
+        if (end_date - start_date).days > 365:
+            raise ValueError("Khoảng thời gian không quá 1 năm")
+
+        # Store custom dates with timezone
+        data["custom_start"] = TZ.localize(start_date.replace(hour=0, minute=0, second=0))
+        data["custom_end"] = TZ.localize(end_date.replace(hour=23, minute=59, second=59))
+        data["custom_display"] = f"{start_str} - {end_str}"
+
+        await update.message.reply_text(
+            f"Khoảng thời gian: {start_str} đến {end_str}\n\n"
+            "Bước 2/4: Chọn loại việc\n\n"
+            "Chọn loại việc cần xuất:",
+            reply_markup=filter_keyboard(),
+        )
+        return TASK_FILTER
+
+    except ValueError as e:
+        await update.message.reply_text(
+            f"❌ Lỗi: {e}\n\n"
+            "Vui lòng nhập đúng định dạng:\n"
+            "`DD/MM/YYYY - DD/MM/YYYY`\n\n"
+            "Ví dụ: `01/12/2025 - 15/12/2025`",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("« Quay lại", callback_data="export_back:period")],
+                [InlineKeyboardButton("❌ Hủy", callback_data="export_cancel")],
+            ]),
+        )
+        return CUSTOM_DATE
 
 
 # =============================================================================
@@ -296,7 +380,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             user = update.effective_user
             db_user = await get_or_create_user(db, user)
 
-            # Create the report
+            # Create the report with optional custom dates
             result = await create_export_report(
                 db=db,
                 user_id=db_user["id"],
@@ -304,6 +388,8 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 report_type=data.get("period", "all"),
                 file_format=data.get("format", "csv"),
                 task_filter=data.get("filter", "all"),
+                period_start=data.get("custom_start"),
+                period_end=data.get("custom_end"),
             )
 
             # Get report URL from environment
@@ -440,6 +526,11 @@ def get_export_conversation_handler() -> ConversationHandler:
         states={
             PERIOD: [
                 CallbackQueryHandler(period_callback, pattern=r"^export_period:"),
+                CallbackQueryHandler(cancel_callback, pattern=r"^export_cancel$"),
+            ],
+            CUSTOM_DATE: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, custom_date_handler),
+                CallbackQueryHandler(back_callback, pattern=r"^export_back:"),
                 CallbackQueryHandler(cancel_callback, pattern=r"^export_cancel$"),
             ],
             TASK_FILTER: [
