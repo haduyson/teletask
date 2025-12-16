@@ -169,6 +169,36 @@ After viewing a task with `/xemviec T-123`, use the edit menu buttons.
 
 ---
 
+## Bulk Delete
+
+Delete multiple tasks at once. Only the task creator can delete.
+
+| Command | Description |
+|---------|-------------|
+| `/xoahet` | Delete all tasks you created |
+| `/xoaviecdagiao` | Delete tasks you assigned to others |
+
+### How It Works
+
+1. Run the command
+2. Bot shows list of tasks to be deleted (preview max 5)
+3. Press **"Xác nhận"** to delete or **"Hủy"** to cancel
+
+⚠️ **Warning:** Bulk delete cannot be undone!
+
+### Example
+
+```
+/xoahet
+→ Shows: "Bạn có 3 việc sẽ bị xóa"
+→ • P-0001: Hoàn thành báo cáo...
+→ • P-0002: Gửi email...
+→ • T-0003: Review code...
+→ [Xác nhận xóa 3 việc] [Hủy]
+```
+
+---
+
 ## Tips
 
 1. **Use wizard mode** for complex tasks with multiple options
