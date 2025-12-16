@@ -4,7 +4,8 @@ Command and callback handlers for Telegram bot
 
 Handlers:
 - start: /start, /help, /thongtin
-- task_create: /taoviec, /vieccanhan
+- task_wizard: /taoviec (wizard mode, step-by-step)
+- task_create: /vieccanhan
 - task_assign: /giaoviec, /viecdagiao
 - task_view: /xemviec, /viecnhom, /timviec, /deadline
 - task_update: /xong, /danglam, /tiendo
@@ -18,6 +19,7 @@ Handlers:
 from telegram.ext import Application
 
 from .start import get_handlers as get_start_handlers
+from .task_wizard import get_handlers as get_task_wizard_handlers
 from .task_create import get_handlers as get_task_create_handlers
 from .task_assign import get_handlers as get_task_assign_handlers
 from .task_view import get_handlers as get_task_view_handlers
@@ -34,6 +36,10 @@ def register_handlers(application: Application) -> None:
     """Register all bot handlers."""
     # Start/Help handlers
     for handler in get_start_handlers():
+        application.add_handler(handler)
+
+    # Task wizard handlers (must be before task_create for /taoviec)
+    for handler in get_task_wizard_handlers():
         application.add_handler(handler)
 
     # Task create handlers

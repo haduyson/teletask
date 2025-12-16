@@ -156,7 +156,7 @@ async def vieccanhan_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 def get_handlers() -> list:
     """Return list of handlers for this module."""
+    # Note: /taoviec is now handled by task_wizard.py
     return [
-        CommandHandler("taoviec", taoviec_command),
         CommandHandler("vieccanhan", vieccanhan_command),
     ]

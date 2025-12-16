@@ -259,3 +259,120 @@ def edit_priority_keyboard(task_id: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton("« Quay lại", callback_data=f"task_edit:{task_id}"),
         ],
     ])
+
+
+# =============================================================================
+# Wizard Keyboards for Step-by-Step Task Creation
+# =============================================================================
+
+
+def wizard_deadline_keyboard() -> InlineKeyboardMarkup:
+    """Deadline selection buttons for wizard."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📅 Hôm nay", callback_data="wizard_deadline:today"),
+            InlineKeyboardButton("📅 Ngày mai", callback_data="wizard_deadline:tomorrow"),
+        ],
+        [
+            InlineKeyboardButton("📅 Tuần sau", callback_data="wizard_deadline:nextweek"),
+            InlineKeyboardButton("📅 Tháng sau", callback_data="wizard_deadline:nextmonth"),
+        ],
+        [
+            InlineKeyboardButton("⏰ Nhập thời gian", callback_data="wizard_deadline:custom"),
+            InlineKeyboardButton("⏭️ Bỏ qua", callback_data="wizard_deadline:skip"),
+        ],
+        [
+            InlineKeyboardButton("« Quay lại", callback_data="wizard_back:content"),
+            InlineKeyboardButton("❌ Hủy", callback_data="wizard_cancel"),
+        ],
+    ])
+
+
+def wizard_assignee_keyboard(recent_users: Optional[List[dict]] = None) -> InlineKeyboardMarkup:
+    """Assignee selection buttons for wizard."""
+    buttons = [
+        [
+            InlineKeyboardButton("👤 Cho mình", callback_data="wizard_assignee:self"),
+            InlineKeyboardButton("👥 Giao người khác", callback_data="wizard_assignee:others"),
+        ],
+    ]
+
+    # Add recent users if available
+    if recent_users:
+        recent_row = []
+        for user in recent_users[:3]:  # Max 3 recent users
+            name = user.get("display_name", "?")[:10]
+            user_id = user.get("id")
+            recent_row.append(
+                InlineKeyboardButton(f"@{name}", callback_data=f"wizard_assignee:user:{user_id}")
+            )
+        if recent_row:
+            buttons.append(recent_row)
+
+    buttons.extend([
+        [
+            InlineKeyboardButton("« Quay lại", callback_data="wizard_back:deadline"),
+            InlineKeyboardButton("❌ Hủy", callback_data="wizard_cancel"),
+        ],
+    ])
+
+    return InlineKeyboardMarkup(buttons)
+
+
+def wizard_priority_keyboard() -> InlineKeyboardMarkup:
+    """Priority selection buttons for wizard."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🔴 Khẩn cấp", callback_data="wizard_priority:urgent"),
+            InlineKeyboardButton("🟠 Cao", callback_data="wizard_priority:high"),
+        ],
+        [
+            InlineKeyboardButton("🟡 Bình thường", callback_data="wizard_priority:normal"),
+            InlineKeyboardButton("🟢 Thấp", callback_data="wizard_priority:low"),
+        ],
+        [
+            InlineKeyboardButton("« Quay lại", callback_data="wizard_back:assignee"),
+            InlineKeyboardButton("❌ Hủy", callback_data="wizard_cancel"),
+        ],
+    ])
+
+
+def wizard_confirm_keyboard() -> InlineKeyboardMarkup:
+    """Confirmation buttons for wizard."""
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Tạo việc", callback_data="wizard_confirm:create"),
+            InlineKeyboardButton("❌ Hủy bỏ", callback_data="wizard_confirm:cancel"),
+        ],
+        [
+            InlineKeyboardButton("✏️ Sửa nội dung", callback_data="wizard_edit:content"),
+            InlineKeyboardButton("📅 Sửa deadline", callback_data="wizard_edit:deadline"),
+        ],
+        [
+            InlineKeyboardButton("👤 Sửa người nhận", callback_data="wizard_edit:assignee"),
+            InlineKeyboardButton("🔔 Sửa độ ưu tiên", callback_data="wizard_edit:priority"),
+        ],
+    ])
+
+
+def wizard_cancel_keyboard() -> InlineKeyboardMarkup:
+    """Cancel wizard button."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Hủy", callback_data="wizard_cancel")],
+    ])
+
+
+def task_type_filter_keyboard(current_filter: str = "all") -> InlineKeyboardMarkup:
+    """Task type filter buttons (Individual/Group)."""
+    # Mark current filter with checkmark
+    ind_label = "✓ 👤 Cá nhân" if current_filter == "individual" else "👤 Cá nhân"
+    grp_label = "✓ 👥 Nhóm" if current_filter == "group" else "👥 Nhóm"
+    all_label = "✓ 📋 Tất cả" if current_filter == "all" else "📋 Tất cả"
+
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(all_label, callback_data="task_filter:all"),
+            InlineKeyboardButton(ind_label, callback_data="task_filter:individual"),
+            InlineKeyboardButton(grp_label, callback_data="task_filter:group"),
+        ],
+    ])

@@ -145,6 +145,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             category = parts[1]
             await handle_task_category(query, db, db_user, category)
 
+        # Task type filter (Individual/Group)
+        elif action == "task_filter":
+            filter_type = parts[1] if len(parts) > 1 else "all"
+            list_type = parts[2] if len(parts) > 2 else "all"
+            await handle_task_filter(query, db, db_user, filter_type, list_type)
+
         # Statistics callbacks
         elif action in ("stats_weekly", "stats_monthly"):
             from handlers.statistics import handle_stats_callback
@@ -434,14 +440,28 @@ async def handle_task_category(query, db, db_user, category: str) -> None:
     page_size = 10
 
     if category == "menu":
-        # Show category menu
+        # Show category menu with filter options
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📋 Việc cá nhân", callback_data="task_category:personal")],
+            [InlineKeyboardButton("📤 Việc đã giao", callback_data="task_category:assigned")],
+            [InlineKeyboardButton("📥 Việc đã nhận", callback_data="task_category:received")],
+            [InlineKeyboardButton("📊 Tất cả việc", callback_data="task_category:all")],
+            [
+                InlineKeyboardButton("👤 Lọc: Cá nhân", callback_data="task_filter:individual"),
+                InlineKeyboardButton("👥 Lọc: Nhóm", callback_data="task_filter:group"),
+            ],
+        ])
+
         await query.edit_message_text(
             "📋 CHỌN DANH MỤC VIỆC\n\n"
             "📋 Việc cá nhân - Việc bạn tự tạo cho mình\n"
             "📤 Việc đã giao - Việc bạn giao cho người khác\n"
             "📥 Việc đã nhận - Việc người khác giao cho bạn\n"
-            "📊 Tất cả việc - Toàn bộ việc liên quan",
-            reply_markup=task_category_keyboard(),
+            "📊 Tất cả việc - Toàn bộ việc liên quan\n\n"
+            "🔍 Lọc theo loại: Cá nhân (T/P-ID) | Nhóm (G-ID)",
+            reply_markup=keyboard,
         )
         return
 
@@ -482,6 +502,88 @@ async def handle_task_category(query, db, db_user, category: str) -> None:
     await query.edit_message_text(
         msg,
         reply_markup=task_list_with_pagination(tasks, 1, total_pages, list_type),
+    )
+
+
+async def handle_task_filter(query, db, db_user, filter_type: str, list_type: str) -> None:
+    """Handle task type filter (Individual/Group)."""
+    from services import get_all_user_related_tasks
+    from utils import format_task_list, task_type_filter_keyboard
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+
+    # Get all tasks first
+    all_tasks = await get_all_user_related_tasks(db, db_user["id"], limit=50)
+
+    if not all_tasks:
+        await query.edit_message_text(
+            "Không có việc nào.",
+            reply_markup=task_category_keyboard(),
+        )
+        return
+
+    # Filter by type
+    if filter_type == "individual":
+        # T-ID and P-ID tasks (not starting with G)
+        tasks = [t for t in all_tasks if not t.get("public_id", "").upper().startswith("G")]
+        title = "👤 VIỆC CÁ NHÂN"
+    elif filter_type == "group":
+        # G-ID tasks (group tasks)
+        tasks = [t for t in all_tasks if t.get("public_id", "").upper().startswith("G")]
+        title = "👥 VIỆC NHÓM"
+    else:
+        tasks = all_tasks
+        title = "📊 TẤT CẢ VIỆC"
+
+    # Build filter buttons row
+    filter_kb = task_type_filter_keyboard(filter_type)
+
+    if not tasks:
+        buttons = list(filter_kb.inline_keyboard) + [
+            [InlineKeyboardButton("« Quay lại danh mục", callback_data="task_category:menu")]
+        ]
+        await query.edit_message_text(
+            f"{title}\n\nKhông có việc nào trong danh mục này.",
+            reply_markup=InlineKeyboardMarkup(buttons),
+        )
+        return
+
+    total = len(tasks)
+    total_pages = max(1, (total + 9) // 10)
+    tasks = tasks[:10]  # First page
+
+    msg = format_task_list(
+        tasks=tasks,
+        title=title,
+        page=1,
+        total=total,
+    )
+
+    # Build task buttons
+    task_buttons = []
+    for task in tasks:
+        task_id = task.get("public_id", "")
+        content = task.get("content", "")[:30]
+        if len(task.get("content", "")) > 30:
+            content += "..."
+        task_buttons.append([
+            InlineKeyboardButton(f"{task_id}: {content}", callback_data=f"task_detail:{task_id}")
+        ])
+
+    # Pagination buttons
+    nav_row = []
+    nav_row.append(InlineKeyboardButton("1/{}".format(total_pages), callback_data="noop"))
+    if total_pages > 1:
+        nav_row.append(InlineKeyboardButton("Sau »", callback_data=f"task_filter:{filter_type}:2"))
+    task_buttons.append(nav_row)
+
+    # Combine: filter row + task buttons + back button
+    all_buttons = list(filter_kb.inline_keyboard) + task_buttons + [
+        [InlineKeyboardButton("« Quay lại danh mục", callback_data="task_category:menu")]
+    ]
+
+    await query.edit_message_text(
+        msg,
+        reply_markup=InlineKeyboardMarkup(all_buttons),
     )
 
 

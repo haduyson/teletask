@@ -89,6 +89,13 @@ from .keyboards import (
     confirm_keyboard,
     edit_menu_keyboard,
     edit_priority_keyboard,
+    # Wizard keyboards
+    wizard_deadline_keyboard,
+    wizard_assignee_keyboard,
+    wizard_priority_keyboard,
+    wizard_confirm_keyboard,
+    wizard_cancel_keyboard,
+    task_type_filter_keyboard,
 )
 
 from .validators import (
@@ -173,6 +180,13 @@ __all__ = [
     "confirm_keyboard",
     "edit_menu_keyboard",
     "edit_priority_keyboard",
+    # Wizard keyboards
+    "wizard_deadline_keyboard",
+    "wizard_assignee_keyboard",
+    "wizard_priority_keyboard",
+    "wizard_confirm_keyboard",
+    "wizard_cancel_keyboard",
+    "task_type_filter_keyboard",
     # Validators
     "extract_mentions",
     "validate_task_content",

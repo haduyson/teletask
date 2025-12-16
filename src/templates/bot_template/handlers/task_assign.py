@@ -383,8 +383,9 @@ async def viecdagiao_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 def get_handlers() -> list:
     """Return list of handlers for this module."""
+    # Note: /giaoviec is now handled by task_wizard.py (wizard mode)
+    # The wizard calls giaoviec_command when args are provided
     return [
-        CommandHandler("giaoviec", giaoviec_command),
         # /viecdagiao and /viectoigiao - Tasks you assigned to others
         CommandHandler(["viecdagiao", "viectoigiao"], viecdagiao_command),
     ]
