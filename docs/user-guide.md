@@ -254,6 +254,87 @@ Delete multiple tasks at once. Only the task creator can delete.
 
 ---
 
+## Export Reports (`/export`)
+
+Export task statistics as CSV, Excel, or PDF files.
+
+### How to Use
+
+1. Run `/export`
+2. Select time period (7 days, 30 days, this week, this month, custom dates)
+3. Select task filter (all, created, assigned, received)
+4. Select format (CSV, Excel, PDF)
+5. Receive download link with password
+
+### Report Access
+
+- Reports are password-protected
+- Download link expires after **72 hours**
+- MacOS-style web interface for password entry
+
+### Web Interface
+
+| Page | URL Pattern |
+|------|-------------|
+| Password Entry | `https://domain.com/report/{report_id}` |
+| User Guide | `https://domain.com/hdsdbot.html` |
+
+---
+
+## Google Calendar Integration (`/lichgoogle`)
+
+Sync task deadlines with Google Calendar.
+
+### How to Use
+
+1. Run `/lichgoogle`
+2. Click authorization link
+3. Sign in to Google account
+4. Grant calendar permissions
+5. Return to Telegram
+
+### Features
+
+- Auto-sync task deadlines to Google Calendar
+- Receive notifications from both bot and Google Calendar
+- MacOS-style OAuth callback pages
+
+---
+
+## Web Interface
+
+TeleTask provides a MacOS-style web interface for various features.
+
+### Design System
+
+| Element | Style |
+|---------|-------|
+| Window | Frosted glass with traffic lights |
+| Colors | Apple blue (#007aff), green (#34c759), red (#ff3b30) |
+| Typography | SF Pro Display/Text |
+| Corners | Rounded (8-14px) |
+
+### Pages
+
+| Page | Purpose | URL |
+|------|---------|-----|
+| User Guide | Bot documentation | `/hdsdbot.html` |
+| Export Download | Password-protected report access | `/report/{id}` |
+| OAuth Callback | Google Calendar authorization | Internal |
+
+### Responsive Design
+
+User guide page adapts to all screen sizes:
+
+| Device | Feature Grid |
+|--------|--------------|
+| Desktop (>1024px) | 4 columns + sidebar |
+| Tablet (768-1024px) | 4 columns compact |
+| Mobile (520-768px) | 4 columns small |
+| Small Mobile (<520px) | 2x2 grid |
+
+---
+
 ## Tips
 
 1. **Use wizard mode** for complex tasks with multiple options
@@ -261,3 +342,5 @@ Delete multiple tasks at once. Only the task creator can delete.
 3. **Text mention** works for users without @username
 4. **Reply to bot messages** in group chats when entering text
 5. **Clickable mentions** in task confirmations notify assignees
+6. **Export reports** are password-protected for security
+7. **User guide** available at `domain/hdsdbot.html` for quick reference
