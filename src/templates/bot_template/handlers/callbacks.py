@@ -102,6 +102,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             undo_id = int(parts[1])
             await handle_undo(query, db, undo_id, context)
 
+        # Bulk undo delete
+        elif action == "bulk_undo":
+            undo_id = int(parts[1])
+            await handle_bulk_undo(query, db, undo_id, context)
+
         # List navigation
         elif action == "list":
             list_type = parts[1]
@@ -158,6 +163,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         elif action in ("stats_weekly", "stats_monthly"):
             from handlers.statistics import handle_stats_callback
             await handle_stats_callback(update, context)
+
+        # Overdue task callbacks
+        elif data.startswith("overdue_"):
+            from handlers.statistics import handle_overdue_callback
+            await handle_overdue_callback(update, context)
 
         # Bulk delete callbacks
         elif action == "bulk_delete":
@@ -385,6 +395,32 @@ async def handle_undo(query, db, undo_id: int, context=None) -> None:
         )
     else:
         await query.edit_message_text(result)
+
+
+async def handle_bulk_undo(query, db, undo_id: int, context=None) -> None:
+    """Handle bulk undo deletion."""
+    from services import bulk_restore_tasks
+
+    # Cancel any pending countdown jobs
+    if context:
+        job_queue = context.application.job_queue if hasattr(context, 'application') else context.job_queue
+        if job_queue:
+            current_jobs = job_queue.jobs()
+            for job in current_jobs:
+                if job.name and f"bulk_undo_{undo_id}" in job.name:
+                    job.schedule_removal()
+
+    restored_count = await bulk_restore_tasks(db, undo_id)
+
+    if restored_count > 0:
+        await query.edit_message_text(
+            f"↩️ Đã hoàn tác xóa <b>{restored_count}</b> việc!",
+            parse_mode="HTML",
+        )
+    else:
+        await query.edit_message_text(
+            "❌ Không thể hoàn tác. Đã hết thời gian (10 giây).",
+        )
 
 
 async def handle_list_page(query, db, db_user, list_type: str, page: int) -> None:

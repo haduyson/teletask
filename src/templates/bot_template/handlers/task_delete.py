@@ -16,6 +16,8 @@ from services import (
     get_tasks_created_by_user,
     get_tasks_assigned_to_others,
     bulk_delete_tasks,
+    bulk_soft_delete_with_undo,
+    bulk_restore_tasks,
 )
 from utils import (
     MSG_TASK_DELETED,
@@ -24,6 +26,7 @@ from utils import (
     ERR_NO_PERMISSION,
     ERR_DATABASE,
     undo_keyboard,
+    bulk_undo_keyboard,
     confirm_keyboard,
     bulk_delete_confirm_keyboard,
     format_datetime,
@@ -410,6 +413,106 @@ async def _countdown_expired_job(context) -> None:
         logger.debug(f"Could not update expired message: {e}")
 
 
+async def _bulk_countdown_update_job(context) -> None:
+    """Job to update bulk undo button countdown."""
+    job_data = context.job.data
+    chat_id = job_data["chat_id"]
+    message_id = job_data["message_id"]
+    count = job_data["count"]
+    undo_id = job_data["undo_id"]
+    seconds = job_data["seconds"]
+
+    try:
+        # Check if undo was already performed
+        db = get_db()
+        undo_record = await db.fetch_one(
+            "SELECT is_restored FROM deleted_tasks_undo WHERE id = $1",
+            undo_id
+        )
+        if not undo_record or undo_record["is_restored"]:
+            return  # Undo already performed, skip update
+
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=f"✅ Đã xóa <b>{count}</b> việc.\n\n"
+                 f"Bấm nút bên dưới để hoàn tác:",
+            reply_markup=bulk_undo_keyboard(undo_id, count, seconds),
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.debug(f"Could not update bulk countdown: {e}")
+
+
+async def _bulk_countdown_expired_job(context) -> None:
+    """Job to handle bulk undo expiry."""
+    job_data = context.job.data
+    chat_id = job_data["chat_id"]
+    message_id = job_data["message_id"]
+    count = job_data["count"]
+    undo_id = job_data["undo_id"]
+
+    try:
+        # Check if undo was already performed
+        db = get_db()
+        undo_record = await db.fetch_one(
+            "SELECT is_restored FROM deleted_tasks_undo WHERE id = $1",
+            undo_id
+        )
+        if not undo_record or undo_record["is_restored"]:
+            return  # Undo already performed, skip expiry message
+
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=message_id,
+            text=f"🗑️ Đã xóa <b>{count}</b> việc!\n\n"
+                 f"⏰ Đã hết thời gian hoàn tác.",
+            parse_mode="HTML",
+        )
+    except Exception as e:
+        logger.debug(f"Could not update bulk expired message: {e}")
+
+
+async def bulk_undo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle bulk undo button click."""
+    query = update.callback_query
+    await query.answer()
+
+    undo_id_str = query.data.split(":")[1] if ":" in query.data else ""
+
+    try:
+        undo_id = int(undo_id_str)
+    except ValueError:
+        await query.edit_message_text("❌ Lỗi: ID không hợp lệ.")
+        return
+
+    try:
+        db = get_db()
+        restored_count = await bulk_restore_tasks(db, undo_id)
+
+        if restored_count > 0:
+            # Cancel any scheduled jobs for this undo
+            job_queue = context.application.job_queue
+            if job_queue:
+                current_jobs = job_queue.jobs()
+                for job in current_jobs:
+                    if job.name and f"bulk_undo_{undo_id}" in job.name:
+                        job.schedule_removal()
+
+            await query.edit_message_text(
+                f"↩️ Đã hoàn tác xóa <b>{restored_count}</b> việc!",
+                parse_mode="HTML",
+            )
+        else:
+            await query.edit_message_text(
+                "❌ Không thể hoàn tác. Đã hết thời gian (10 giây).",
+            )
+
+    except Exception as e:
+        logger.error(f"Error in bulk_undo_callback: {e}")
+        await query.edit_message_text("❌ Lỗi khi hoàn tác. Vui lòng thử lại.")
+
+
 async def delete_all_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle bulk delete request."""
     query = update.callback_query
@@ -446,7 +549,7 @@ async def delete_all_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 
 async def delete_all_confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle bulk delete confirmation."""
+    """Handle bulk delete confirmation with 10s countdown."""
     query = update.callback_query
     await query.answer()
 
@@ -462,16 +565,60 @@ async def delete_all_confirm_callback(update: Update, context: ContextTypes.DEFA
         db_user = await get_or_create_user(db, user)
 
         task_ids = [t["id"] for t in tasks]
-        count = await bulk_delete_tasks(db, task_ids, db_user["id"])
+        count = len(task_ids)
+
+        # Use bulk delete with undo support
+        undo_id = await bulk_soft_delete_with_undo(db, task_ids, db_user["id"])
+
+        if not undo_id:
+            await query.edit_message_text("Không thể xóa việc. Vui lòng thử lại.")
+            return
 
         # Clear stored data
         context.user_data.pop("delete_tasks", None)
         context.user_data.pop("delete_category", None)
 
         await query.edit_message_text(
-            f"✅ Đã xóa <b>{count}</b> việc thành công.",
+            f"✅ Đã xóa <b>{count}</b> việc.\n\n"
+            f"Bấm nút bên dưới để hoàn tác:",
+            reply_markup=bulk_undo_keyboard(undo_id, count, 10),
             parse_mode="HTML",
         )
+
+        # Schedule countdown updates
+        chat_id = query.message.chat_id
+        message_id = query.message.message_id
+
+        job_queue = context.application.job_queue
+
+        if job_queue:
+            # Schedule countdown updates every second (9s -> 1s)
+            for seconds in range(9, 0, -1):
+                job_queue.run_once(
+                    _bulk_countdown_update_job,
+                    when=10 - seconds,
+                    data={
+                        "chat_id": chat_id,
+                        "message_id": message_id,
+                        "count": count,
+                        "undo_id": undo_id,
+                        "seconds": seconds,
+                    },
+                    name=f"bulk_undo_countdown_{undo_id}_{seconds}",
+                )
+
+            # Schedule final expiry at 10 seconds
+            job_queue.run_once(
+                _bulk_countdown_expired_job,
+                when=10,
+                data={
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "count": count,
+                    "undo_id": undo_id,
+                },
+                name=f"bulk_undo_expired_{undo_id}",
+            )
 
     except Exception as e:
         logger.error(f"Error in delete_all_confirm_callback: {e}")
@@ -557,4 +704,5 @@ def get_handlers() -> list:
         CallbackQueryHandler(delete_confirm_callback, pattern=r"^delete_confirm:"),
         CallbackQueryHandler(delete_all_callback, pattern=r"^delete_all:(?!confirm)"),
         CallbackQueryHandler(delete_all_confirm_callback, pattern=r"^delete_all_confirm:"),
+        CallbackQueryHandler(bulk_undo_callback, pattern=r"^bulk_undo:"),
     ]

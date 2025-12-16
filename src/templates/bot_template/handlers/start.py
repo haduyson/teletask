@@ -1,17 +1,41 @@
 """
 Start Handler
-Handles /start, /help, /thongtin commands
+Handles /start, /help, /thongtin, /menu commands
 """
 
 import logging
-from telegram import Update
-from telegram.ext import ContextTypes, CommandHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 
 from database import get_db
 from services import get_or_create_user, get_user_tasks
 from utils import MSG_START, MSG_START_GROUP, MSG_HELP, MSG_HELP_GROUP, MSG_INFO, ERR_DATABASE
 
 logger = logging.getLogger(__name__)
+
+
+def main_menu_keyboard(is_group: bool = False) -> InlineKeyboardMarkup:
+    """Create main menu keyboard with feature buttons."""
+    buttons = [
+        [InlineKeyboardButton("➕ Tạo việc mới", callback_data="menu:taoviec")],
+    ]
+
+    # Only show "Giao việc" in group chats
+    if is_group:
+        buttons.append([InlineKeyboardButton("👥 Giao việc", callback_data="menu:giaoviec")])
+
+    buttons.extend([
+        [InlineKeyboardButton("📋 Xem việc của tôi", callback_data="menu:xemviec")],
+        [InlineKeyboardButton("🔄 Việc lặp lại", callback_data="menu:vieclaplai")],
+        [InlineKeyboardButton("🗑️ Xóa việc", callback_data="menu:xoaviec")],
+        [InlineKeyboardButton("📊 Thống kê", callback_data="menu:thongke")],
+        [InlineKeyboardButton("📤 Xuất báo cáo", callback_data="menu:export")],
+        [InlineKeyboardButton("📅 Google Calendar", callback_data="menu:lichgoogle")],
+        [InlineKeyboardButton("⚙️ Cài đặt", callback_data="menu:caidat")],
+        [InlineKeyboardButton("❓ Hướng dẫn", callback_data="menu:help")],
+    ])
+
+    return InlineKeyboardMarkup(buttons)
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -108,10 +132,141 @@ async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await update.message.reply_text(ERR_DATABASE)
 
 
+async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handle /menu command.
+    Show interactive menu with feature buttons.
+    """
+    user = update.effective_user
+    if not user:
+        return
+
+    chat = update.effective_chat
+    is_group = chat.type in ("group", "supergroup")
+
+    await update.message.reply_text(
+        "📱 <b>MENU CHÍNH</b>\n\n"
+        "Chọn chức năng bạn muốn sử dụng:",
+        reply_markup=main_menu_keyboard(is_group=is_group),
+        parse_mode="HTML",
+    )
+
+
+async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle menu button callbacks."""
+    query = update.callback_query
+    await query.answer()
+
+    action = query.data.split(":")[1] if ":" in query.data else ""
+
+    if action == "taoviec":
+        # Trigger task wizard
+        await query.message.reply_text(
+            "📝 <b>TẠO VIỆC MỚI</b>\n\n"
+            "Nhập nội dung việc cần làm:\n"
+            "Ví dụ: <code>Họp đội 14h30</code>\n\n"
+            "Hoặc dùng lệnh: /taoviec [nội dung]",
+            parse_mode="HTML",
+        )
+
+    elif action == "xemviec":
+        # Show task category menu
+        from utils import task_category_keyboard
+        await query.message.reply_text(
+            "📋 <b>XEM VIỆC</b>\n\n"
+            "Chọn loại việc muốn xem:",
+            reply_markup=task_category_keyboard(),
+            parse_mode="HTML",
+        )
+
+    elif action == "vieclaplai":
+        await query.message.reply_text(
+            "🔄 <b>VIỆC LẶP LẠI</b>\n\n"
+            "• /vieclaplai - Tạo việc lặp lại mới\n"
+            "• /danhsachvieclaplai - Xem danh sách việc lặp\n\n"
+            "Ví dụ:\n"
+            "<code>/vieclaplai Họp đội hàng tuần thứ 2 9h</code>",
+            parse_mode="HTML",
+        )
+
+    elif action == "xoaviec":
+        # Show delete menu
+        from handlers.task_delete import delete_menu_keyboard
+        await query.message.reply_text(
+            "🗑️ <b>XÓA VIỆC</b>\n\n"
+            "Chọn loại việc muốn xóa:",
+            reply_markup=delete_menu_keyboard(),
+            parse_mode="HTML",
+        )
+
+    elif action == "thongke":
+        await query.message.reply_text(
+            "📊 <b>THỐNG KÊ</b>\n\n"
+            "• /thongke - Thống kê tổng hợp\n"
+            "• /thongketuan - Thống kê tuần này\n"
+            "• /thongkethang - Thống kê tháng này\n"
+            "• /viectrehan - Xem việc trễ hạn",
+            parse_mode="HTML",
+        )
+
+    elif action == "export":
+        await query.message.reply_text(
+            "📤 <b>XUẤT BÁO CÁO</b>\n\n"
+            "Dùng lệnh /export để xuất báo cáo.\n\n"
+            "Định dạng hỗ trợ: CSV, Excel, PDF",
+            parse_mode="HTML",
+        )
+
+    elif action == "giaoviec":
+        await query.message.reply_text(
+            "👥 <b>GIAO VIỆC</b>\n\n"
+            "Dùng lệnh /giaoviec để giao việc cho thành viên trong nhóm.\n\n"
+            "Cách dùng:\n"
+            "<code>/giaoviec @username Nội dung việc</code>\n\n"
+            "Ví dụ:\n"
+            "<code>/giaoviec @nam Hoàn thành báo cáo 17h</code>",
+            parse_mode="HTML",
+        )
+
+    elif action == "lichgoogle":
+        await query.message.reply_text(
+            "📅 <b>GOOGLE CALENDAR</b>\n\n"
+            "Dùng lệnh /lichgoogle để kết nối với Google Calendar.\n\n"
+            "Khi kết nối, việc sẽ tự động đồng bộ với lịch Google của bạn.",
+            parse_mode="HTML",
+        )
+
+    elif action == "caidat":
+        await query.message.reply_text(
+            "⚙️ <b>CÀI ĐẶT</b>\n\n"
+            "Dùng lệnh /caidat để mở cài đặt.\n\n"
+            "Bao gồm: Ngôn ngữ, múi giờ, nhắc nhở, báo cáo tự động...",
+            parse_mode="HTML",
+        )
+
+    elif action == "help":
+        chat = update.effective_chat
+        is_private = chat.type == "private"
+        msg = MSG_HELP if is_private else MSG_HELP_GROUP
+        await query.message.reply_text(msg)
+
+    elif action == "back":
+        chat = update.effective_chat
+        is_group = chat.type in ("group", "supergroup")
+        await query.edit_message_text(
+            "📱 <b>MENU CHÍNH</b>\n\n"
+            "Chọn chức năng bạn muốn sử dụng:",
+            reply_markup=main_menu_keyboard(is_group=is_group),
+            parse_mode="HTML",
+        )
+
+
 def get_handlers() -> list:
     """Return list of handlers for this module."""
     return [
         CommandHandler("start", start_command),
         CommandHandler("help", help_command),
         CommandHandler("thongtin", info_command),
+        CommandHandler("menu", menu_command),
+        CallbackQueryHandler(menu_callback, pattern=r"^menu:"),
     ]
