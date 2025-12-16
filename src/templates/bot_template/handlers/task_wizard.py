@@ -211,7 +211,7 @@ async def direct_task_creation(update: Update, context: ContextTypes.DEFAULT_TYP
                 deadline=deadline_str,
                 priority=priority_str,
             ),
-            reply_markup=task_actions_keyboard(task["public_id"]),
+            reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
         )
 
         logger.info(f"Direct: User {user.id} created task {task['public_id']}")
@@ -332,11 +332,14 @@ async def deadline_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     except Exception:
         recent_users = None
 
+    # Check if private chat
+    is_private = update.effective_chat.type == "private"
+
     await query.edit_message_text(
         f"Deadline: {deadline_str}\n\n"
         "Bước 3/5: Chọn người nhận\n\n"
         "Giao việc cho ai?",
-        reply_markup=wizard_assignee_keyboard(recent_users),
+        reply_markup=wizard_assignee_keyboard(recent_users, is_private_chat=is_private),
     )
 
     return ASSIGNEE
@@ -391,11 +394,14 @@ async def receive_deadline_custom(update: Update, context: ContextTypes.DEFAULT_
 
     deadline_str = format_datetime(deadline, relative=True)
 
+    # Check if private chat
+    is_private = update.effective_chat.type == "private"
+
     await update.message.reply_text(
         f"Deadline: {deadline_str}\n\n"
         "Bước 3/5: Chọn người nhận\n\n"
         "Giao việc cho ai?",
-        reply_markup=wizard_assignee_keyboard(recent_users),
+        reply_markup=wizard_assignee_keyboard(recent_users, is_private_chat=is_private),
     )
 
     return ASSIGNEE
@@ -645,7 +651,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                             deadline=deadline_str,
                             priority=priority_str,
                         ),
-                        reply_markup=task_actions_keyboard(task["public_id"]),
+                        reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
                     )
 
                     # Sync to Google Calendar if connected
@@ -664,7 +670,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                             f"📅 Deadline: {deadline_str}\n"
                             f"⚡ Ưu tiên: {priority_str}{calendar_note}\n\n"
                             f"Xem chi tiết: /xemviec {task['public_id']}",
-                            reply_markup=task_actions_keyboard(task["public_id"]),
+                            reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
                         )
                 else:
                     # Task assigned to someone else - show mention
@@ -678,7 +684,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                         f"⚡ Ưu tiên: {priority_str}\n\n"
                         f"Xem chi tiết: /xemviec {task['public_id']}",
                         parse_mode="Markdown",
-                        reply_markup=task_actions_keyboard(task["public_id"]),
+                        reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
                     )
 
                     # Send private notification to creator if in group
@@ -691,7 +697,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                             f"👤 Giao cho: {assignee_mention}\n"
                             f"📅 Deadline: {deadline_str}\n\n"
                             f"Xem chi tiết: /xemviec {task['public_id']}",
-                            reply_markup=task_actions_keyboard(task["public_id"]),
+                            reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
                         )
 
                     # Send private notification to assignee and sync calendar
@@ -712,7 +718,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                             f"👤 Từ: {creator_mention}\n"
                             f"📅 Deadline: {deadline_str}{calendar_note}\n\n"
                             f"Trả lời /xong {task['public_id']} khi hoàn thành.",
-                            reply_markup=task_actions_keyboard(task["public_id"]),
+                            reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
                         )
 
                 logger.info(f"Wizard: User {user.id} created task {task['public_id']}")
@@ -781,7 +787,7 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                             f"👥 Thành viên: {len(assignees)} người\n\n"
                             f"🔖 Việc của bạn: *{child_task['public_id']}*\n"
                             f"Trả lời /xong {child_task['public_id']} khi hoàn thành.",
-                            reply_markup=task_actions_keyboard(child_task['public_id']),
+                            reply_markup=task_actions_keyboard(child_task['public_id'], show_complete=False),
                         )
 
                 logger.info(f"Wizard: User {user.id} created group task {group_task['public_id']}")
@@ -805,6 +811,28 @@ async def edit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     parts = query.data.split(":")
     field = parts[1] if len(parts) > 1 else ""
+
+    # Show edit menu
+    if field == "menu":
+        from utils.keyboards import wizard_edit_menu_keyboard
+        await query.edit_message_text(
+            "✏️ <b>Sửa thông tin việc</b>\n\n"
+            "Chọn mục cần sửa:",
+            reply_markup=wizard_edit_menu_keyboard(),
+            parse_mode="HTML",
+        )
+        return CONFIRM
+
+    # Back to confirm screen
+    if field == "back":
+        data = get_wizard_data(context)
+        summary = format_wizard_summary(data)
+        from utils.keyboards import wizard_confirm_keyboard
+        await query.edit_message_text(
+            f"Bước 5/5: Xác nhận\n\n{summary}",
+            reply_markup=wizard_confirm_keyboard(),
+        )
+        return CONFIRM
 
     if field == "content":
         await query.edit_message_text(
@@ -844,10 +872,11 @@ async def edit_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         except Exception:
             recent_users = None
 
+        is_private = update.effective_chat.type == "private"
         await query.edit_message_text(
             "Sửa người nhận:\n\n"
             "Chọn người nhận mới:",
-            reply_markup=wizard_assignee_keyboard(recent_users),
+            reply_markup=wizard_assignee_keyboard(recent_users, is_private_chat=is_private),
         )
         return ASSIGNEE
 
@@ -916,10 +945,11 @@ async def back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         except Exception:
             recent_users = None
 
+        is_private = update.effective_chat.type == "private"
         await query.edit_message_text(
             "Bước 3/5: Chọn người nhận\n\n"
             "Giao việc cho ai?",
-            reply_markup=wizard_assignee_keyboard(recent_users),
+            reply_markup=wizard_assignee_keyboard(recent_users, is_private_chat=is_private),
         )
         return ASSIGNEE
 
@@ -1413,15 +1443,31 @@ async def assign_priority_callback(update: Update, context: ContextTypes.DEFAULT
 
 
 def assign_confirm_keyboard() -> InlineKeyboardMarkup:
-    """Confirmation keyboard for assignment wizard."""
+    """Confirmation keyboard for assignment wizard - each on separate row."""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✏️ SỬA THÔNG TIN", callback_data="assign_edit:menu")],
+        [InlineKeyboardButton("❌ Hủy giao việc", callback_data="assign_confirm:cancel")],
+        [InlineKeyboardButton("✅ XÁC NHẬN GIAO VIỆC", callback_data="assign_confirm:create")],
+    ])
+
+
+def assign_edit_menu_keyboard() -> InlineKeyboardMarkup:
+    """Edit submenu for task assignment wizard."""
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ Giao việc", callback_data="assign_confirm:create"),
-            InlineKeyboardButton("❌ Hủy bỏ", callback_data="assign_confirm:cancel"),
+            InlineKeyboardButton("✏️ Sửa nội dung", callback_data="assign_edit:content"),
         ],
         [
-            InlineKeyboardButton("✏️ Sửa nội dung", callback_data="assign_edit:content"),
             InlineKeyboardButton("👤 Sửa người nhận", callback_data="assign_edit:recipient"),
+        ],
+        [
+            InlineKeyboardButton("📅 Sửa deadline", callback_data="assign_edit:deadline"),
+        ],
+        [
+            InlineKeyboardButton("🔔 Sửa độ ưu tiên", callback_data="assign_edit:priority"),
+        ],
+        [
+            InlineKeyboardButton("« Quay lại", callback_data="assign_edit:back"),
         ],
     ])
 
@@ -1494,7 +1540,7 @@ async def assign_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                         f"👤 Giao cho: {assignee_mention}\n"
                         f"📅 Deadline: {deadline_str}\n\n"
                         f"Xem chi tiết: /xemviec {task['public_id']}",
-                        reply_markup=task_actions_keyboard(task['public_id']),
+                        reply_markup=task_actions_keyboard(task['public_id'], show_complete=False),
                     )
 
                 # Send private notification to assignee and sync calendar
@@ -1515,7 +1561,7 @@ async def assign_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                         f"👤 Từ: {creator_mention}\n"
                         f"📅 Deadline: {deadline_str}{calendar_note}\n\n"
                         f"Trả lời /xong {task['public_id']} khi hoàn thành.",
-                        reply_markup=task_actions_keyboard(task['public_id']),
+                        reply_markup=task_actions_keyboard(task['public_id'], show_complete=False),
                     )
 
                 logger.info(f"Assign wizard: User {user.id} assigned task {task['public_id']}")
@@ -1586,7 +1632,7 @@ async def assign_confirm_callback(update: Update, context: ContextTypes.DEFAULT_
                             f"👥 Thành viên: {len(assignees)} người{calendar_note}\n\n"
                             f"🔖 Việc của bạn: *{child_task['public_id']}*\n"
                             f"Trả lời /xong {child_task['public_id']} khi hoàn thành.",
-                            reply_markup=task_actions_keyboard(child_task['public_id']),
+                            reply_markup=task_actions_keyboard(child_task['public_id'], show_complete=False),
                         )
 
                 logger.info(f"Assign wizard: User {user.id} created group task {group_task['public_id']}")
@@ -1610,6 +1656,25 @@ async def assign_edit_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     field = query.data.split(":")[1] if ":" in query.data else ""
     data = get_wizard_data(context)
+
+    # Show edit menu
+    if field == "menu":
+        await query.edit_message_text(
+            "✏️ <b>Sửa thông tin giao việc</b>\n\n"
+            "Chọn mục cần sửa:",
+            reply_markup=assign_edit_menu_keyboard(),
+            parse_mode="HTML",
+        )
+        return ASSIGN_CONFIRM
+
+    # Back to confirm screen
+    if field == "back":
+        summary = format_assign_summary(data)
+        await query.edit_message_text(
+            f"Bước 5/5: Xác nhận\n\n{summary}",
+            reply_markup=assign_confirm_keyboard(),
+        )
+        return ASSIGN_CONFIRM
 
     if field == "content":
         await query.edit_message_text(

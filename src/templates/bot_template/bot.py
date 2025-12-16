@@ -47,7 +47,34 @@ logger = logging.getLogger(__name__)
 
 async def post_init(application: Application) -> None:
     """Post-initialization hook to set bot commands."""
-    commands = [
+    from telegram import BotCommandScopeAllPrivateChats, BotCommandScopeAllGroupChats
+
+    # Commands for private chat (no giaoviec, viecdagiao)
+    private_commands = [
+        ("start", "Bắt đầu sử dụng bot"),
+        ("help", "Xem hướng dẫn sử dụng"),
+        ("taoviec", "Tạo việc cá nhân mới"),
+        ("vieccanhan", "Xem danh sách việc cá nhân"),
+        ("xemviec", "Xem chi tiết việc"),
+        ("xong", "Đánh dấu việc hoàn thành"),
+        ("tiendo", "Cập nhật tiến độ việc"),
+        ("xoa", "Xóa việc"),
+        ("timviec", "Tìm kiếm việc"),
+        ("nhacviec", "Đặt nhắc việc tự động"),
+        ("vieclaplai", "Tạo việc lặp lại tự động"),
+        ("danhsachvieclaplai", "Xem danh sách việc lặp lại"),
+        ("thongke", "Xem thống kê tổng hợp"),
+        ("thongketuan", "Xem thống kê tuần này"),
+        ("thongkethang", "Xem thống kê tháng này"),
+        ("viectrehan", "Xem việc trễ hạn"),
+        ("export", "Xuất báo cáo thống kê"),
+        ("thongtin", "Xem thông tin tài khoản"),
+        ("lichgoogle", "Kết nối Google Calendar"),
+        ("caidat", "Cài đặt thông báo và múi giờ"),
+    ]
+
+    # Commands for group chat (includes giaoviec, viecdagiao)
+    group_commands = [
         ("start", "Bắt đầu sử dụng bot"),
         ("help", "Xem hướng dẫn sử dụng"),
         ("taoviec", "Tạo việc cá nhân mới"),
@@ -69,9 +96,13 @@ async def post_init(application: Application) -> None:
         ("export", "Xuất báo cáo thống kê"),
         ("thongtin", "Xem thông tin tài khoản"),
         ("lichgoogle", "Kết nối Google Calendar"),
+        ("caidat", "Cài đặt thông báo và múi giờ"),
     ]
-    await application.bot.set_my_commands(commands)
-    logger.info("Bot commands registered")
+
+    # Set different commands for private and group chats
+    await application.bot.set_my_commands(private_commands, scope=BotCommandScopeAllPrivateChats())
+    await application.bot.set_my_commands(group_commands, scope=BotCommandScopeAllGroupChats())
+    logger.info("Bot commands registered (private + group)")
 
 
 async def main() -> None:

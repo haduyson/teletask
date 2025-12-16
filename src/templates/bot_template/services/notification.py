@@ -41,11 +41,11 @@ async def send_reminder_notification(bot: Bot, reminder: Dict[str, Any]) -> None
     task_id = reminder["public_id"]
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ Xong", callback_data=f"task_complete:{task_id}"),
             InlineKeyboardButton("📊 Tiến độ", callback_data=f"task_progress:{task_id}"),
+            InlineKeyboardButton("⏰ Nhắc sau 30p", callback_data=f"snooze:{reminder['id']}:30"),
         ],
         [
-            InlineKeyboardButton("⏰ Nhắc sau 30p", callback_data=f"snooze:{reminder['id']}:30"),
+            InlineKeyboardButton("✅ HOÀN THÀNH", callback_data=f"task_complete:{task_id}"),
         ],
     ])
 
@@ -102,8 +102,10 @@ async def send_reminder_by_task(
 
     keyboard = InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ Xong", callback_data=f"task_complete:{task['public_id']}"),
             InlineKeyboardButton("📝 Chi tiết", callback_data=f"task_detail:{task['public_id']}"),
+        ],
+        [
+            InlineKeyboardButton("✅ HOÀN THÀNH", callback_data=f"task_complete:{task['public_id']}"),
         ],
     ])
 
@@ -283,11 +285,11 @@ Trả lời /xong {child_task['public_id']} khi hoàn thành."""
 
         keyboard = InlineKeyboardMarkup([
             [
-                InlineKeyboardButton("✅ Xong", callback_data=f"task_complete:{child_task['public_id']}"),
                 InlineKeyboardButton("📊 Tiến độ", callback_data=f"task_progress:{child_task['public_id']}"),
+                InlineKeyboardButton("👥 Xem nhóm", callback_data=f"task_detail:{group_task['public_id']}"),
             ],
             [
-                InlineKeyboardButton("👥 Xem nhóm", callback_data=f"task_detail:{group_task['public_id']}"),
+                InlineKeyboardButton("✅ HOÀN THÀNH", callback_data=f"task_complete:{child_task['public_id']}"),
             ],
         ])
 

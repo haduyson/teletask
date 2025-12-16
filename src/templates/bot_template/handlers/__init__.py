@@ -13,6 +13,7 @@ Handlers:
 - reminder: /nhacviec, /xemnhac
 - recurring_task: /vieclaplai, /danhsachvieclaplai
 - calendar: /lichgoogle
+- settings: /caidat
 - callbacks: Inline button handlers
 """
 
@@ -30,6 +31,7 @@ from .statistics import get_handlers as get_statistics_handlers
 from .recurring_task import get_handlers as get_recurring_handlers
 from .calendar import get_handlers as get_calendar_handlers
 from .export import get_handlers as get_export_handlers
+from .settings import get_handlers as get_settings_handlers
 from .callbacks import get_handlers as get_callback_handlers
 
 
@@ -81,6 +83,10 @@ def register_handlers(application: Application) -> None:
 
     # Export handlers
     for handler in get_export_handlers():
+        application.add_handler(handler)
+
+    # Settings handlers
+    for handler in get_settings_handlers():
         application.add_handler(handler)
 
     # Callback handlers (must be last)

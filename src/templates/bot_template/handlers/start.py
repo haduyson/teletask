@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes, CommandHandler
 
 from database import get_db
 from services import get_or_create_user, get_user_tasks
-from utils import MSG_START, MSG_HELP, MSG_INFO, ERR_DATABASE
+from utils import MSG_START, MSG_START_GROUP, MSG_HELP, MSG_HELP_GROUP, MSG_INFO, ERR_DATABASE
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +28,14 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         # Register/update user
         db_user = await get_or_create_user(db, user)
 
+        # Use different message for private chat vs group
+        chat = update.effective_chat
+        is_private = chat.type == "private"
+        msg = MSG_START if is_private else MSG_START_GROUP
+
         # Send welcome message
         await update.message.reply_text(
-            MSG_START.format(name=db_user.get("display_name", user.first_name))
+            msg.format(name=db_user.get("display_name", user.first_name))
         )
 
         logger.info(f"User {user.id} started bot")
@@ -43,9 +48,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Handle /help command.
-    Show detailed help message.
+    Show detailed help message (different for private vs group).
     """
-    await update.message.reply_text(MSG_HELP)
+    chat = update.effective_chat
+    is_private = chat.type == "private"
+    msg = MSG_HELP if is_private else MSG_HELP_GROUP
+    await update.message.reply_text(msg)
 
 
 async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

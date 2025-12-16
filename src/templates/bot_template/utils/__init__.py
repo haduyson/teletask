@@ -12,7 +12,9 @@ Utils:
 from .messages import (
     # Command responses
     MSG_START,
+    MSG_START_GROUP,
     MSG_HELP,
+    MSG_HELP_GROUP,
     MSG_INFO,
     # Task messages
     MSG_TASK_CREATED,
@@ -113,7 +115,9 @@ from .validators import (
 __all__ = [
     # Messages
     "MSG_START",
+    "MSG_START_GROUP",
     "MSG_HELP",
+    "MSG_HELP_GROUP",
     "MSG_INFO",
     "MSG_TASK_CREATED",
     "MSG_TASK_ASSIGNED",

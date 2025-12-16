@@ -11,6 +11,19 @@ Tôi là TeleTask Bot - hệ thống quản lý công việc qua Telegram.
 
 Sử dụng các lệnh:
 /taoviec - Tạo việc mới cho bản thân
+/vieccanhan - Xem danh sách việc cá nhân
+/thongtin - Xem thông tin tài khoản
+
+Gõ /help để xem hướng dẫn chi tiết.
+"""
+
+MSG_START_GROUP = """
+Xin chào {name}!
+
+Tôi là TeleTask Bot - hệ thống quản lý công việc qua Telegram.
+
+Sử dụng các lệnh:
+/taoviec - Tạo việc mới cho bản thân
 /giaoviec - Giao việc cho người khác
 /vieccanhan - Xem danh sách việc cá nhân
 /thongtin - Xem thông tin tài khoản
@@ -19,6 +32,56 @@ Gõ /help để xem hướng dẫn chi tiết.
 """
 
 MSG_HELP = """
+📖 HƯỚNG DẪN SỬ DỤNG TELETASK BOT
+
+━━━━━ TẠO VIỆC ━━━━━
+/taoviec - Tạo việc cá nhân (wizard)
+
+Ví dụ:
+  /taoviec Họp đội 14h30
+
+━━━━━ VIỆC LẶP LẠI ━━━━━
+/vieclaplai - Tạo việc lặp lại tự động
+/danhsachvieclaplai - Xem danh sách việc lặp
+
+Ví dụ:
+  /vieclaplai Họp đội hàng tuần thứ 2 9h
+  /vieclaplai Báo cáo hàng tháng ngày 1 10h
+
+━━━━━ XEM VIỆC ━━━━━
+/vieccanhan - Việc của bạn
+/xemviec [mã] - Chi tiết việc
+/timviec [từ khóa] - Tìm kiếm việc
+
+━━━━━ CẬP NHẬT ━━━━━
+/xong [mã] - Hoàn thành việc
+/tiendo [mã] [%] - Cập nhật tiến độ
+/xoa [mã] - Xóa việc (hoàn tác 10s)
+/xoanhieu [mã1,mã2,...] - Xóa nhiều việc
+
+━━━━━ NHẮC VIỆC ━━━━━
+/nhacviec [mã] [thời gian] - Đặt nhắc
+/xemnhac - Xem nhắc đã đặt
+
+━━━━━ THỐNG KÊ ━━━━━
+/thongke - Thống kê tổng hợp
+/thongketuan - Thống kê tuần này
+/thongkethang - Thống kê tháng này
+/viectrehan - Xem việc trễ hạn
+/export - Xuất báo cáo (CSV/Excel/PDF)
+
+━━━━━ TÍCH HỢP ━━━━━
+/lichgoogle - Kết nối Google Calendar
+
+━━━━━ TÀI KHOẢN ━━━━━
+/thongtin - Thông tin tài khoản
+/start - Bắt đầu sử dụng bot
+/help - Xem hướng dẫn này
+
+📖 Hướng dẫn chi tiết: https://teletask.haduyson.com/hdsdbot.html
+"""
+
+MSG_HELP_GROUP = """
 📖 HƯỚNG DẪN SỬ DỤNG TELETASK BOT
 
 ━━━━━ TẠO VIỆC ━━━━━
@@ -46,7 +109,7 @@ Ví dụ:
 ━━━━━ CẬP NHẬT ━━━━━
 /xong [mã] - Hoàn thành việc
 /tiendo [mã] [%] - Cập nhật tiến độ
-/xoa [mã] - Xóa việc (hoàn tác 30s)
+/xoa [mã] - Xóa việc (hoàn tác 10s)
 /xoanhieu [mã1,mã2,...] - Xóa nhiều việc
 
 ━━━━━ NHẮC VIỆC ━━━━━
