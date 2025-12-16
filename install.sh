@@ -311,6 +311,13 @@ run_migrations() {
 # Step 10: Create botpanel CLI
 #-------------------------------------------------------------------------------
 create_botpanel_cli() {
+    # Check if botpanel already exists
+    if [ -f /usr/local/bin/botpanel ]; then
+        log_warn "botpanel CLI already exists at /usr/local/bin/botpanel"
+        log_info "Skipping CLI creation to preserve existing configuration"
+        return 0
+    fi
+
     log_info "Creating botpanel CLI tool..."
 
     cat > /usr/local/bin/botpanel << 'EOFCLI'
@@ -428,15 +435,18 @@ cmd_db_status() {
     echo -e "${BLUE}[INFO]${NC} Checking database connection..."
     source "$BOT_DIR/.env"
 
-    if PGPASSWORD=$(echo $DATABASE_URL | sed 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/') \
-       psql -h localhost -U botpanel -d teletask_db -c "SELECT version();" &>/dev/null; then
+    # Extract DB credentials from DATABASE_URL
+    DB_PASS=$(echo $DATABASE_URL | sed 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/')
+    DB_NAME=$(echo $DATABASE_URL | sed 's/.*\/\([^?]*\).*/\1/')
+    DB_USER=$(echo $DATABASE_URL | sed 's/.*:\/\/\([^:]*\):.*/\1/')
+
+    if PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -c "SELECT version();" &>/dev/null; then
         echo -e "${GREEN}[OK]${NC} Database connection successful"
 
         # Show table counts
         echo ""
         echo -e "${YELLOW}Table Statistics:${NC}"
-        PGPASSWORD=$(echo $DATABASE_URL | sed 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/') \
-        psql -h localhost -U botpanel -d teletask_db -c "
+        PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -c "
             SELECT 'users' as table_name, COUNT(*) as count FROM users
             UNION ALL
             SELECT 'tasks', COUNT(*) FROM tasks
@@ -460,10 +470,14 @@ cmd_db_backup() {
     echo -e "${BLUE}[INFO]${NC} Creating database backup..."
     source "$BOT_DIR/.env"
 
-    BACKUP_FILE="$BACKUP_DIR/teletask_$(date +%Y%m%d_%H%M%S).sql"
+    # Extract DB credentials from DATABASE_URL
     DB_PASS=$(echo $DATABASE_URL | sed 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/')
+    DB_NAME=$(echo $DATABASE_URL | sed 's/.*\/\([^?]*\).*/\1/')
+    DB_USER=$(echo $DATABASE_URL | sed 's/.*:\/\/\([^:]*\):.*/\1/')
 
-    PGPASSWORD="$DB_PASS" pg_dump -h localhost -U botpanel teletask_db > "$BACKUP_FILE"
+    BACKUP_FILE="$BACKUP_DIR/${DB_NAME}_$(date +%Y%m%d_%H%M%S).sql"
+
+    PGPASSWORD="$DB_PASS" pg_dump -h localhost -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE"
 
     if [ -f "$BACKUP_FILE" ]; then
         echo -e "${GREEN}[OK]${NC} Backup created: $BACKUP_FILE"
@@ -486,9 +500,11 @@ cmd_db_restore() {
     if [ -f "$BACKUP_DIR/$BACKUP_FILE" ]; then
         source "$BOT_DIR/.env"
         DB_PASS=$(echo $DATABASE_URL | sed 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/')
+        DB_NAME=$(echo $DATABASE_URL | sed 's/.*\/\([^?]*\).*/\1/')
+        DB_USER=$(echo $DATABASE_URL | sed 's/.*:\/\/\([^:]*\):.*/\1/')
 
         echo -e "${BLUE}[INFO]${NC} Restoring database..."
-        PGPASSWORD="$DB_PASS" psql -h localhost -U botpanel teletask_db < "$BACKUP_DIR/$BACKUP_FILE"
+        PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" "$DB_NAME" < "$BACKUP_DIR/$BACKUP_FILE"
         echo -e "${GREEN}[OK]${NC} Database restored"
     else
         echo -e "${RED}[ERROR]${NC} Backup file not found"
