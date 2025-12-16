@@ -132,6 +132,61 @@ In group chats, you must **REPLY** to the bot's message when entering text:
 
 ---
 
+## Statistics Commands
+
+| Command | Description |
+|---------|-------------|
+| `/thongke` | Overview statistics (all time) |
+| `/thongketuan` | This week's statistics |
+| `/thongkethang` | This month's statistics |
+
+### Statistics Categories
+
+- **Việc đã giao**: Tasks you assigned to others
+- **Việc được giao**: Tasks assigned to you
+- **Việc cá nhân**: Personal tasks (self-assigned)
+
+---
+
+## Overdue Tasks (`/viectrehan`)
+
+View overdue tasks filtered by current month by default.
+
+### How to Use
+
+```
+/viectrehan
+```
+
+Shows overdue tasks for the **current month** with filter buttons:
+- 📅 **Hôm nay** - Today's overdue tasks
+- 📆 **Tuần này** - This week's overdue tasks
+- 📊 **Tất cả** - All overdue tasks (all time)
+
+### Monthly Reset
+
+The overdue count resets automatically at the start of each new month. This helps track monthly performance without carrying over old overdue tasks.
+
+---
+
+## Private Notifications
+
+When tasks are created in **group chats**, assignees receive private DM notifications from the bot.
+
+### How It Works
+
+1. Creator assigns task in group: `/giaoviec @user1 @user2 Nội dung`
+2. Bot replies in group with confirmation
+3. Each assignee receives a **private message** with task details
+
+### Benefits
+
+- Assignees don't miss tasks even if they mute the group
+- Task details available in private chat for easy reference
+- Works for both single and multiple assignees
+
+---
+
 ## Editing Tasks
 
 After viewing a task with `/xemviec T-123`, use the edit menu buttons.
