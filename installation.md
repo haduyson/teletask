@@ -1,22 +1,124 @@
 # Hướng dẫn cài đặt TeleTask Bot
 
-Tài liệu hướng dẫn chi tiết cài đặt TeleTask Bot trên máy chủ Ubuntu/Debian.
+Tài liệu hướng dẫn cài đặt TeleTask Bot trên máy chủ Ubuntu/Debian.
+
+---
+
+## Cài đặt nhanh (1 lệnh)
+
+Chỉ cần chạy 1 lệnh duy nhất để cài đặt toàn bộ hệ thống:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/haduyson/teletask/main/install.sh | sudo bash
+```
+
+**Yêu cầu:**
+- Ubuntu 20.04+ hoặc Debian 11+
+- Quyền root (sudo)
+- Bot Token từ [@BotFather](https://t.me/BotFather)
+
+**Script sẽ tự động cài đặt:**
+- PostgreSQL database
+- Python 3.11 + virtual environment
+- Node.js + PM2
+- Tất cả dependencies
+- Database migrations
+- Công cụ quản lý `botpanel`
+
+**Sau khi cài xong, quản lý bot bằng lệnh `botpanel`:**
+
+```bash
+botpanel status    # Xem trạng thái
+botpanel logs      # Xem logs
+botpanel restart   # Restart bot
+botpanel config    # Sửa cấu hình
+botpanel help      # Xem tất cả lệnh
+```
+
+---
 
 ## Mục lục
 
+- [Cài đặt nhanh (1 lệnh)](#cài-đặt-nhanh-1-lệnh)
+- [Quản lý với botpanel CLI](#quản-lý-với-botpanel-cli)
 - [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
-- [1. Chuẩn bị máy chủ](#1-chuẩn-bị-máy-chủ)
-- [2. Cài đặt PostgreSQL](#2-cài-đặt-postgresql)
-- [3. Cài đặt Python](#3-cài-đặt-python)
-- [4. Tạo Telegram Bot](#4-tạo-telegram-bot)
-- [5. Clone và cấu hình](#5-clone-và-cấu-hình)
-- [6. Cài đặt dependencies](#6-cài-đặt-dependencies)
-- [7. Khởi tạo database](#7-khởi-tạo-database)
-- [8. Chạy bot](#8-chạy-bot)
-- [9. Quản lý với PM2](#9-quản-lý-với-pm2)
-- [10. Cấu hình Google Calendar (Tùy chọn)](#10-cấu-hình-google-calendar-tùy-chọn)
-- [11. Cấu hình Nginx Reverse Proxy (Tùy chọn)](#11-cấu-hình-nginx-reverse-proxy-tùy-chọn)
+- [Cài đặt thủ công](#cài-đặt-thủ-công)
+  - [1. Chuẩn bị máy chủ](#1-chuẩn-bị-máy-chủ)
+  - [2. Cài đặt PostgreSQL](#2-cài-đặt-postgresql)
+  - [3. Cài đặt Python](#3-cài-đặt-python)
+  - [4. Tạo Telegram Bot](#4-tạo-telegram-bot)
+  - [5. Clone và cấu hình](#5-clone-và-cấu-hình)
+  - [6. Cài đặt dependencies](#6-cài-đặt-dependencies)
+  - [7. Khởi tạo database](#7-khởi-tạo-database)
+  - [8. Chạy bot](#8-chạy-bot)
+  - [9. Quản lý với PM2](#9-quản-lý-với-pm2)
+- [Cấu hình nâng cao](#cấu-hình-nâng-cao)
+  - [Google Calendar](#google-calendar-tùy-chọn)
+  - [Nginx Reverse Proxy](#nginx-reverse-proxy-tùy-chọn)
 - [Khắc phục sự cố](#khắc-phục-sự-cố)
+- [Backup & Restore](#backup--restore)
+
+---
+
+## Quản lý với botpanel CLI
+
+Sau khi cài đặt, sử dụng lệnh `botpanel` để quản lý bot:
+
+### Quản lý Bot
+
+| Lệnh | Mô tả |
+|------|-------|
+| `botpanel start` | Khởi động bot |
+| `botpanel stop` | Dừng bot |
+| `botpanel restart` | Restart bot |
+| `botpanel status` | Xem trạng thái |
+| `botpanel logs` | Xem logs (live) |
+| `botpanel logs-err` | Xem error logs |
+
+### Database
+
+| Lệnh | Mô tả |
+|------|-------|
+| `botpanel db-status` | Kiểm tra kết nối database |
+| `botpanel db-migrate` | Chạy migrations |
+| `botpanel db-backup` | Backup database |
+| `botpanel db-restore` | Restore từ backup |
+
+### Cấu hình
+
+| Lệnh | Mô tả |
+|------|-------|
+| `botpanel config` | Sửa file .env |
+| `botpanel token` | Đổi bot token |
+| `botpanel gcal` | Cấu hình Google Calendar |
+
+### Bảo trì
+
+| Lệnh | Mô tả |
+|------|-------|
+| `botpanel update` | Cập nhật phiên bản mới |
+| `botpanel deps` | Cài lại dependencies |
+| `botpanel clean` | Dọn logs cũ |
+| `botpanel info` | Xem thông tin hệ thống |
+
+### Ví dụ sử dụng
+
+```bash
+# Kiểm tra trạng thái bot
+botpanel status
+
+# Xem logs real-time
+botpanel logs
+
+# Backup database trước khi update
+botpanel db-backup
+
+# Cập nhật bot
+botpanel update
+
+# Cấu hình Google Calendar
+botpanel gcal
+```
 
 ---
 
@@ -33,9 +135,13 @@ Tài liệu hướng dẫn chi tiết cài đặt TeleTask Bot trên máy chủ 
 
 ---
 
-## 1. Chuẩn bị máy chủ
+## Cài đặt thủ công
 
-### Cập nhật hệ thống
+Nếu bạn muốn cài đặt từng bước thủ công, làm theo hướng dẫn bên dưới.
+
+### 1. Chuẩn bị máy chủ
+
+#### Cập nhật hệ thống
 
 ```bash
 sudo apt update && sudo apt upgrade -y
@@ -738,4 +844,4 @@ Thêm dòng (backup lúc 3:00 AM hàng ngày):
 
 ---
 
-*Tài liệu cập nhật: 16/12/2025*
+*Tài liệu cập nhật: 17/12/2025*
