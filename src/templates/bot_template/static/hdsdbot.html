@@ -468,6 +468,10 @@
                         <span class="sidebar-icon">📅</span>
                         <span>Google Calendar</span>
                     </a>
+                    <a href="#settings" class="sidebar-item">
+                        <span class="sidebar-icon">⚙️</span>
+                        <span>Cài đặt</span>
+                    </a>
                     <a href="#tips" class="sidebar-item">
                         <span class="sidebar-icon">💡</span>
                         <span>Mẹo sử dụng</span>
@@ -517,12 +521,20 @@
                             <span class="command-desc">Bắt đầu sử dụng bot, đăng ký tài khoản</span>
                         </div>
                         <div class="command-item">
+                            <span class="command-code">/menu</span>
+                            <span class="command-desc">Menu tính năng với nút bấm tương tác</span>
+                        </div>
+                        <div class="command-item">
                             <span class="command-code">/help</span>
                             <span class="command-desc">Xem hướng dẫn sử dụng nhanh</span>
                         </div>
                         <div class="command-item">
                             <span class="command-code">/thongtin</span>
                             <span class="command-desc">Xem thông tin tài khoản và thống kê</span>
+                        </div>
+                        <div class="command-item">
+                            <span class="command-code">/caidat</span>
+                            <span class="command-desc">Cài đặt nhắc nhở (24h, 1h trước deadline)</span>
                         </div>
                     </div>
                 </section>
@@ -580,16 +592,20 @@
                     </div>
                     <div class="command-group">
                         <div class="command-item">
-                            <span class="command-code">/vieccanhan</span>
-                            <span class="command-desc">Danh sách việc của bạn</span>
+                            <span class="command-code">/xemviec</span>
+                            <span class="command-desc">Danh mục việc (menu với nút bấm)</span>
+                        </div>
+                        <div class="command-item">
+                            <span class="command-code">/xemviec [mã việc]</span>
+                            <span class="command-desc">Xem chi tiết một việc (P-ID hoặc G-ID)</span>
                         </div>
                         <div class="command-item">
                             <span class="command-code">/viecdagiao</span>
                             <span class="command-desc">Việc bạn đã giao cho người khác</span>
                         </div>
                         <div class="command-item">
-                            <span class="command-code">/xemviec [mã việc]</span>
-                            <span class="command-desc">Xem chi tiết một việc</span>
+                            <span class="command-code">/viecdanhan</span>
+                            <span class="command-desc">Việc được giao cho bạn</span>
                         </div>
                         <div class="command-item">
                             <span class="command-code">/timviec [từ khóa]</span>
@@ -614,11 +630,15 @@
                         </div>
                         <div class="command-item">
                             <span class="command-code">/xoa [mã việc]</span>
-                            <span class="command-desc">Xóa việc (có thể hoàn tác trong 30s)</span>
+                            <span class="command-desc">Xóa việc (hoàn tác trong 10s)</span>
                         </div>
                         <div class="command-item">
                             <span class="command-code">/xoanhieu [mã1,mã2,...]</span>
                             <span class="command-desc">Xóa nhiều việc cùng lúc</span>
+                        </div>
+                        <div class="command-item">
+                            <span class="command-code">/xoatatca</span>
+                            <span class="command-desc">Xóa tất cả việc (hoàn tác trong 10s)</span>
                         </div>
                     </div>
                 </section>
@@ -703,6 +723,25 @@
                             <span class="tip-icon">💡</span>
                             <div class="tip-content">
                                 <strong>Mẹo:</strong> Sau khi kết nối, các việc có deadline sẽ tự động được thêm vào Google Calendar của bạn. Bạn sẽ nhận thông báo từ cả bot và Google Calendar.
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="settings" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">⚙️</div>
+                        <h2 class="section-title">Cài Đặt</h2>
+                    </div>
+                    <div class="command-group">
+                        <div class="command-item">
+                            <span class="command-code">/caidat</span>
+                            <span class="command-desc">Cài đặt nhắc nhở tự động</span>
+                        </div>
+                        <div class="tip-box">
+                            <span class="tip-icon">💡</span>
+                            <div class="tip-content">
+                                <strong>Tùy chọn:</strong> Bật/tắt nhắc trước 24 giờ và 1 giờ trước deadline. Mặc định cả hai đều bật để không bỏ lỡ việc quan trọng.
                             </div>
                         </div>
                     </div>

@@ -49,8 +49,9 @@ Ví dụ:
   /vieclaplai Báo cáo hàng tháng ngày 1 10h
 
 ━━━━━ XEM VIỆC ━━━━━
-/vieccanhan - Việc của bạn
+/xemviec - Danh mục việc (menu)
 /xemviec [mã] - Chi tiết việc
+/viecdanhan - Việc được giao cho bạn
 /timviec [từ khóa] - Tìm kiếm việc
 
 ━━━━━ CẬP NHẬT ━━━━━
@@ -58,6 +59,7 @@ Ví dụ:
 /tiendo [mã] [%] - Cập nhật tiến độ
 /xoa [mã] - Xóa việc (hoàn tác 10s)
 /xoanhieu [mã1,mã2,...] - Xóa nhiều việc
+/xoatatca - Xóa tất cả việc (hoàn tác 10s)
 
 ━━━━━ NHẮC VIỆC ━━━━━
 /nhacviec [mã] [thời gian] - Đặt nhắc
@@ -74,6 +76,8 @@ Ví dụ:
 /lichgoogle - Kết nối Google Calendar
 
 ━━━━━ TÀI KHOẢN ━━━━━
+/menu - Menu tính năng (nút bấm)
+/caidat - Cài đặt nhắc nhở
 /thongtin - Thông tin tài khoản
 /start - Bắt đầu sử dụng bot
 /help - Xem hướng dẫn này
@@ -101,9 +105,10 @@ Ví dụ:
   /vieclaplai Báo cáo hàng tháng ngày 1 10h
 
 ━━━━━ XEM VIỆC ━━━━━
-/vieccanhan - Việc của bạn
-/viecdagiao - Việc bạn đã giao
+/xemviec - Danh mục việc (menu)
 /xemviec [mã] - Chi tiết việc
+/viecdagiao - Việc bạn đã giao
+/viecdanhan - Việc được giao cho bạn
 /timviec [từ khóa] - Tìm kiếm việc
 
 ━━━━━ CẬP NHẬT ━━━━━
@@ -111,6 +116,7 @@ Ví dụ:
 /tiendo [mã] [%] - Cập nhật tiến độ
 /xoa [mã] - Xóa việc (hoàn tác 10s)
 /xoanhieu [mã1,mã2,...] - Xóa nhiều việc
+/xoatatca - Xóa tất cả việc (hoàn tác 10s)
 
 ━━━━━ NHẮC VIỆC ━━━━━
 /nhacviec [mã] [thời gian] - Đặt nhắc
@@ -127,6 +133,8 @@ Ví dụ:
 /lichgoogle - Kết nối Google Calendar
 
 ━━━━━ TÀI KHOẢN ━━━━━
+/menu - Menu tính năng (nút bấm)
+/caidat - Cài đặt nhắc nhở
 /thongtin - Thông tin tài khoản
 /start - Bắt đầu sử dụng bot
 /help - Xem hướng dẫn này
