@@ -19,6 +19,7 @@ from services import (
     update_task_assignee,
     restore_task,
     parse_vietnamese_time,
+    get_user_by_username,
 )
 from utils import (
     MSG_TASK_RESTORED,
@@ -34,6 +35,7 @@ from utils import (
     undo_keyboard,
     edit_menu_keyboard,
     edit_priority_keyboard,
+    mention_user,
 )
 from handlers.task_delete import process_delete, process_restore
 
@@ -856,40 +858,63 @@ async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE
         elif edit_type == "assignee":
             from services import convert_individual_to_group, update_group_assignees
 
-            # Parse multiple assignees (comma or space separated)
-            raw_inputs = [x.strip().lstrip("@") for x in text.replace(",", " ").split()]
-            raw_inputs = [x for x in raw_inputs if x]  # Remove empty
-
-            if not raw_inputs:
-                await update.message.reply_text("Vui lòng nhập ít nhất 1 người nhận.")
-                return
-
-            # Find all users
+            message = update.message
             assignees = []
-            not_found = []
 
-            for inp in raw_inputs:
-                found = None
-                if inp.isdigit():
-                    found = await db.fetch_one(
-                        "SELECT id, display_name, telegram_id, username FROM users WHERE telegram_id = $1",
-                        int(inp)
-                    )
-                if not found:
-                    found = await db.fetch_one(
-                        "SELECT id, display_name, telegram_id, username FROM users WHERE LOWER(username) = LOWER($1)",
-                        inp
-                    )
-                if found:
-                    assignees.append(dict(found))
-                else:
-                    not_found.append(inp)
+            # Method 1: Check message entities for text_mention (users without @username)
+            if message.entities:
+                for entity in message.entities:
+                    if entity.type == "text_mention" and entity.user:
+                        # User without @username - get or create from entity.user
+                        mentioned_user = await get_or_create_user(db, entity.user)
+                        if not any(u["id"] == mentioned_user["id"] for u in assignees):
+                            assignees.append(mentioned_user)
+                            logger.info(f"Edit assignee - Found text_mention: {entity.user.first_name} (id={entity.user.id})")
+                    elif entity.type == "mention":
+                        # @username mention
+                        full_text = message.text or ""
+                        username_with_at = full_text[entity.offset:entity.offset + entity.length]
+                        username = username_with_at.lstrip("@")
+                        found_user = await get_user_by_username(db, username)
+                        if found_user and not any(u["id"] == found_user["id"] for u in assignees):
+                            assignees.append(found_user)
+                            logger.info(f"Edit assignee - Found @mention: @{username} (id={found_user['id']})")
 
-            if not_found:
+            # Method 2: Parse @username from text if no entities found
+            if not assignees:
+                raw_inputs = [x.strip().lstrip("@") for x in text.replace(",", " ").split()]
+                raw_inputs = [x for x in raw_inputs if x]  # Remove empty
+                not_found = []
+
+                for inp in raw_inputs:
+                    found = None
+                    if inp.isdigit():
+                        found = await db.fetch_one(
+                            "SELECT id, display_name, telegram_id, username FROM users WHERE telegram_id = $1",
+                            int(inp)
+                        )
+                    if not found:
+                        found = await db.fetch_one(
+                            "SELECT id, display_name, telegram_id, username FROM users WHERE LOWER(username) = LOWER($1)",
+                            inp
+                        )
+                    if found:
+                        assignees.append(dict(found))
+                    else:
+                        not_found.append(inp)
+
+                if not_found:
+                    await update.message.reply_text(
+                        f"Không tìm thấy: {', '.join(not_found)}\n\n"
+                        f"Người này cần đã từng tương tác với bot.\n"
+                        f"💡 Hoặc dùng text mention (chạm tên trong nhóm)"
+                    )
+                    return
+
+            if not assignees:
                 await update.message.reply_text(
-                    f"Không tìm thấy: {', '.join(not_found)}\n\n"
-                    f"Người này cần đã từng tương tác với bot.\n"
-                    f"Vui lòng thử lại."
+                    "Vui lòng nhập ít nhất 1 người nhận.\n\n"
+                    "💡 Dùng @username hoặc text mention (chạm tên trong nhóm)"
                 )
                 return
 
@@ -932,17 +957,21 @@ async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE
                     )
 
                     context.user_data.pop("pending_edit", None)
+                    assignee_mention = mention_user(new_assignee)
                     await update.message.reply_text(
                         f"✅ Đã chuyển việc nhóm {task_id} → việc cá nhân {new_task['public_id']}!\n\n"
-                        f"👤 Người nhận: {new_assignee.get('display_name', '?')}"
+                        f"👤 Người nhận: {assignee_mention}",
+                        parse_mode="Markdown"
                     )
                 else:
                     # Simple update
                     await update_task_assignee(db, task_db_id, new_assignee["id"], db_user["id"])
                     context.user_data.pop("pending_edit", None)
+                    assignee_mention = mention_user(new_assignee)
                     await update.message.reply_text(
                         f"✅ Đã cập nhật người nhận {task_id}!\n\n"
-                        f"👤 Người nhận mới: {new_assignee.get('display_name', '?')}"
+                        f"👤 Người nhận mới: {assignee_mention}",
+                        parse_mode="Markdown"
                     )
 
                 # Notify new assignee
@@ -959,15 +988,17 @@ async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE
 
             else:
                 # Multiple assignees - convert to group or update group
+                assignee_mentions = ", ".join([mention_user(a) for a in assignees])
+
                 if is_group:
                     # Update existing group
                     new_children = await update_group_assignees(db, task_id, assignees, db_user["id"])
                     context.user_data.pop("pending_edit", None)
 
-                    assignee_names = ", ".join([a.get("display_name", "?") for a in assignees])
                     await update.message.reply_text(
                         f"✅ Đã cập nhật việc nhóm {task_id}!\n\n"
-                        f"👥 Người nhận: {assignee_names}"
+                        f"👥 Người nhận: {assignee_mentions}",
+                        parse_mode="Markdown"
                     )
                 else:
                     # Convert individual to group
@@ -979,7 +1010,9 @@ async def handle_pending_edit(update: Update, context: ContextTypes.DEFAULT_TYPE
                     child_ids = ", ".join([c[0]["public_id"] for c in children])
                     await update.message.reply_text(
                         f"✅ Đã chuyển việc cá nhân {task_id} → việc nhóm {parent['public_id']}!\n\n"
-                        f"👥 Việc con: {child_ids}"
+                        f"👥 Người nhận: {assignee_mentions}\n"
+                        f"📋 Việc con: {child_ids}",
+                        parse_mode="Markdown"
                     )
 
                 # Notify all assignees
