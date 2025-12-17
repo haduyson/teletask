@@ -182,23 +182,42 @@ create_user() {
 clone_repository() {
     log_info "Cloning TeleTask repository..."
 
-    if [ -d "$BOT_DIR/.git" ]; then
-        log_warn "Repository already exists, pulling latest..."
-        sudo -u "$BOTPANEL_USER" git -C "$BOT_DIR" pull origin main || true
-    else
-        # Clone from GitHub
-        sudo -u "$BOTPANEL_USER" git clone https://github.com/haduyson/teletask.git "$BOT_DIR" || {
-            # If clone fails, copy from template
-            log_warn "Clone failed, checking for local template..."
-            if [ -d "/root/teletask/src/templates/bot_template" ]; then
-                cp -r /root/teletask/src/templates/bot_template/* "$BOT_DIR/"
-                chown -R "$BOTPANEL_USER:$BOTPANEL_USER" "$BOT_DIR"
-            else
-                log_error "No source found. Please clone manually."
-                exit 1
-            fi
-        }
+    # Check if bot files already exist
+    if [ -f "$BOT_DIR/bot.py" ]; then
+        log_warn "Bot files already exist, skipping clone"
+        log_success "Repository ready"
+        return 0
     fi
+
+    # Clone to temp directory and copy template
+    TEMP_DIR=$(mktemp -d)
+
+    git clone --depth 1 https://github.com/haduyson/teletask.git "$TEMP_DIR" || {
+        log_warn "Clone failed, checking for local template..."
+        rm -rf "$TEMP_DIR"
+        if [ -d "/root/teletask/src/templates/bot_template" ]; then
+            cp -r /root/teletask/src/templates/bot_template/* "$BOT_DIR/"
+            chown -R "$BOTPANEL_USER:$BOTPANEL_USER" "$BOT_DIR"
+            log_success "Repository ready"
+            return 0
+        else
+            log_error "No source found. Please clone manually."
+            exit 1
+        fi
+    }
+
+    # Copy only the bot template files
+    if [ -d "$TEMP_DIR/src/templates/bot_template" ]; then
+        cp -r "$TEMP_DIR/src/templates/bot_template/"* "$BOT_DIR/"
+        chown -R "$BOTPANEL_USER:$BOTPANEL_USER" "$BOT_DIR"
+    else
+        log_error "Template not found in repository"
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
+
+    # Cleanup temp directory
+    rm -rf "$TEMP_DIR"
 
     log_success "Repository ready"
 }
