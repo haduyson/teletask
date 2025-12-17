@@ -528,6 +528,29 @@ async def update_task_content(
         new_value=content[:100]
     )
 
+    # Sync to Google Calendar if task has event
+    if task and current.get("google_event_id"):
+        try:
+            from services.calendar_service import (
+                is_calendar_enabled,
+                get_user_token_data,
+                update_calendar_event,
+            )
+            if is_calendar_enabled():
+                assignee_id = current.get("assignee_id")
+                token_data = await get_user_token_data(db, assignee_id)
+                if token_data:
+                    await update_calendar_event(
+                        token_data, current["google_event_id"],
+                        current["public_id"], content,  # Use new content
+                        current.get("deadline"), current.get("description", ""),
+                        current.get("priority", "normal"),
+                        current.get("status", "pending"),
+                    )
+                    logger.info(f"Updated calendar event for task {task_id} content change")
+        except Exception as e:
+            logger.warning(f"Calendar sync failed for task {task_id}: {e}")
+
     return dict(task) if task else None
 
 
@@ -746,6 +769,28 @@ async def soft_delete_task(
         note="Task deleted (30s undo available)"
     )
 
+    # Delete from Google Calendar if event exists
+    if task.get("google_event_id"):
+        try:
+            from services.calendar_service import (
+                is_calendar_enabled,
+                get_user_token_data,
+                delete_calendar_event,
+            )
+            if is_calendar_enabled():
+                assignee_id = task.get("assignee_id")
+                token_data = await get_user_token_data(db, assignee_id)
+                if token_data:
+                    await delete_calendar_event(token_data, task["google_event_id"])
+                    # Clear google_event_id so restore can recreate
+                    await db.execute(
+                        "UPDATE tasks SET google_event_id = NULL WHERE id = $1",
+                        task_id
+                    )
+                    logger.info(f"Deleted calendar event for task {task_id}")
+        except Exception as e:
+            logger.warning(f"Calendar delete failed for task {task_id}: {e}")
+
     return dict(undo) if undo else None
 
 
@@ -800,7 +845,41 @@ async def restore_task(db: Database, undo_id: int) -> Optional[Dict[str, Any]]:
         note="Task restored from undo"
     )
 
-    return await get_task_by_id(db, task_id)
+    # Get restored task
+    task = await get_task_by_id(db, task_id)
+
+    # Recreate Google Calendar event if task has deadline
+    if task and task.get("deadline") and not task.get("google_event_id"):
+        try:
+            from services.calendar_service import (
+                is_calendar_enabled,
+                get_user_token_data,
+                create_calendar_event,
+                get_user_reminder_source,
+            )
+            if is_calendar_enabled():
+                assignee_id = task.get("assignee_id")
+                token_data = await get_user_token_data(db, assignee_id)
+                if token_data:
+                    reminder_source = await get_user_reminder_source(db, assignee_id)
+                    event_id = await create_calendar_event(
+                        token_data,
+                        task["public_id"], task["content"],
+                        task["deadline"], task.get("description", ""),
+                        task.get("priority", "normal"),
+                        reminder_source,
+                    )
+                    if event_id:
+                        await db.execute(
+                            "UPDATE tasks SET google_event_id = $2 WHERE id = $1",
+                            task_id, event_id
+                        )
+                        task["google_event_id"] = event_id
+                        logger.info(f"Recreated calendar event for restored task {task_id}: {event_id}")
+        except Exception as e:
+            logger.warning(f"Calendar recreation failed for task {task_id}: {e}")
+
+    return task
 
 
 async def get_tasks_created_by_user(
