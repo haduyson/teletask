@@ -252,14 +252,14 @@ configure_env() {
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 
-    read -p "Enter your Telegram Bot Token (from @BotFather): " BOT_TOKEN
+    read -p "Enter your Telegram Bot Token (from @BotFather): " BOT_TOKEN < /dev/tty
 
     if [ -z "$BOT_TOKEN" ]; then
         log_error "Bot token is required!"
         exit 1
     fi
 
-    read -p "Enter your Telegram User ID (for admin notifications, optional): " ADMIN_ID
+    read -p "Enter your Telegram User ID (for admin notifications, optional): " ADMIN_ID < /dev/tty
 
     # Create .env file
     cat > "$BOT_DIR/.env" << EOF
@@ -333,7 +333,7 @@ create_botpanel_cli() {
     # Check if botpanel already exists
     if [ -f /usr/local/bin/botpanel ]; then
         log_warn "botpanel CLI already exists at /usr/local/bin/botpanel"
-        read -p "Do you want to overwrite it? (y/N): " OVERWRITE
+        read -p "Do you want to overwrite it? (y/N): " OVERWRITE < /dev/tty
         if [[ ! "$OVERWRITE" =~ ^[Yy]$ ]]; then
             log_info "Skipping CLI creation to preserve existing configuration"
             return 0
