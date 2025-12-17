@@ -17,16 +17,17 @@ NC='\033[0m' # No Color
 # Configuration
 BOTPANEL_USER="botpanel"
 BOTPANEL_HOME="/home/$BOTPANEL_USER"
-BOT_DIR="$BOTPANEL_HOME/bots/bot_001"
 LOG_DIR="$BOTPANEL_HOME/logs"
 BACKUP_DIR="$BOTPANEL_HOME/backups"
 PYTHON_VERSION="3.11"
 TIMEZONE="Asia/Ho_Chi_Minh"
 
-# Generated values
-DB_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
-DB_NAME="teletask_db"
+# Will be set after asking for bot name
+BOT_SLUG=""
+BOT_DIR=""
+DB_NAME=""
 DB_USER="botpanel"
+DB_PASSWORD=""
 
 #-------------------------------------------------------------------------------
 # Helper functions
@@ -61,6 +62,46 @@ check_root() {
         log_error "Please run as root: sudo bash install.sh"
         exit 1
     fi
+}
+
+#-------------------------------------------------------------------------------
+# Ask for bot name and set up variables
+#-------------------------------------------------------------------------------
+setup_bot_config() {
+    echo -e "${CYAN}"
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║                    TeleTask Bot Installer                    ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+
+    echo -e "${YELLOW}Enter a name for your bot (e.g., mybot, taskbot, companybot):${NC}"
+    echo -e "This will be used as folder name and database name."
+    echo -e "Only lowercase letters, numbers, and underscores allowed.\n"
+
+    read -p "Bot name: " BOT_NAME_INPUT < /dev/tty
+
+    if [ -z "$BOT_NAME_INPUT" ]; then
+        log_error "Bot name is required!"
+        exit 1
+    fi
+
+    # Convert to slug: lowercase, replace spaces/special chars with underscore
+    BOT_SLUG=$(echo "$BOT_NAME_INPUT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
+
+    if [ -z "$BOT_SLUG" ]; then
+        log_error "Invalid bot name!"
+        exit 1
+    fi
+
+    # Set derived variables
+    BOT_DIR="$BOTPANEL_HOME/bots/$BOT_SLUG"
+    DB_NAME="${BOT_SLUG}_db"
+    DB_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
+
+    log_info "Bot slug: $BOT_SLUG"
+    log_info "Bot directory: $BOT_DIR"
+    log_info "Database name: $DB_NAME"
+    echo ""
 }
 
 #-------------------------------------------------------------------------------
@@ -267,7 +308,7 @@ configure_env() {
 # Telegram Bot
 #-------------------------------------------------------------------------------
 BOT_TOKEN=$BOT_TOKEN
-BOT_NAME=TeleTask
+BOT_NAME=$BOT_SLUG
 
 #-------------------------------------------------------------------------------
 # Database
@@ -353,10 +394,10 @@ create_botpanel_cli() {
 # Usage: botpanel [command]
 #===============================================================================
 
-BOT_DIR="/home/botpanel/bots/bot_001"
+BOT_DIR="__BOT_DIR__"
 LOG_DIR="/home/botpanel/logs"
 BACKUP_DIR="/home/botpanel/backups"
-PM2_NAME="teletask-bot"
+PM2_NAME="__PM2_NAME__"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -670,6 +711,10 @@ case "$1" in
 esac
 EOFCLI
 
+    # Replace placeholders with actual values
+    sed -i "s|__BOT_DIR__|$BOT_DIR|g" /usr/local/bin/botpanel
+    sed -i "s|__PM2_NAME__|$BOT_SLUG|g" /usr/local/bin/botpanel
+
     chmod +x /usr/local/bin/botpanel
 
     log_success "botpanel CLI created"
@@ -698,7 +743,7 @@ start_bot() {
         cd '$BOT_DIR'
         source venv/bin/activate
         pm2 start '$BOT_DIR/venv/bin/python' \
-            --name 'teletask-bot' \
+            --name '$BOT_SLUG' \
             --interpreter none \
             -- '$BOT_DIR/bot.py'
         pm2 save
@@ -717,6 +762,12 @@ print_summary() {
     echo "║              INSTALLATION COMPLETED SUCCESSFULLY             ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
+
+    echo -e "${YELLOW}Bot Information:${NC}"
+    echo "  Bot Name: $BOT_SLUG"
+    echo "  PM2 Name: $BOT_SLUG"
+    echo "  Directory: $BOT_DIR"
+    echo ""
 
     echo -e "${YELLOW}Database Credentials (save these!):${NC}"
     echo "  Database: $DB_NAME"
@@ -741,14 +792,16 @@ print_summary() {
     echo ""
 
     echo -e "${CYAN}Test your bot in Telegram: /start${NC}"
+    echo ""
+    echo -e "${YELLOW}Note:${NC} PM2 process name is '$BOT_SLUG' - use 'pm2 logs $BOT_SLUG' for raw logs"
 }
 
 #-------------------------------------------------------------------------------
 # Main installation
 #-------------------------------------------------------------------------------
 main() {
-    print_banner
     check_root
+    setup_bot_config
 
     log_info "Starting TeleTask Bot installation..."
     echo ""
