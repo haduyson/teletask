@@ -60,6 +60,7 @@ from .task_service import (
     get_tasks_created_by_user,
     get_tasks_assigned_to_others,
     bulk_delete_tasks,
+    bulk_soft_delete_with_undo,
 )
 
 from .recurring_service import (
@@ -133,6 +134,7 @@ __all__ = [
     "get_tasks_created_by_user",
     "get_tasks_assigned_to_others",
     "bulk_delete_tasks",
+    "bulk_soft_delete_with_undo",
     # Recurring service
     "create_recurring_template",
     "get_recurring_template",
