@@ -269,20 +269,23 @@ async def update_calendar_event(
 
     try:
         color_map = {
-            "urgent": "11",
-            "high": "6",
-            "normal": "7",
-            "low": "2",
+            "urgent": "11",  # Red
+            "high": "6",     # Orange
+            "normal": "7",   # Cyan
+            "low": "2",      # Green
         }
 
-        # Mark completed tasks with strikethrough
+        # Mark completed tasks visually
         summary = f"[{task_id}] {title}"
         if status == "completed":
-            summary = f"✅ {summary}"
+            summary = f"✅ [DONE] {title}"
+            color_id = "8"  # Gray for completed
+        else:
+            color_id = color_map.get(priority, "7")
 
         event = {
             "summary": summary,
-            "description": f"TeleTask: {task_id}\n\n{description}" if description else f"TeleTask: {task_id}",
+            "description": f"TeleTask: {task_id}\nStatus: {status.upper()}\n\n{description}" if description else f"TeleTask: {task_id}\nStatus: {status.upper()}",
             "start": {
                 "dateTime": deadline.isoformat(),
                 "timeZone": "Asia/Ho_Chi_Minh",
@@ -291,7 +294,7 @@ async def update_calendar_event(
                 "dateTime": (deadline + timedelta(hours=1)).isoformat(),
                 "timeZone": "Asia/Ho_Chi_Minh",
             },
-            "colorId": color_map.get(priority, "7"),
+            "colorId": color_id,
         }
 
         service.events().update(
