@@ -317,13 +317,15 @@ EOF
 run_migrations() {
     log_info "Running database migrations..."
 
-    sudo -u "$BOTPANEL_USER" bash -c "
+    if sudo -u "$BOTPANEL_USER" bash -c "
         cd '$BOT_DIR'
         source venv/bin/activate
         alembic upgrade head
-    "
-
-    log_success "Database migrations completed"
+    "; then
+        log_success "Database migrations completed"
+    else
+        log_warn "Database migrations failed. You can run manually later: botpanel db-migrate"
+    fi
 }
 
 #-------------------------------------------------------------------------------
