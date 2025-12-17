@@ -215,46 +215,46 @@ NC='\033[0m'
 print_banner() {
     echo -e "${CYAN}"
     echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                   TeleTask Bot Manager                       ║"
+    echo "║              TeleTask - Quản lý Bot Telegram                 ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 }
 
 print_help() {
     print_banner
-    echo -e "${GREEN}Usage:${NC} botpanel [command] [bot_name]"
+    echo -e "${GREEN}Cách dùng:${NC} botpanel [lệnh] [tên_bot]"
     echo ""
-    echo -e "${YELLOW}Bot Creation:${NC}"
-    echo "  create              Create a new bot"
-    echo "  list                List all bots"
-    echo "  delete <bot>        Delete a bot"
+    echo -e "${YELLOW}Tạo Bot:${NC}"
+    echo "  create              Tạo bot mới"
+    echo "  list                Danh sách bot"
+    echo "  delete <bot>        Xóa bot"
     echo ""
-    echo -e "${YELLOW}Bot Management:${NC}"
-    echo "  start <bot>         Start a bot"
-    echo "  stop <bot>          Stop a bot"
-    echo "  restart <bot>       Restart a bot"
-    echo "  status [bot]        Show bot status (all if no bot specified)"
-    echo "  logs <bot>          Show bot logs (live)"
-    echo "  logs-err <bot>      Show error logs"
+    echo -e "${YELLOW}Quản lý Bot:${NC}"
+    echo "  start <bot>         Khởi động bot"
+    echo "  stop <bot>          Dừng bot"
+    echo "  restart <bot>       Khởi động lại bot"
+    echo "  status [bot]        Trạng thái bot"
+    echo "  logs <bot>          Xem logs"
+    echo "  logs-err <bot>      Xem logs lỗi"
     echo ""
-    echo -e "${YELLOW}Database:${NC}"
-    echo "  db-status <bot>     Check database connection"
-    echo "  db-migrate <bot>    Run database migrations"
-    echo "  db-backup <bot>     Backup database"
-    echo "  db-restore <bot>    Restore database from backup"
+    echo -e "${YELLOW}Cơ sở dữ liệu:${NC}"
+    echo "  db-status <bot>     Kiểm tra kết nối DB"
+    echo "  db-migrate <bot>    Chạy migrations"
+    echo "  db-backup <bot>     Sao lưu dữ liệu"
+    echo "  db-restore <bot>    Khôi phục dữ liệu"
     echo ""
-    echo -e "${YELLOW}Configuration:${NC}"
-    echo "  config <bot>        Edit .env configuration"
-    echo "  token <bot>         Update bot token"
-    echo "  gcal <bot>          Configure Google Calendar"
+    echo -e "${YELLOW}Cấu hình:${NC}"
+    echo "  config <bot>        Sửa cấu hình .env"
+    echo "  token <bot>         Cập nhật token"
+    echo "  gcal <bot>          Cài đặt Google Calendar"
     echo ""
-    echo -e "${YELLOW}Maintenance:${NC}"
-    echo "  update <bot>        Update bot to latest version"
-    echo "  deps <bot>          Reinstall dependencies"
-    echo "  clean               Clean logs and temp files"
-    echo "  info                Show system information"
+    echo -e "${YELLOW}Bảo trì:${NC}"
+    echo "  update <bot>        Cập nhật bot"
+    echo "  deps <bot>          Cài lại thư viện"
+    echo "  clean               Dọn logs và file tạm"
+    echo "  info                Thông tin hệ thống"
     echo ""
-    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "${YELLOW}Ví dụ:${NC}"
     echo "  botpanel create"
     echo "  botpanel start mybot"
     echo "  botpanel logs taskbot"
@@ -283,9 +283,9 @@ select_bot() {
     local bots=($(get_bots_array))
 
     if [ ${#bots[@]} -eq 0 ]; then
-        echo -e "${YELLOW}No bots found. Create one first.${NC}"
+        echo -e "${YELLOW}Chưa có bot nào. Hãy tạo bot trước.${NC}"
         echo ""
-        read -p "Press Enter to continue..."
+        read -p "Nhấn Enter để tiếp tục..."
         return 1
     fi
 
@@ -298,21 +298,21 @@ select_bot() {
         if pm2 describe "$bot" &>/dev/null; then
             local status=$(pm2 jq "$bot" 2>/dev/null | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
             if [ "$status" = "online" ]; then
-                echo -e "  ${GREEN}$i)${NC} $bot ${GREEN}(online)${NC}"
+                echo -e "  ${GREEN}$i)${NC} $bot ${GREEN}(đang chạy)${NC}"
             else
-                echo -e "  ${RED}$i)${NC} $bot ${RED}($status)${NC}"
+                echo -e "  ${RED}$i)${NC} $bot ${RED}(lỗi)${NC}"
             fi
         else
-            echo -e "  ${YELLOW}$i)${NC} $bot ${YELLOW}(stopped)${NC}"
+            echo -e "  ${YELLOW}$i)${NC} $bot ${YELLOW}(đã dừng)${NC}"
         fi
         ((i++))
     done
 
     echo ""
-    echo -e "  ${BLUE}0)${NC} Back to main menu"
+    echo -e "  ${BLUE}0)${NC} Quay lại menu chính"
     echo ""
 
-    read -p "Select bot [0-$((i-1))]: " choice
+    read -p "Chọn bot [0-$((i-1))]: " choice
 
     if [ "$choice" = "0" ] || [ -z "$choice" ]; then
         return 1
@@ -322,7 +322,7 @@ select_bot() {
         SELECTED_BOT="${bots[$((choice-1))]}"
         return 0
     else
-        echo -e "${RED}Invalid selection${NC}"
+        echo -e "${RED}Lựa chọn không hợp lệ${NC}"
         sleep 1
         return 1
     fi
@@ -344,172 +344,172 @@ interactive_menu() {
             fi
         done
 
-        echo -e "  Bots: ${CYAN}${#bots[@]}${NC} total, ${GREEN}${online_count}${NC} online"
+        echo -e "  Tổng: ${CYAN}${#bots[@]}${NC} bot, ${GREEN}${online_count}${NC} đang chạy"
         echo ""
         echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
         echo ""
-        echo -e "${GREEN}  Bot Management${NC}"
-        echo "  1) Create new bot"
-        echo "  2) List all bots"
-        echo "  3) Start bot"
-        echo "  4) Stop bot"
-        echo "  5) Restart bot"
-        echo "  6) View logs"
+        echo -e "${GREEN}  Quản lý Bot${NC}"
+        echo "  1) Tạo bot mới"
+        echo "  2) Danh sách bot"
+        echo "  3) Khởi động bot"
+        echo "  4) Dừng bot"
+        echo "  5) Khởi động lại"
+        echo "  6) Xem logs"
         echo ""
-        echo -e "${GREEN}  Database${NC}"
-        echo "  7) Database status"
-        echo "  8) Run migrations"
-        echo "  9) Backup database"
+        echo -e "${GREEN}  Cơ sở dữ liệu${NC}"
+        echo "  7) Trạng thái DB"
+        echo "  8) Chạy migrations"
+        echo "  9) Sao lưu dữ liệu"
         echo ""
-        echo -e "${GREEN}  Configuration${NC}"
-        echo "  10) Edit config"
-        echo "  11) Update bot token"
-        echo "  12) Google Calendar setup"
+        echo -e "${GREEN}  Cấu hình${NC}"
+        echo "  10) Sửa cấu hình"
+        echo "  11) Cập nhật token"
+        echo "  12) Google Calendar"
         echo ""
-        echo -e "${GREEN}  Maintenance${NC}"
-        echo "  13) Update bot"
-        echo "  14) Delete bot"
-        echo "  15) System info"
-        echo "  16) Clean logs"
+        echo -e "${GREEN}  Bảo trì${NC}"
+        echo "  13) Cập nhật bot"
+        echo "  14) Xóa bot"
+        echo "  15) Thông tin hệ thống"
+        echo "  16) Dọn logs"
         echo ""
         echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
         echo ""
-        echo -e "  ${BLUE}h)${NC} Help (command reference)"
-        echo -e "  ${RED}q)${NC} Quit"
+        echo -e "  ${BLUE}h)${NC} Trợ giúp (danh sách lệnh)"
+        echo -e "  ${RED}q)${NC} Thoát"
         echo ""
 
-        read -p "Select option: " choice
+        read -p "Chọn: " choice
 
         case "$choice" in
             1)
                 clear
                 cmd_create
                 echo ""
-                read -p "Press Enter to continue..."
+                read -p "Nhấn Enter để tiếp tục..."
                 ;;
             2)
                 clear
                 cmd_list
-                read -p "Press Enter to continue..."
+                read -p "Nhấn Enter để tiếp tục..."
                 ;;
             3)
                 clear
-                if select_bot "Select bot to START:"; then
+                if select_bot "Chọn bot để KHỞI ĐỘNG:"; then
                     cmd_start "$SELECTED_BOT"
                     echo ""
-                    read -p "Press Enter to continue..."
+                    read -p "Nhấn Enter để tiếp tục..."
                 fi
                 ;;
             4)
                 clear
-                if select_bot "Select bot to STOP:"; then
+                if select_bot "Chọn bot để DỪNG:"; then
                     cmd_stop "$SELECTED_BOT"
                     echo ""
-                    read -p "Press Enter to continue..."
+                    read -p "Nhấn Enter để tiếp tục..."
                 fi
                 ;;
             5)
                 clear
-                if select_bot "Select bot to RESTART:"; then
+                if select_bot "Chọn bot để KHỞI ĐỘNG LẠI:"; then
                     cmd_restart "$SELECTED_BOT"
                     echo ""
-                    read -p "Press Enter to continue..."
+                    read -p "Nhấn Enter để tiếp tục..."
                 fi
                 ;;
             6)
                 clear
-                if select_bot "Select bot to view LOGS:"; then
-                    echo -e "${BLUE}[INFO]${NC} Showing logs for '$SELECTED_BOT' (Ctrl+C to exit)..."
+                if select_bot "Chọn bot để xem LOGS:"; then
+                    echo -e "${BLUE}[INFO]${NC} Đang hiển thị logs '$SELECTED_BOT' (Ctrl+C để thoát)..."
                     echo ""
                     pm2 logs "$SELECTED_BOT" --lines 50
                 fi
                 ;;
             7)
                 clear
-                if select_bot "Select bot for DATABASE STATUS:"; then
+                if select_bot "Chọn bot để kiểm tra DATABASE:"; then
                     cmd_db_status "$SELECTED_BOT"
                     echo ""
-                    read -p "Press Enter to continue..."
+                    read -p "Nhấn Enter để tiếp tục..."
                 fi
                 ;;
             8)
                 clear
-                if select_bot "Select bot to run MIGRATIONS:"; then
+                if select_bot "Chọn bot để chạy MIGRATIONS:"; then
                     cmd_db_migrate "$SELECTED_BOT"
                     echo ""
-                    read -p "Press Enter to continue..."
+                    read -p "Nhấn Enter để tiếp tục..."
                 fi
                 ;;
             9)
                 clear
-                if select_bot "Select bot to BACKUP:"; then
+                if select_bot "Chọn bot để SAO LƯU:"; then
                     cmd_db_backup "$SELECTED_BOT"
                     echo ""
-                    read -p "Press Enter to continue..."
+                    read -p "Nhấn Enter để tiếp tục..."
                 fi
                 ;;
             10)
                 clear
-                if select_bot "Select bot to CONFIGURE:"; then
+                if select_bot "Chọn bot để SỬA CẤU HÌNH:"; then
                     cmd_config "$SELECTED_BOT"
                 fi
                 ;;
             11)
                 clear
-                if select_bot "Select bot to update TOKEN:"; then
+                if select_bot "Chọn bot để cập nhật TOKEN:"; then
                     cmd_token "$SELECTED_BOT"
                     echo ""
-                    read -p "Press Enter to continue..."
+                    read -p "Nhấn Enter để tiếp tục..."
                 fi
                 ;;
             12)
                 clear
-                if select_bot "Select bot for GOOGLE CALENDAR:"; then
+                if select_bot "Chọn bot để cài GOOGLE CALENDAR:"; then
                     cmd_gcal "$SELECTED_BOT"
                     echo ""
-                    read -p "Press Enter to continue..."
+                    read -p "Nhấn Enter để tiếp tục..."
                 fi
                 ;;
             13)
                 clear
-                if select_bot "Select bot to UPDATE:"; then
+                if select_bot "Chọn bot để CẬP NHẬT:"; then
                     cmd_update "$SELECTED_BOT"
                     echo ""
-                    read -p "Press Enter to continue..."
+                    read -p "Nhấn Enter để tiếp tục..."
                 fi
                 ;;
             14)
                 clear
-                if select_bot "Select bot to DELETE:"; then
+                if select_bot "Chọn bot để XÓA:"; then
                     cmd_delete "$SELECTED_BOT"
                     echo ""
-                    read -p "Press Enter to continue..."
+                    read -p "Nhấn Enter để tiếp tục..."
                 fi
                 ;;
             15)
                 clear
                 cmd_info
-                read -p "Press Enter to continue..."
+                read -p "Nhấn Enter để tiếp tục..."
                 ;;
             16)
                 clear
                 cmd_clean
                 echo ""
-                read -p "Press Enter to continue..."
+                read -p "Nhấn Enter để tiếp tục..."
                 ;;
             h|H)
                 clear
                 print_help
                 echo ""
-                read -p "Press Enter to continue..."
+                read -p "Nhấn Enter để tiếp tục..."
                 ;;
             q|Q|0)
                 clear
-                echo -e "${CYAN}Goodbye!${NC}"
+                echo -e "${CYAN}Tạm biệt!${NC}"
                 exit 0
                 ;;
             *)
-                echo -e "${RED}Invalid option${NC}"
+                echo -e "${RED}Lựa chọn không hợp lệ${NC}"
                 sleep 1
                 ;;
         esac
@@ -520,15 +520,15 @@ interactive_menu() {
 get_bot_dir() {
     local bot_name="$1"
     if [ -z "$bot_name" ]; then
-        echo -e "${RED}[ERROR]${NC} Bot name is required"
+        echo -e "${RED}[LỖI]${NC} Thiếu tên bot"
         return 1
     fi
 
     local bot_dir="$BOTS_DIR/$bot_name"
     if [ ! -d "$bot_dir" ]; then
-        echo -e "${RED}[ERROR]${NC} Bot '$bot_name' not found"
-        echo "Available bots:"
-        ls -1 "$BOTS_DIR" 2>/dev/null || echo "  (none)"
+        echo -e "${RED}[LỖI]${NC} Không tìm thấy bot '$bot_name'"
+        echo "Các bot hiện có:"
+        ls -1 "$BOTS_DIR" 2>/dev/null || echo "  (không có)"
         return 1
     fi
 
@@ -540,17 +540,17 @@ get_bot_dir() {
 #-------------------------------------------------------------------------------
 cmd_create() {
     print_banner
-    echo -e "${YELLOW}Create a new TeleTask bot${NC}"
+    echo -e "${YELLOW}Tạo bot TeleTask mới${NC}"
     echo ""
 
     # Ask for bot name
-    echo -e "Enter a name for your bot (e.g., mybot, taskbot, companybot):"
-    echo -e "Only lowercase letters, numbers, and underscores allowed."
+    echo -e "Nhập tên cho bot (ví dụ: mybot, taskbot, companybot):"
+    echo -e "Chỉ dùng chữ thường, số và dấu gạch dưới."
     echo ""
-    read -p "Bot name: " BOT_NAME_INPUT
+    read -p "Tên bot: " BOT_NAME_INPUT
 
     if [ -z "$BOT_NAME_INPUT" ]; then
-        echo -e "${RED}[ERROR]${NC} Bot name is required!"
+        echo -e "${RED}[LỖI]${NC} Phải nhập tên bot!"
         exit 1
     fi
 
@@ -558,7 +558,7 @@ cmd_create() {
     BOT_SLUG=$(echo "$BOT_NAME_INPUT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
 
     if [ -z "$BOT_SLUG" ]; then
-        echo -e "${RED}[ERROR]${NC} Invalid bot name!"
+        echo -e "${RED}[LỖI]${NC} Tên bot không hợp lệ!"
         exit 1
     fi
 
@@ -566,57 +566,57 @@ cmd_create() {
 
     # Check if bot already exists
     if [ -d "$BOT_DIR" ]; then
-        echo -e "${RED}[ERROR]${NC} Bot '$BOT_SLUG' already exists at $BOT_DIR"
+        echo -e "${RED}[LỖI]${NC} Bot '$BOT_SLUG' đã tồn tại tại $BOT_DIR"
         exit 1
     fi
 
-    echo -e "${BLUE}[INFO]${NC} Bot slug: $BOT_SLUG"
+    echo -e "${BLUE}[INFO]${NC} Tên bot: $BOT_SLUG"
     echo ""
 
     # Ask for bot token
     echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${YELLOW}║                  TELEGRAM BOT CONFIGURATION                  ║${NC}"
+    echo -e "${YELLOW}║                    CẤU HÌNH BOT TELEGRAM                     ║${NC}"
     echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 
-    read -p "Enter your Telegram Bot Token (from @BotFather): " BOT_TOKEN
+    read -p "Nhập Bot Token (lấy từ @BotFather): " BOT_TOKEN
 
     if [ -z "$BOT_TOKEN" ]; then
-        echo -e "${RED}[ERROR]${NC} Bot token is required!"
+        echo -e "${RED}[LỖI]${NC} Phải nhập bot token!"
         exit 1
     fi
 
-    read -p "Enter your Telegram User ID (for admin, optional): " ADMIN_ID
+    read -p "Nhập Telegram User ID của bạn (để làm admin, tùy chọn): " ADMIN_ID
 
     echo ""
-    echo -e "${BLUE}[INFO]${NC} Creating bot '$BOT_SLUG'..."
+    echo -e "${BLUE}[INFO]${NC} Đang tạo bot '$BOT_SLUG'..."
 
     # Create bot directory
     mkdir -p "$BOT_DIR"
 
     # Clone template
-    echo -e "${BLUE}[INFO]${NC} Downloading bot template..."
+    echo -e "${BLUE}[INFO]${NC} Đang tải template bot..."
     TEMP_DIR=$(mktemp -d)
 
     if git clone --depth 1 https://github.com/haduyson/teletask.git "$TEMP_DIR" 2>/dev/null; then
         if [ -d "$TEMP_DIR/src/templates/bot_template" ]; then
             cp -r "$TEMP_DIR/src/templates/bot_template/"* "$BOT_DIR/"
         else
-            echo -e "${RED}[ERROR]${NC} Template not found in repository"
+            echo -e "${RED}[LỖI]${NC} Không tìm thấy template"
             rm -rf "$TEMP_DIR" "$BOT_DIR"
             exit 1
         fi
         rm -rf "$TEMP_DIR"
     else
-        echo -e "${RED}[ERROR]${NC} Failed to download template"
+        echo -e "${RED}[LỖI]${NC} Không thể tải template"
         rm -rf "$TEMP_DIR" "$BOT_DIR"
         exit 1
     fi
 
-    echo -e "${GREEN}[OK]${NC} Template downloaded"
+    echo -e "${GREEN}[OK]${NC} Đã tải template"
 
     # Setup Python environment
-    echo -e "${BLUE}[INFO]${NC} Setting up Python environment..."
+    echo -e "${BLUE}[INFO]${NC} Đang cài đặt môi trường Python..."
     cd "$BOT_DIR"
     python${PYTHON_VERSION} -m venv venv
     source venv/bin/activate
@@ -624,17 +624,17 @@ cmd_create() {
     pip install -r requirements.txt -q
     deactivate
 
-    echo -e "${GREEN}[OK]${NC} Python environment ready"
+    echo -e "${GREEN}[OK]${NC} Môi trường Python sẵn sàng"
 
     # Create database
-    echo -e "${BLUE}[INFO]${NC} Creating database..."
+    echo -e "${BLUE}[INFO]${NC} Đang tạo database..."
     DB_NAME="${BOT_SLUG}_db"
     DB_USER="botpanel"
     DB_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
 
     # Create database using botpanel user's createdb privilege or postgres
     if sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
-        echo -e "${YELLOW}[WARN]${NC} Database '$DB_NAME' already exists"
+        echo -e "${YELLOW}[CẢNH BÁO]${NC} Database '$DB_NAME' đã tồn tại"
     else
         sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" 2>/dev/null || {
             # Fallback: create with postgres
@@ -646,10 +646,10 @@ cmd_create() {
     sudo -u postgres psql -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
     sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null || true
 
-    echo -e "${GREEN}[OK]${NC} Database created"
+    echo -e "${GREEN}[OK]${NC} Đã tạo database"
 
     # Create .env file
-    echo -e "${BLUE}[INFO]${NC} Creating configuration..."
+    echo -e "${BLUE}[INFO]${NC} Đang tạo cấu hình..."
     cat > "$BOT_DIR/.env" << EOF
 #-------------------------------------------------------------------------------
 # Telegram Bot
@@ -694,16 +694,16 @@ HEALTH_PORT=8080
 EOF
 
     chmod 600 "$BOT_DIR/.env"
-    echo -e "${GREEN}[OK]${NC} Configuration created"
+    echo -e "${GREEN}[OK]${NC} Đã tạo cấu hình"
 
     # Run migrations
-    echo -e "${BLUE}[INFO]${NC} Running database migrations..."
+    echo -e "${BLUE}[INFO]${NC} Đang chạy database migrations..."
     cd "$BOT_DIR"
     source venv/bin/activate
     if alembic upgrade head 2>/dev/null; then
-        echo -e "${GREEN}[OK]${NC} Migrations completed"
+        echo -e "${GREEN}[OK]${NC} Migrations hoàn tất"
     else
-        echo -e "${YELLOW}[WARN]${NC} Migrations failed. Run later: botpanel db-migrate $BOT_SLUG"
+        echo -e "${YELLOW}[CẢNH BÁO]${NC} Migrations lỗi. Chạy sau: botpanel db-migrate $BOT_SLUG"
     fi
     deactivate
 
@@ -711,7 +711,7 @@ EOF
     chown -R botpanel:botpanel "$BOT_DIR"
 
     # Start bot
-    echo -e "${BLUE}[INFO]${NC} Starting bot..."
+    echo -e "${BLUE}[INFO]${NC} Đang khởi động bot..."
     sudo -u botpanel bash -c "
         cd '$BOT_DIR'
         source venv/bin/activate
@@ -722,30 +722,30 @@ EOF
         pm2 save
     "
 
-    echo -e "${GREEN}[OK]${NC} Bot started"
+    echo -e "${GREEN}[OK]${NC} Bot đã khởi động"
 
     # Print summary
     echo ""
     echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}║                  BOT CREATED SUCCESSFULLY                    ║${NC}"
+    echo -e "${GREEN}║                  TẠO BOT THÀNH CÔNG!                         ║${NC}"
     echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${YELLOW}Bot Information:${NC}"
-    echo "  Name: $BOT_SLUG"
-    echo "  Directory: $BOT_DIR"
-    echo "  PM2 Name: $BOT_SLUG"
+    echo -e "${YELLOW}Thông tin Bot:${NC}"
+    echo "  Tên: $BOT_SLUG"
+    echo "  Thư mục: $BOT_DIR"
+    echo "  PM2: $BOT_SLUG"
     echo ""
-    echo -e "${YELLOW}Database (save these!):${NC}"
+    echo -e "${YELLOW}Database (hãy lưu lại!):${NC}"
     echo "  Database: $DB_NAME"
     echo "  User: $DB_USER"
-    echo "  Password: $DB_PASSWORD"
+    echo "  Mật khẩu: $DB_PASSWORD"
     echo ""
-    echo -e "${YELLOW}Commands:${NC}"
+    echo -e "${YELLOW}Các lệnh:${NC}"
     echo "  botpanel status $BOT_SLUG"
     echo "  botpanel logs $BOT_SLUG"
     echo "  botpanel restart $BOT_SLUG"
     echo ""
-    echo -e "${CYAN}Test your bot in Telegram: /start${NC}"
+    echo -e "${CYAN}Test bot trong Telegram: /start${NC}"
 }
 
 #-------------------------------------------------------------------------------
@@ -753,13 +753,13 @@ EOF
 #-------------------------------------------------------------------------------
 cmd_list() {
     print_banner
-    echo -e "${YELLOW}Available Bots:${NC}"
+    echo -e "${YELLOW}Danh sách Bot:${NC}"
     echo ""
 
     if [ ! -d "$BOTS_DIR" ] || [ -z "$(ls -A "$BOTS_DIR" 2>/dev/null)" ]; then
-        echo "  No bots found."
+        echo "  Chưa có bot nào."
         echo ""
-        echo "  Create one with: botpanel create"
+        echo "  Tạo mới: botpanel create"
         return
     fi
 
@@ -772,12 +772,14 @@ cmd_list() {
                 status=$(pm2 jq "$bot_name" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 2>/dev/null || echo "unknown")
                 if [ "$status" = "online" ]; then
                     status_icon="${GREEN}●${NC}"
+                    status="đang chạy"
                 else
                     status_icon="${RED}●${NC}"
+                    status="lỗi"
                 fi
             else
                 status_icon="${YELLOW}○${NC}"
-                status="not started"
+                status="đã dừng"
             fi
 
             echo -e "  $status_icon $bot_name ($status)"
@@ -793,11 +795,11 @@ cmd_delete() {
     local bot_name="$1"
     local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    echo -e "${YELLOW}[WARN]${NC} This will delete bot '$bot_name' and ALL its data!"
-    read -p "Are you sure? (yes/no): " CONFIRM
+    echo -e "${YELLOW}[CẢNH BÁO]${NC} Sẽ xóa bot '$bot_name' và TẤT CẢ dữ liệu!"
+    read -p "Bạn chắc chắn? (yes/no): " CONFIRM
 
     if [ "$CONFIRM" != "yes" ]; then
-        echo "Cancelled."
+        echo "Đã hủy."
         return
     fi
 
@@ -813,13 +815,13 @@ cmd_delete() {
 
         # Drop database
         sudo -u postgres psql -c "DROP DATABASE IF EXISTS $DB_NAME;" 2>/dev/null || true
-        echo -e "${GREEN}[OK]${NC} Database '$DB_NAME' dropped"
+        echo -e "${GREEN}[OK]${NC} Đã xóa database '$DB_NAME'"
     fi
 
     # Remove directory
     rm -rf "$bot_dir"
 
-    echo -e "${GREEN}[OK]${NC} Bot '$bot_name' deleted"
+    echo -e "${GREEN}[OK]${NC} Đã xóa bot '$bot_name'"
 }
 
 #-------------------------------------------------------------------------------
@@ -829,7 +831,7 @@ cmd_start() {
     local bot_name="$1"
     local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    echo -e "${BLUE}[INFO]${NC} Starting bot '$bot_name'..."
+    echo -e "${BLUE}[INFO]${NC} Đang khởi động bot '$bot_name'..."
 
     if pm2 describe "$bot_name" &>/dev/null; then
         pm2 restart "$bot_name"
@@ -845,7 +847,7 @@ cmd_start() {
         "
     fi
 
-    echo -e "${GREEN}[OK]${NC} Bot started"
+    echo -e "${GREEN}[OK]${NC} Bot đã khởi động"
     pm2 status "$bot_name"
 }
 
@@ -853,18 +855,18 @@ cmd_stop() {
     local bot_name="$1"
     get_bot_dir "$bot_name" >/dev/null || exit 1
 
-    echo -e "${BLUE}[INFO]${NC} Stopping bot '$bot_name'..."
+    echo -e "${BLUE}[INFO]${NC} Đang dừng bot '$bot_name'..."
     pm2 stop "$bot_name" 2>/dev/null || true
-    echo -e "${GREEN}[OK]${NC} Bot stopped"
+    echo -e "${GREEN}[OK]${NC} Bot đã dừng"
 }
 
 cmd_restart() {
     local bot_name="$1"
     get_bot_dir "$bot_name" >/dev/null || exit 1
 
-    echo -e "${BLUE}[INFO]${NC} Restarting bot '$bot_name'..."
+    echo -e "${BLUE}[INFO]${NC} Đang khởi động lại bot '$bot_name'..."
     pm2 restart "$bot_name"
-    echo -e "${GREEN}[OK]${NC} Bot restarted"
+    echo -e "${GREEN}[OK]${NC} Bot đã khởi động lại"
 }
 
 cmd_status() {
@@ -873,19 +875,19 @@ cmd_status() {
     print_banner
 
     if [ -z "$bot_name" ]; then
-        echo -e "${YELLOW}All Bots Status:${NC}"
+        echo -e "${YELLOW}Trạng thái tất cả Bot:${NC}"
         pm2 status
     else
         get_bot_dir "$bot_name" >/dev/null || exit 1
-        echo -e "${YELLOW}Bot '$bot_name' Status:${NC}"
+        echo -e "${YELLOW}Trạng thái Bot '$bot_name':${NC}"
         pm2 status "$bot_name"
     fi
 
     echo ""
-    echo -e "${YELLOW}System:${NC}"
+    echo -e "${YELLOW}Hệ thống:${NC}"
     echo "  Uptime: $(uptime -p)"
-    echo "  Memory: $(free -h | awk '/^Mem:/ {print $3 "/" $2}')"
-    echo "  Disk: $(df -h / | awk 'NR==2 {print $3 "/" $2}')"
+    echo "  Bộ nhớ: $(free -h | awk '/^Mem:/ {print $3 "/" $2}')"
+    echo "  Ổ đĩa: $(df -h / | awk 'NR==2 {print $3 "/" $2}')"
 }
 
 cmd_logs() {
@@ -909,7 +911,7 @@ cmd_db_status() {
     local bot_name="$1"
     local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    echo -e "${BLUE}[INFO]${NC} Checking database connection..."
+    echo -e "${BLUE}[INFO]${NC} Đang kiểm tra kết nối database..."
     source "$bot_dir/.env"
 
     DB_PASS=$(echo $DATABASE_URL | sed 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/')
@@ -917,16 +919,16 @@ cmd_db_status() {
     DB_USER=$(echo $DATABASE_URL | sed 's/.*:\/\/\([^:]*\):.*/\1/')
 
     if PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -c "SELECT version();" &>/dev/null; then
-        echo -e "${GREEN}[OK]${NC} Database connection successful"
+        echo -e "${GREEN}[OK]${NC} Kết nối database thành công"
         echo ""
-        echo -e "${YELLOW}Table Statistics:${NC}"
+        echo -e "${YELLOW}Thống kê bảng:${NC}"
         PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -c "
             SELECT 'users' as table_name, COUNT(*) as count FROM users
             UNION ALL SELECT 'tasks', COUNT(*) FROM tasks
             UNION ALL SELECT 'reminders', COUNT(*) FROM reminders;
-        " 2>/dev/null || echo "  (tables not created yet)"
+        " 2>/dev/null || echo "  (chưa tạo bảng)"
     else
-        echo -e "${RED}[ERROR]${NC} Database connection failed"
+        echo -e "${RED}[LỖI]${NC} Kết nối database thất bại"
     fi
 }
 
@@ -934,18 +936,18 @@ cmd_db_migrate() {
     local bot_name="$1"
     local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    echo -e "${BLUE}[INFO]${NC} Running database migrations..."
+    echo -e "${BLUE}[INFO]${NC} Đang chạy database migrations..."
     cd "$bot_dir"
     source venv/bin/activate
     alembic upgrade head
-    echo -e "${GREEN}[OK]${NC} Migrations completed"
+    echo -e "${GREEN}[OK]${NC} Migrations hoàn tất"
 }
 
 cmd_db_backup() {
     local bot_name="$1"
     local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    echo -e "${BLUE}[INFO]${NC} Creating database backup..."
+    echo -e "${BLUE}[INFO]${NC} Đang tạo bản sao lưu database..."
     source "$bot_dir/.env"
 
     DB_PASS=$(echo $DATABASE_URL | sed 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/')
@@ -957,10 +959,10 @@ cmd_db_backup() {
     PGPASSWORD="$DB_PASS" pg_dump -h localhost -U "$DB_USER" "$DB_NAME" > "$BACKUP_FILE"
 
     if [ -f "$BACKUP_FILE" ]; then
-        echo -e "${GREEN}[OK]${NC} Backup created: $BACKUP_FILE"
-        echo "  Size: $(du -h "$BACKUP_FILE" | cut -f1)"
+        echo -e "${GREEN}[OK]${NC} Đã tạo backup: $BACKUP_FILE"
+        echo "  Kích thước: $(du -h "$BACKUP_FILE" | cut -f1)"
     else
-        echo -e "${RED}[ERROR]${NC} Backup failed"
+        echo -e "${RED}[LỖI]${NC} Sao lưu thất bại"
     fi
 }
 
@@ -968,14 +970,14 @@ cmd_db_restore() {
     local bot_name="$1"
     local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    echo -e "${YELLOW}Available backups:${NC}"
+    echo -e "${YELLOW}Các bản backup có sẵn:${NC}"
     ls -la "$BACKUP_DIR"/*.sql 2>/dev/null || {
-        echo "No backups found in $BACKUP_DIR"
+        echo "Không tìm thấy backup trong $BACKUP_DIR"
         return
     }
 
     echo ""
-    read -p "Enter backup filename to restore: " BACKUP_FILE
+    read -p "Nhập tên file backup để khôi phục: " BACKUP_FILE
 
     if [ -f "$BACKUP_DIR/$BACKUP_FILE" ]; then
         source "$bot_dir/.env"
@@ -983,11 +985,11 @@ cmd_db_restore() {
         DB_NAME=$(echo $DATABASE_URL | sed 's/.*\/\([^?]*\).*/\1/')
         DB_USER=$(echo $DATABASE_URL | sed 's/.*:\/\/\([^:]*\):.*/\1/')
 
-        echo -e "${BLUE}[INFO]${NC} Restoring database..."
+        echo -e "${BLUE}[INFO]${NC} Đang khôi phục database..."
         PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" "$DB_NAME" < "$BACKUP_DIR/$BACKUP_FILE"
-        echo -e "${GREEN}[OK]${NC} Database restored"
+        echo -e "${GREEN}[OK]${NC} Đã khôi phục database"
     else
-        echo -e "${RED}[ERROR]${NC} Backup file not found"
+        echo -e "${RED}[LỖI]${NC} Không tìm thấy file backup"
     fi
 }
 
@@ -999,17 +1001,17 @@ cmd_config() {
     local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
     ${EDITOR:-nano} "$bot_dir/.env"
-    echo -e "${YELLOW}[WARN]${NC} Restart bot to apply changes: botpanel restart $bot_name"
+    echo -e "${YELLOW}[LƯU Ý]${NC} Khởi động lại bot để áp dụng: botpanel restart $bot_name"
 }
 
 cmd_token() {
     local bot_name="$1"
     local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    read -p "Enter new Bot Token: " NEW_TOKEN
+    read -p "Nhập Bot Token mới: " NEW_TOKEN
     if [ -n "$NEW_TOKEN" ]; then
         sed -i "s/^BOT_TOKEN=.*/BOT_TOKEN=$NEW_TOKEN/" "$bot_dir/.env"
-        echo -e "${GREEN}[OK]${NC} Token updated. Restart bot: botpanel restart $bot_name"
+        echo -e "${GREEN}[OK]${NC} Đã cập nhật token. Khởi động lại: botpanel restart $bot_name"
     fi
 }
 
@@ -1017,25 +1019,25 @@ cmd_gcal() {
     local bot_name="$1"
     local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    echo -e "${CYAN}Google Calendar Configuration${NC}"
+    echo -e "${CYAN}Cấu hình Google Calendar${NC}"
     echo ""
 
-    read -p "Enable Google Calendar? (y/n): " ENABLE_GCAL
+    read -p "Bật Google Calendar? (y/n): " ENABLE_GCAL
 
     if [[ "$ENABLE_GCAL" =~ ^[Yy]$ ]]; then
         read -p "Google Client ID: " GCAL_CLIENT_ID
         read -p "Google Client Secret: " GCAL_CLIENT_SECRET
-        read -p "Redirect URI (e.g., https://yourdomain.com/oauth/callback): " GCAL_REDIRECT
+        read -p "Redirect URI (vd: https://domain.com/oauth/callback): " GCAL_REDIRECT
 
         sed -i "s/^GOOGLE_CALENDAR_ENABLED=.*/GOOGLE_CALENDAR_ENABLED=true/" "$bot_dir/.env"
         sed -i "s/^GOOGLE_CLIENT_ID=.*/GOOGLE_CLIENT_ID=$GCAL_CLIENT_ID/" "$bot_dir/.env"
         sed -i "s/^GOOGLE_CLIENT_SECRET=.*/GOOGLE_CLIENT_SECRET=$GCAL_CLIENT_SECRET/" "$bot_dir/.env"
         sed -i "s|^GOOGLE_REDIRECT_URI=.*|GOOGLE_REDIRECT_URI=$GCAL_REDIRECT|" "$bot_dir/.env"
 
-        echo -e "${GREEN}[OK]${NC} Google Calendar configured. Restart bot: botpanel restart $bot_name"
+        echo -e "${GREEN}[OK]${NC} Đã cấu hình Google Calendar. Khởi động lại: botpanel restart $bot_name"
     else
         sed -i "s/^GOOGLE_CALENDAR_ENABLED=.*/GOOGLE_CALENDAR_ENABLED=false/" "$bot_dir/.env"
-        echo -e "${GREEN}[OK]${NC} Google Calendar disabled"
+        echo -e "${GREEN}[OK]${NC} Đã tắt Google Calendar"
     fi
 }
 
@@ -1046,7 +1048,7 @@ cmd_update() {
     local bot_name="$1"
     local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    echo -e "${BLUE}[INFO]${NC} Updating bot '$bot_name'..."
+    echo -e "${BLUE}[INFO]${NC} Đang cập nhật bot '$bot_name'..."
 
     # Stop bot
     pm2 stop "$bot_name" 2>/dev/null || true
@@ -1054,7 +1056,7 @@ cmd_update() {
     # Download latest template
     TEMP_DIR=$(mktemp -d)
     git clone --depth 1 https://github.com/haduyson/teletask.git "$TEMP_DIR" 2>/dev/null || {
-        echo -e "${RED}[ERROR]${NC} Failed to download update"
+        echo -e "${RED}[LỖI]${NC} Không thể tải bản cập nhật"
         rm -rf "$TEMP_DIR"
         exit 1
     }
@@ -1087,22 +1089,22 @@ cmd_update() {
     # Restart
     pm2 restart "$bot_name"
 
-    echo -e "${GREEN}[OK]${NC} Update completed"
+    echo -e "${GREEN}[OK]${NC} Cập nhật hoàn tất"
 }
 
 cmd_deps() {
     local bot_name="$1"
     local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    echo -e "${BLUE}[INFO]${NC} Reinstalling dependencies..."
+    echo -e "${BLUE}[INFO]${NC} Đang cài lại thư viện..."
     cd "$bot_dir"
     source venv/bin/activate
     pip install -r requirements.txt --force-reinstall -q
-    echo -e "${GREEN}[OK]${NC} Dependencies reinstalled"
+    echo -e "${GREEN}[OK]${NC} Đã cài lại thư viện"
 }
 
 cmd_clean() {
-    echo -e "${BLUE}[INFO]${NC} Cleaning logs and temp files..."
+    echo -e "${BLUE}[INFO]${NC} Đang dọn logs và file tạm..."
 
     # Clean old logs
     find "$LOG_DIR" -name "*.log" -mtime +7 -delete 2>/dev/null || true
@@ -1115,20 +1117,20 @@ cmd_clean() {
         ls -t "${backup_prefix}"_*.sql 2>/dev/null | tail -n +11 | xargs -r rm -- 2>/dev/null || true
     done
 
-    echo -e "${GREEN}[OK]${NC} Cleanup completed"
+    echo -e "${GREEN}[OK]${NC} Đã dọn xong"
 }
 
 cmd_info() {
     print_banner
-    echo -e "${YELLOW}System Information:${NC}"
-    echo "  OS: $(lsb_release -d 2>/dev/null | cut -f2 || echo 'Unknown')"
+    echo -e "${YELLOW}Thông tin hệ thống:${NC}"
+    echo "  Hệ điều hành: $(lsb_release -d 2>/dev/null | cut -f2 || echo 'Không rõ')"
     echo "  Kernel: $(uname -r)"
-    echo "  Python: $(python${PYTHON_VERSION} --version 2>/dev/null || echo 'Not found')"
-    echo "  Node.js: $(node --version 2>/dev/null || echo 'Not found')"
-    echo "  PM2: $(pm2 --version 2>/dev/null || echo 'Not found')"
-    echo "  PostgreSQL: $(psql --version 2>/dev/null | head -1 || echo 'Not found')"
+    echo "  Python: $(python${PYTHON_VERSION} --version 2>/dev/null || echo 'Không tìm thấy')"
+    echo "  Node.js: $(node --version 2>/dev/null || echo 'Không tìm thấy')"
+    echo "  PM2: $(pm2 --version 2>/dev/null || echo 'Không tìm thấy')"
+    echo "  PostgreSQL: $(psql --version 2>/dev/null | head -1 || echo 'Không tìm thấy')"
     echo ""
-    echo -e "${YELLOW}Directories:${NC}"
+    echo -e "${YELLOW}Thư mục:${NC}"
     echo "  Bots: $BOTS_DIR"
     echo "  Logs: $LOG_DIR"
     echo "  Backups: $BACKUP_DIR"
@@ -1167,8 +1169,8 @@ case "$1" in
     "")
         interactive_menu ;;
     *)
-        echo -e "${RED}[ERROR]${NC} Unknown command: $1"
-        echo "Run 'botpanel help' for usage"
+        echo -e "${RED}[LỖI]${NC} Lệnh không hợp lệ: $1"
+        echo "Chạy 'botpanel help' để xem hướng dẫn"
         exit 1 ;;
 esac
 EOFCLI
