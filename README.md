@@ -48,14 +48,16 @@ botpanel help      # Xem tất cả lệnh
 - **Việc trễ hạn** - Theo dõi và lọc theo tháng
 - **Xuất báo cáo** - PDF/Excel/CSV với chọn khoảng thời gian
 
-### Nhắc nhở
-- **Cài đặt nhắc** (`/caidat`) - Bật/tắt nhắc 24h và 1h trước deadline
-- **Nhắc tùy chỉnh** - Đặt nhắc theo thời gian cụ thể
-- **Thông báo tự động** - Nhắc việc sắp hết hạn
+### Nhắc nhở & Cài đặt
+- **Cài đặt thông báo** (`/caidat`) - Thông báo giao việc, trạng thái, nhắc việc, báo cáo
+- **Cài đặt múi giờ** (`/caidat`) - Chọn múi giờ hiển thị
+- **Nhắc tùy chỉnh** - Đặt nhắc theo thời gian cụ thể (24h, 1h, 30p, 5p)
+- **Nguồn nhắc** - Chọn Telegram, Google Calendar, hoặc cả hai
 
-### Tích hợp
-- **Google Calendar** (`/lichgoogle`) - Đồng bộ deadline với lịch Google
-- **OAuth 2.0** - Xác thực an toàn
+### Tích hợp Google Calendar
+- **Kết nối** (`/lichgoogle`) - Đăng nhập Google OAuth 2.0
+- **Chế độ đồng bộ** - Tự động khi có thay đổi hoặc thủ công
+- **Đồng bộ ngay** - Đồng bộ tất cả việc vào lịch
 
 ## Lệnh Bot
 
@@ -90,7 +92,7 @@ botpanel help      # Xem tất cả lệnh
 |------|-------|
 | `/nhacviec <mã> <thời gian>` | Đặt nhắc |
 | `/xemnhac` | Xem nhắc đã đặt |
-| `/caidat` | Cài đặt nhắc nhở |
+| `/caidat` | Cài đặt thông báo, múi giờ |
 
 ### Thống kê
 | Lệnh | Mô tả |
@@ -107,7 +109,7 @@ botpanel help      # Xem tất cả lệnh
 | `/start` | Bắt đầu sử dụng |
 | `/help` | Hướng dẫn |
 | `/thongtin` | Thông tin tài khoản |
-| `/lichgoogle` | Kết nối Google Calendar |
+| `/lichgoogle` | Kết nối và cài đặt Google Calendar |
 
 ## Hệ thống mã việc
 
@@ -128,10 +130,11 @@ botpanel help      # Xem tất cả lệnh
 ## Tài liệu
 
 - **Hướng dẫn sử dụng:** https://teletask.haduyson.com
-- **Release Notes:** [docs/release-notes-2025-12-16.md](docs/release-notes-2025-12-16.md)
+- **Release Notes:** [docs/release-notes-2025-12-17.md](docs/release-notes-2025-12-17.md)
 
 ## Phiên bản
 
+- **v1.2.0** - 17/12/2025 - Google Calendar settings, notification preferences, bot slug naming
 - **v1.1.1** - 17/12/2025 - Automated installation script
 - **v1.1.0** - 16/12/2025 - Reminder source & Google Calendar sync
 - **v1.0.0** - 16/12/2025 - Phiên bản đầu tiên
