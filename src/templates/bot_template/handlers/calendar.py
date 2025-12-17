@@ -1,6 +1,6 @@
 """
 Google Calendar Handler
-Commands for calendar connection and sync
+Commands for calendar connection, sync, and settings
 """
 
 import logging
@@ -23,6 +23,65 @@ from services.calendar_service import (
 
 logger = logging.getLogger(__name__)
 
+# Sync mode options
+SYNC_OPTIONS = [
+    ("auto", "🔄 Tự động khi có thay đổi"),
+    ("manual", "👆 Thủ công (bấm đồng bộ)"),
+]
+
+
+def get_sync_display(sync_mode: str) -> str:
+    """Get sync mode display name."""
+    for code, label in SYNC_OPTIONS:
+        if code == sync_mode:
+            return label
+    return "🔄 Tự động"
+
+
+async def get_user_calendar_data(db, telegram_id: int) -> dict:
+    """Get user calendar settings from database."""
+    result = await db.fetch_one(
+        """SELECT id, calendar_sync_interval
+           FROM users WHERE telegram_id = $1""",
+        telegram_id
+    )
+    if result:
+        return dict(result)
+    return {}
+
+
+async def update_user_setting(db, telegram_id: int, column: str, value) -> None:
+    """Update a single user setting in database."""
+    await db.execute(
+        f"UPDATE users SET {column} = $1 WHERE telegram_id = $2",
+        value, telegram_id
+    )
+
+
+def calendar_connected_keyboard(sync_mode: str) -> InlineKeyboardMarkup:
+    """Create keyboard for connected calendar."""
+    sync_display = get_sync_display(sync_mode)
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"⚙️ Chế độ: {sync_display}", callback_data="cal_edit_sync")],
+        [InlineKeyboardButton("📤 Đồng bộ ngay", callback_data="cal_sync_all")],
+        [InlineKeyboardButton("❌ Ngắt kết nối", callback_data="cal_disconnect")],
+    ])
+
+
+def sync_mode_keyboard(current: str) -> InlineKeyboardMarkup:
+    """Create sync mode selection keyboard."""
+    buttons = []
+    for code, label in SYNC_OPTIONS:
+        prefix = "✅ " if code == current else ""
+        buttons.append([
+            InlineKeyboardButton(
+                f"{prefix}{label}",
+                callback_data=f"cal_set_sync:{code}"
+            )
+        ])
+    buttons.append([InlineKeyboardButton("« Quay lại", callback_data="cal_back")])
+    return InlineKeyboardMarkup(buttons)
+
 
 async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
@@ -43,18 +102,16 @@ async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         connected = await is_user_connected(db, db_user["id"])
 
         if connected:
-            # User is connected
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 Đồng bộ tất cả việc", callback_data="cal_sync_all")],
-                [InlineKeyboardButton("❌ Ngắt kết nối", callback_data="cal_disconnect")],
-            ])
+            # User is connected - show settings
+            user_data = await get_user_calendar_data(db, user.id)
+            sync_mode = user_data.get("calendar_sync_interval", "auto")
 
             await update.message.reply_text(
-                "📅 GOOGLE CALENDAR\n\n"
+                "📅 <b>GOOGLE CALENDAR</b>\n\n"
                 "✅ Đã kết nối Google Calendar!\n\n"
-                "Các việc mới sẽ tự động được thêm vào lịch của bạn.\n\n"
-                "Tùy chọn:",
-                reply_markup=keyboard,
+                "Các việc mới sẽ tự động được thêm vào lịch của bạn.",
+                reply_markup=calendar_connected_keyboard(sync_mode),
+                parse_mode="HTML",
             )
         else:
             # User not connected
@@ -66,10 +123,11 @@ async def calendar_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 ])
 
                 await update.message.reply_text(
-                    "📅 GOOGLE CALENDAR\n\n"
+                    "📅 <b>GOOGLE CALENDAR</b>\n\n"
                     "Kết nối Google Calendar để tự động đồng bộ các việc.\n\n"
                     "Bấm nút bên dưới để đăng nhập Google:",
                     reply_markup=keyboard,
+                    parse_mode="HTML",
                 )
             else:
                 await update.message.reply_text(
@@ -94,8 +152,8 @@ async def calendar_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         db = get_db()
         db_user = await get_or_create_user(db, user)
 
+        # ---- DISCONNECT ----
         if data == "cal_disconnect":
-            # Disconnect calendar
             await disconnect_calendar(db, db_user["id"])
 
             await query.edit_message_text(
@@ -103,8 +161,8 @@ async def calendar_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 "Sử dụng /lichgoogle để kết nối lại."
             )
 
+        # ---- SYNC ALL ----
         elif data == "cal_sync_all":
-            # Sync all tasks to calendar
             await query.edit_message_text(
                 "🔄 Đang đồng bộ các việc vào Google Calendar...\n\n"
                 "Vui lòng đợi..."
@@ -112,9 +170,59 @@ async def calendar_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
             synced = await sync_all_tasks_to_calendar(db, db_user)
 
+            user_data = await get_user_calendar_data(db, user.id)
+            sync_mode = user_data.get("calendar_sync_interval", "auto")
+
             await query.edit_message_text(
-                f"✅ Đã đồng bộ {synced} việc vào Google Calendar!\n\n"
-                f"Sử dụng /lichgoogle để xem tùy chọn."
+                f"📅 <b>GOOGLE CALENDAR</b>\n\n"
+                f"✅ Đã đồng bộ {synced} việc vào lịch!",
+                reply_markup=calendar_connected_keyboard(sync_mode),
+                parse_mode="HTML",
+            )
+
+        # ---- EDIT SYNC MODE ----
+        elif data == "cal_edit_sync":
+            user_data = await get_user_calendar_data(db, user.id)
+            current_mode = user_data.get("calendar_sync_interval", "auto")
+
+            await query.edit_message_text(
+                "⚙️ <b>CHẾ ĐỘ ĐỒNG BỘ</b>\n\n"
+                "Chọn cách đồng bộ với Google Calendar:",
+                reply_markup=sync_mode_keyboard(current_mode),
+                parse_mode="HTML",
+            )
+
+        # ---- SET SYNC MODE ----
+        elif data.startswith("cal_set_sync:"):
+            value = data.split(":")[1]
+            valid_modes = [m[0] for m in SYNC_OPTIONS]
+            if value not in valid_modes:
+                return
+
+            await update_user_setting(db, user.id, "calendar_sync_interval", value)
+            mode_display = get_sync_display(value)
+            await query.answer(f"✅ {mode_display}")
+
+            # Return to main calendar menu
+            await query.edit_message_text(
+                "📅 <b>GOOGLE CALENDAR</b>\n\n"
+                "✅ Đã kết nối Google Calendar!\n\n"
+                "Các việc mới sẽ tự động được thêm vào lịch của bạn.",
+                reply_markup=calendar_connected_keyboard(value),
+                parse_mode="HTML",
+            )
+
+        # ---- BACK TO MAIN ----
+        elif data == "cal_back":
+            user_data = await get_user_calendar_data(db, user.id)
+            sync_mode = user_data.get("calendar_sync_interval", "auto")
+
+            await query.edit_message_text(
+                "📅 <b>GOOGLE CALENDAR</b>\n\n"
+                "✅ Đã kết nối Google Calendar!\n\n"
+                "Các việc mới sẽ tự động được thêm vào lịch của bạn.",
+                reply_markup=calendar_connected_keyboard(sync_mode),
+                parse_mode="HTML",
             )
 
     except Exception as e:

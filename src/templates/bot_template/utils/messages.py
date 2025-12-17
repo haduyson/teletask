@@ -73,11 +73,11 @@ Ví dụ:
 /export - Xuất báo cáo (CSV/Excel/PDF)
 
 ━━━━━ TÍCH HỢP ━━━━━
-/lichgoogle - Kết nối Google Calendar
+/lichgoogle - Kết nối và cài đặt Google Calendar
 
 ━━━━━ TÀI KHOẢN ━━━━━
 /menu - Menu tính năng (nút bấm)
-/caidat - Cài đặt cá nhân (thông báo, lịch, múi giờ)
+/caidat - Cài đặt cá nhân (thông báo, múi giờ)
 /thongtin - Thông tin tài khoản
 /start - Bắt đầu sử dụng bot
 /help - Xem hướng dẫn này
@@ -130,11 +130,11 @@ Ví dụ:
 /export - Xuất báo cáo (CSV/Excel/PDF)
 
 ━━━━━ TÍCH HỢP ━━━━━
-/lichgoogle - Kết nối Google Calendar
+/lichgoogle - Kết nối và cài đặt Google Calendar
 
 ━━━━━ TÀI KHOẢN ━━━━━
 /menu - Menu tính năng (nút bấm)
-/caidat - Cài đặt cá nhân (thông báo, lịch, múi giờ)
+/caidat - Cài đặt cá nhân (thông báo, múi giờ)
 /thongtin - Thông tin tài khoản
 /start - Bắt đầu sử dụng bot
 /help - Xem hướng dẫn này

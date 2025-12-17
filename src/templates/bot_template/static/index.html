@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hướng Dẫn Sử Dụng - TeleTask Bot</title>
+    <title>Hướng Dẫn Sử Dụng</title>
     <style>
         * {
             margin: 0;
@@ -413,7 +413,7 @@
                 <div class="traffic-light light-minimize"></div>
                 <div class="traffic-light light-maximize"></div>
             </div>
-            <div class="window-title">TeleTask Bot - Hướng Dẫn Sử Dụng</div>
+            <div class="window-title"><span class="bot-name">Bot</span> - Hướng Dẫn Sử Dụng</div>
         </div>
         <div class="window-content">
             <aside class="sidebar">
@@ -481,7 +481,7 @@
             <main class="main-content">
                 <div class="hero">
                     <div class="hero-icon">📋</div>
-                    <h1>TeleTask Bot</h1>
+                    <h1 class="bot-name">Bot</h1>
                     <p>Hệ thống quản lý công việc qua Telegram</p>
                 </div>
 
@@ -717,12 +717,17 @@
                     <div class="command-group">
                         <div class="command-item">
                             <span class="command-code">/lichgoogle</span>
-                            <span class="command-desc">Kết nối với Google Calendar</span>
+                            <span class="command-desc">Kết nối và cài đặt Google Calendar</span>
                         </div>
                         <div class="tip-box">
                             <span class="tip-icon">💡</span>
                             <div class="tip-content">
-                                <strong>Mẹo:</strong> Sau khi kết nối, các việc có deadline sẽ tự động được thêm vào Google Calendar của bạn. Bạn sẽ nhận thông báo từ cả bot và Google Calendar.
+                                <strong>Tính năng:</strong>
+                                <ul style="margin: 8px 0 0 0; padding-left: 20px;">
+                                    <li><b>🔗 Kết nối:</b> Đăng nhập Google để đồng bộ lịch</li>
+                                    <li><b>⚙️ Chế độ đồng bộ:</b> Tự động khi có thay đổi hoặc thủ công</li>
+                                    <li><b>📤 Đồng bộ ngay:</b> Đồng bộ tất cả việc có deadline vào lịch</li>
+                                </ul>
                             </div>
                         </div>
                     </div>
@@ -744,7 +749,6 @@
                                 <strong>Menu cài đặt:</strong>
                                 <ul style="margin: 8px 0 0 0; padding-left: 20px;">
                                     <li><b>🔔 Thông báo:</b> Giao việc mới, trạng thái việc, nhắc việc, báo cáo tuần/tháng</li>
-                                    <li><b>📅 Google Calendar:</b> Chế độ đồng bộ (tự động/thủ công), đồng bộ ngay</li>
                                     <li><b>🌏 Múi giờ:</b> Chọn múi giờ hiển thị</li>
                                 </ul>
                             </div>
@@ -783,13 +787,33 @@
                 </section>
 
                 <div class="footer">
-                    <p><span class="brand">TeleTask Bot</span> — Quản lý công việc hiệu quả</p>
+                    <p><span class="brand bot-name">Bot</span> — Quản lý công việc hiệu quả</p>
                 </div>
             </main>
         </div>
     </div>
 
     <script>
+        // Load bot name from config.json
+        (async function() {
+            try {
+                const response = await fetch('/config.json');
+                if (response.ok) {
+                    const config = await response.json();
+                    const botName = config.bot_name || 'TeleTask Bot';
+                    document.querySelectorAll('.bot-name').forEach(el => {
+                        el.textContent = botName;
+                    });
+                    document.title = `Hướng Dẫn Sử Dụng - ${botName}`;
+                }
+            } catch (e) {
+                // Use default name if config not found
+                document.querySelectorAll('.bot-name').forEach(el => {
+                    el.textContent = 'TeleTask Bot';
+                });
+            }
+        })();
+
         // Smooth scroll for sidebar links
         document.querySelectorAll('.sidebar-item').forEach(link => {
             link.addEventListener('click', function(e) {

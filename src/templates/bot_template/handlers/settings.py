@@ -49,12 +49,6 @@ REMINDER_SOURCE_OPTIONS = [
     ("both", "✈️ + 📅 Cả hai"),
 ]
 
-# Calendar sync options
-SYNC_OPTIONS = [
-    ("auto", "Tự động khi có thay đổi"),
-    ("manual", "Thủ công (bấm đồng bộ)"),
-]
-
 
 def on_off_button(label: str, is_on: bool, callback: str) -> InlineKeyboardButton:
     """Create a button with clear ON/OFF status."""
@@ -78,26 +72,17 @@ def get_source_display(source: str) -> str:
     return "✈️ + 📅 Cả hai"
 
 
-def get_sync_display(sync_mode: str) -> str:
-    """Get sync mode display name."""
-    for code, label in SYNC_OPTIONS:
-        if code == sync_mode:
-            return label
-    return "Tự động"
-
-
 # ============================================
-# MAIN MENU - 3 categories
+# MAIN MENU - 2 categories (notifications, timezone)
 # ============================================
 
 def main_menu_keyboard(user_data: dict) -> InlineKeyboardMarkup:
-    """Create main settings menu with 3 categories."""
+    """Create main settings menu with 2 categories."""
     timezone = user_data.get("timezone", "Asia/Ho_Chi_Minh")
     tz_short = "GMT+7" if "Ho_Chi_Minh" in timezone or "Bangkok" in timezone else timezone[:10]
 
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🔔 Thông báo »", callback_data="settings:notifications")],
-        [InlineKeyboardButton("📅 Google Calendar »", callback_data="settings:gcal")],
         [InlineKeyboardButton(f"🌏 Múi giờ: {tz_short}", callback_data="settings:edit:timezone")],
         [InlineKeyboardButton("❌ Đóng", callback_data="settings:close")],
     ])
@@ -162,37 +147,6 @@ def reminder_source_keyboard(current: str) -> InlineKeyboardMarkup:
 
 
 # ============================================
-# GOOGLE CALENDAR SUBMENU
-# ============================================
-
-def gcal_menu_keyboard(user_data: dict) -> InlineKeyboardMarkup:
-    """Create Google Calendar settings submenu."""
-    sync_mode = user_data.get("calendar_sync_interval", "auto")
-    sync_display = get_sync_display(sync_mode)
-
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"🔄 Chế độ: {sync_display}", callback_data="settings:edit:sync_mode")],
-        [InlineKeyboardButton("📤 Đồng bộ ngay", callback_data="settings:action:sync_now")],
-        [InlineKeyboardButton("« Quay lại", callback_data="settings:back")],
-    ])
-
-
-def sync_mode_keyboard(current: str) -> InlineKeyboardMarkup:
-    """Create sync mode selection keyboard."""
-    buttons = []
-    for code, label in SYNC_OPTIONS:
-        prefix = "✅ " if code == current else ""
-        buttons.append([
-            InlineKeyboardButton(
-                f"{prefix}{label}",
-                callback_data=f"settings:set:sync_mode:{code}"
-            )
-        ])
-    buttons.append([InlineKeyboardButton("« Quay lại", callback_data="settings:gcal")])
-    return InlineKeyboardMarkup(buttons)
-
-
-# ============================================
 # TIMEZONE SELECTION
 # ============================================
 
@@ -216,8 +170,7 @@ async def get_user_data(db, telegram_id: int) -> dict:
     result = await db.fetch_one(
         """SELECT id, notify_reminder, notify_weekly_report, notify_monthly_report, timezone,
                   remind_24h, remind_1h, remind_30m, remind_5m, remind_overdue,
-                  reminder_source, calendar_sync_interval,
-                  notify_all, notify_task_assigned, notify_task_status
+                  reminder_source, notify_task_assigned, notify_task_status
            FROM users WHERE telegram_id = $1""",
         telegram_id
     )
@@ -311,41 +264,6 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         )
         return SETTINGS_MENU
 
-    # ---- GOOGLE CALENDAR SUBMENU ----
-    if action == "gcal":
-        user_data = await get_user_data(db, user.id)
-        await query.edit_message_text(
-            "📅 <b>GOOGLE CALENDAR</b>\n\n"
-            "Cài đặt đồng bộ lịch:",
-            reply_markup=gcal_menu_keyboard(user_data),
-            parse_mode="HTML"
-        )
-        return SETTINGS_MENU
-
-    # ---- SYNC NOW ACTION ----
-    if action == "action":
-        action_type = parts[2] if len(parts) > 2 else ""
-
-        if action_type == "sync_now":
-            user_data = await get_user_data(db, user.id)
-            user_db_id = user_data.get("id")
-
-            if user_db_id:
-                try:
-                    from handlers.calendar import sync_all_tasks_to_calendar
-                    synced = await sync_all_tasks_to_calendar(db, user_data)
-                    await query.answer(f"✅ Đã đồng bộ {synced} việc!", show_alert=True)
-                except Exception as e:
-                    logger.error(f"Manual sync failed: {e}")
-                    await query.answer("❌ Đồng bộ thất bại.", show_alert=True)
-            else:
-                await query.answer("❌ Lỗi người dùng.", show_alert=True)
-
-            # No need to edit message - just stay on same menu
-            return SETTINGS_MENU
-
-        return SETTINGS_MENU
-
     # ---- TOGGLE SETTINGS ----
     if action == "toggle":
         column = parts[2] if len(parts) > 2 else ""
@@ -427,17 +345,6 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             )
             return SETTINGS_MENU
 
-        if edit_type == "sync_mode":
-            user_data = await get_user_data(db, user.id)
-            current_mode = user_data.get("calendar_sync_interval", "auto")
-            await query.edit_message_text(
-                "🔄 <b>CHẾ ĐỘ ĐỒNG BỘ</b>\n\n"
-                "Chọn cách đồng bộ với Google Calendar:",
-                reply_markup=sync_mode_keyboard(current_mode),
-                parse_mode="HTML"
-            )
-            return SETTINGS_MENU
-
         return SETTINGS_MENU
 
     # ---- SET VALUES ----
@@ -479,24 +386,6 @@ async def settings_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 "Cài đặt nguồn và thời điểm nhắc:\n\n"
                 "<i>🟢 Bật | 🔴 Tắt</i>",
                 reply_markup=reminders_menu_keyboard(user_data),
-                parse_mode="HTML"
-            )
-            return SETTINGS_MENU
-
-        if set_type == "sync_mode" and value:
-            valid_modes = [m[0] for m in SYNC_OPTIONS]
-            if value not in valid_modes:
-                return SETTINGS_MENU
-
-            await update_user_setting(db, user.id, "calendar_sync_interval", value)
-            mode_display = get_sync_display(value)
-            await query.answer(f"✅ {mode_display}")
-
-            # Return to gcal menu
-            user_data = await get_user_data(db, user.id)
-            await query.edit_message_text(
-                "📅 <b>GOOGLE CALENDAR</b>\n\nCài đặt đồng bộ lịch:",
-                reply_markup=gcal_menu_keyboard(user_data),
                 parse_mode="HTML"
             )
             return SETTINGS_MENU
