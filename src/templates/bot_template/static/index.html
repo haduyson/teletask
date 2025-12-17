@@ -58,20 +58,36 @@
             font-weight: 500;
             color: #4d4d4d;
         }
+        /* Mobile menu button */
+        .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+        .menu-toggle:hover {
+            background: rgba(0,0,0,0.05);
+        }
         .window-content {
             display: flex;
             min-height: calc(100vh - 120px);
+            position: relative;
         }
-        /* Sidebar */
+        /* Sidebar - sticky on scroll */
         .sidebar {
             width: 220px;
             background: rgba(246, 246, 246, 0.8);
             border-right: 1px solid rgba(0,0,0,0.06);
             padding: 16px 12px;
             position: sticky;
-            top: 45px;
-            height: calc(100vh - 90px);
+            top: 0;
+            height: 100vh;
             overflow-y: auto;
+            flex-shrink: 0;
         }
         .sidebar-section {
             margin-bottom: 20px;
@@ -143,7 +159,7 @@
             font-size: 17px;
             color: #86868b;
         }
-        /* Feature grid - 4 items in a row */
+        /* Feature grid */
         .feature-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -205,13 +221,6 @@
         /* Command items */
         .command-group {
             margin-bottom: 24px;
-        }
-        .command-group-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #86868b;
-            margin-bottom: 12px;
-            padding-left: 4px;
         }
         .command-item {
             display: flex;
@@ -337,6 +346,20 @@
             font-weight: 600;
             color: #1d1d1f;
         }
+        /* Mobile overlay */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.3);
+            z-index: 199;
+        }
+        .sidebar-overlay.active {
+            display: block;
+        }
         /* Responsive - Tablet */
         @media (max-width: 1024px) {
             .sidebar { width: 180px; }
@@ -347,21 +370,54 @@
             .feature-card p { font-size: 11px; }
             .feature-icon { font-size: 28px; margin-bottom: 8px; }
         }
-        /* Responsive - Small tablet */
+        /* Responsive - Small tablet & Mobile */
         @media (max-width: 768px) {
             body { padding: 10px; }
             .macos-window { border-radius: 10px; }
-            .sidebar { display: none; }
+            .menu-toggle { display: block; }
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: -280px;
+                width: 260px;
+                height: 100vh;
+                z-index: 200;
+                transition: left 0.3s ease;
+                border-radius: 0;
+                background: rgba(255,255,255,0.98);
+                backdrop-filter: blur(20px);
+            }
+            .sidebar.open {
+                left: 0;
+            }
+            .sidebar-close {
+                display: flex;
+                justify-content: flex-end;
+                padding: 12px 16px;
+                border-bottom: 1px solid rgba(0,0,0,0.06);
+                margin-bottom: 8px;
+            }
+            .sidebar-close button {
+                background: none;
+                border: none;
+                font-size: 24px;
+                cursor: pointer;
+                padding: 4px 8px;
+                border-radius: 6px;
+            }
+            .sidebar-close button:hover {
+                background: rgba(0,0,0,0.05);
+            }
             .main-content { padding: 20px; }
             .hero { padding: 24px 0 30px; }
             .hero-icon { width: 64px; height: 64px; font-size: 32px; border-radius: 14px; }
             .hero h1 { font-size: 24px; }
             .hero p { font-size: 15px; }
-            .feature-grid { grid-template-columns: repeat(4, 1fr); gap: 10px; }
-            .feature-card { padding: 12px 8px; }
-            .feature-card h3 { font-size: 11px; }
-            .feature-card p { font-size: 10px; }
-            .feature-icon { font-size: 24px; margin-bottom: 6px; }
+            .feature-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .feature-card { padding: 14px 10px; }
+            .feature-card h3 { font-size: 12px; }
+            .feature-card p { font-size: 11px; }
+            .feature-icon { font-size: 26px; margin-bottom: 8px; }
             .section-title { font-size: 18px; }
             .command-item { flex-direction: column; }
             .command-code { min-width: auto; margin-bottom: 6px; }
@@ -377,10 +433,6 @@
             .hero h1 { font-size: 20px; }
             .hero p { font-size: 14px; }
             .feature-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
-            .feature-card { padding: 14px 10px; }
-            .feature-card h3 { font-size: 12px; }
-            .feature-card p { font-size: 11px; }
-            .feature-icon { font-size: 26px; margin-bottom: 8px; }
             .section { margin-bottom: 36px; }
             .section-header { margin-bottom: 16px; }
             .section-icon { width: 32px; height: 32px; font-size: 16px; }
@@ -406,8 +458,10 @@
     </style>
 </head>
 <body>
+    <div class="sidebar-overlay" onclick="closeSidebar()"></div>
     <div class="macos-window">
         <div class="window-header">
+            <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
             <div class="traffic-lights">
                 <div class="traffic-light light-close"></div>
                 <div class="traffic-light light-minimize"></div>
@@ -416,67 +470,70 @@
             <div class="window-title"><span class="bot-name">Bot</span> - Hướng Dẫn Sử Dụng</div>
         </div>
         <div class="window-content">
-            <aside class="sidebar">
+            <aside class="sidebar" id="sidebar">
+                <div class="sidebar-close">
+                    <button onclick="closeSidebar()">✕</button>
+                </div>
                 <div class="sidebar-section">
                     <div class="sidebar-title">Bắt đầu</div>
-                    <a href="#features" class="sidebar-item active">
+                    <a href="#features" class="sidebar-item active" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">✨</span>
                         <span>Tính năng</span>
                     </a>
-                    <a href="#basic" class="sidebar-item">
+                    <a href="#basic" class="sidebar-item" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">🚀</span>
                         <span>Lệnh cơ bản</span>
                     </a>
                 </div>
                 <div class="sidebar-section">
                     <div class="sidebar-title">Quản lý việc</div>
-                    <a href="#create" class="sidebar-item">
+                    <a href="#create" class="sidebar-item" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">📝</span>
                         <span>Tạo việc</span>
                     </a>
-                    <a href="#recurring" class="sidebar-item">
+                    <a href="#recurring" class="sidebar-item" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">🔄</span>
                         <span>Việc lặp lại</span>
                     </a>
-                    <a href="#view" class="sidebar-item">
+                    <a href="#view" class="sidebar-item" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">👀</span>
                         <span>Xem việc</span>
                     </a>
-                    <a href="#update" class="sidebar-item">
+                    <a href="#update" class="sidebar-item" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">✏️</span>
                         <span>Cập nhật</span>
                     </a>
-                    <a href="#reminder" class="sidebar-item">
+                    <a href="#reminder" class="sidebar-item" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">⏰</span>
                         <span>Nhắc việc</span>
                     </a>
                 </div>
                 <div class="sidebar-section">
                     <div class="sidebar-title">Báo cáo</div>
-                    <a href="#stats" class="sidebar-item">
+                    <a href="#stats" class="sidebar-item" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">📊</span>
                         <span>Thống kê</span>
                     </a>
-                    <a href="#export" class="sidebar-item">
+                    <a href="#export" class="sidebar-item" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">📤</span>
                         <span>Xuất báo cáo</span>
                     </a>
                 </div>
                 <div class="sidebar-section">
                     <div class="sidebar-title">Khác</div>
-                    <a href="#calendar" class="sidebar-item">
+                    <a href="#calendar" class="sidebar-item" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">📅</span>
                         <span>Google Calendar</span>
                     </a>
-                    <a href="#settings" class="sidebar-item">
+                    <a href="#settings" class="sidebar-item" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">⚙️</span>
                         <span>Cài đặt</span>
                     </a>
-                    <a href="#tips" class="sidebar-item">
+                    <a href="#tips" class="sidebar-item" onclick="handleNavClick(event)">
                         <span class="sidebar-icon">💡</span>
                         <span>Mẹo sử dụng</span>
                     </a>
-                    <a href="/user-guide.md" target="_blank" class="sidebar-item">
+                    <a href="/user-guide.html" class="sidebar-item">
                         <span class="sidebar-icon">📖</span>
                         <span>Tài liệu đầy đủ</span>
                     </a>
@@ -811,26 +868,37 @@
                     document.title = `Hướng Dẫn Sử Dụng - ${botName}`;
                 }
             } catch (e) {
-                // Use default name if config not found
                 document.querySelectorAll('.bot-name').forEach(el => {
                     el.textContent = 'TeleTask Bot';
                 });
             }
         })();
 
-        // Smooth scroll for sidebar links
-        document.querySelectorAll('.sidebar-item').forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-                // Update active state
-                document.querySelectorAll('.sidebar-item').forEach(l => l.classList.remove('active'));
-                this.classList.add('active');
-            });
-        });
+        // Mobile sidebar toggle
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+            document.querySelector('.sidebar-overlay').classList.toggle('active');
+        }
+
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+            document.querySelector('.sidebar-overlay').classList.remove('active');
+        }
+
+        // Handle navigation click
+        function handleNavClick(e) {
+            e.preventDefault();
+            const href = e.currentTarget.getAttribute('href');
+            const target = document.querySelector(href);
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            // Update active state
+            document.querySelectorAll('.sidebar-item').forEach(l => l.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            // Close sidebar on mobile
+            closeSidebar();
+        }
     </script>
 </body>
 </html>
