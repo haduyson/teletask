@@ -295,10 +295,16 @@ create_bot() {
     echo -e "${CYAN}Buoc 5: Admin${NC}"
     read -p "Admin Telegram ID (de nhan thong bao): " admin_id
 
-    # Generate bot ID
-    local bot_count=$(ls -d "$BOTS_DIR"/bot_* 2>/dev/null | wc -l)
-    local bot_id="bot_$(printf '%03d' $((bot_count + 1)))"
+    # Use bot_name as folder slug (already normalized)
+    local bot_id="$bot_name"
     local bot_path="$BOTS_DIR/$bot_id"
+
+    # Check if bot already exists
+    if [[ -d "$bot_path" ]]; then
+        log_error "Bot '$bot_name' da ton tai. Vui long chon ten khac."
+        press_enter
+        return
+    fi
 
     # Confirmation
     echo ""
@@ -385,6 +391,12 @@ module.exports = {
         time: true
     }]
 };
+EOF
+
+    # Create static/config.json for website bot name
+    mkdir -p "$bot_path/static"
+    cat > "$bot_path/static/config.json" << EOF
+{"bot_name": "$display_name"}
 EOF
 
     # Set permissions
