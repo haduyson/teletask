@@ -1,251 +1,251 @@
-# TeleTask Bot - User Guide
+# Hướng Dẫn Sử Dụng TeleTask Bot
 
-Vietnamese Task Management Bot for Telegram groups and personal use.
+Bot quản lý công việc qua Telegram cho nhóm và cá nhân.
 
-## Quick Start
+## Bắt Đầu Nhanh
 
-1. Start the bot: `/start`
-2. Create a task: `/taoviec` (wizard mode)
-3. Assign a task: `/giaoviec` (wizard mode)
-4. View tasks: `/xemviec`
+1. Khởi động bot: `/start`
+2. Tạo việc: `/taoviec` (chế độ wizard)
+3. Giao việc: `/giaoviec` (chế độ wizard)
+4. Xem việc: `/xemviec`
 
 ---
 
-## Task Creation Wizard (`/taoviec`)
+## Tạo Việc (`/taoviec`)
 
-Step-by-step task creation with button navigation.
+Tạo việc từng bước với nút bấm hướng dẫn.
 
-### How to Use
+### Cách Sử Dụng
 
-1. **Start wizard**: Type `/taoviec` (no arguments)
-2. **Step 1 - Content**: Enter task description
-3. **Step 2 - Deadline**: Select from buttons or enter custom time
-4. **Step 3 - Assignee**: Choose "Cho mình" (self) or "Giao người khác" (others)
-5. **Step 4 - Priority**: Select priority level
-6. **Step 5 - Confirm**: Review and create task
+1. **Bắt đầu wizard**: Gõ `/taoviec` (không tham số)
+2. **Bước 1 - Nội dung**: Nhập mô tả công việc
+3. **Bước 2 - Deadline**: Chọn từ nút hoặc nhập thời gian
+4. **Bước 3 - Người nhận**: Chọn "Cho mình" hoặc "Giao người khác"
+5. **Bước 4 - Độ ưu tiên**: Chọn mức ưu tiên
+6. **Bước 5 - Xác nhận**: Xem lại và tạo việc
 
-### Quick Mode (Direct Creation)
+### Chế Độ Nhanh
 
-Skip wizard by providing content directly:
+Bỏ qua wizard bằng cách nhập trực tiếp:
 ```
 /taoviec Hoàn thành báo cáo 17h
 ```
 
-### Deadline Options
+### Tùy Chọn Deadline
 
-| Button | Meaning |
-|--------|---------|
-| Hôm nay | End of today (23:59) |
-| Ngày mai | End of tomorrow (23:59) |
-| Tuần sau | 7 days from now |
-| Tháng sau | 30 days from now |
-| Nhập thời gian | Custom time input |
-| Bỏ qua | No deadline |
+| Nút | Ý nghĩa |
+|-----|---------|
+| Hôm nay | Cuối ngày hôm nay (23:59) |
+| Ngày mai | Cuối ngày mai (23:59) |
+| Tuần sau | 7 ngày từ bây giờ |
+| Tháng sau | 30 ngày từ bây giờ |
+| Nhập thời gian | Nhập thời gian tùy chỉnh |
+| Bỏ qua | Không có deadline |
 
-### Custom Time Format
+### Định Dạng Thời Gian
 
 ```
-14h30          → Today 14:30
-ngày mai 10h   → Tomorrow 10:00
-thứ 6 15h      → This Friday 15:00
-20/12 9h       → December 20th 09:00
+14h30          → Hôm nay 14:30
+ngày mai 10h   → Ngày mai 10:00
+thứ 6 15h      → Thứ 6 tuần này 15:00
+20/12 9h       → Ngày 20/12 lúc 09:00
 ```
 
 ---
 
-## Task Assignment Wizard (`/giaoviec`)
+## Giao Việc (`/giaoviec`)
 
-Assign tasks to one or multiple people.
+Giao việc cho một hoặc nhiều người.
 
-### How to Use
+### Cách Sử Dụng
 
-1. **Start wizard**: Type `/giaoviec` (no arguments)
-2. **Step 1 - Content**: Enter task description
-3. **Step 2 - Recipients**: Tag or mention users
-4. **Step 3 - Deadline**: Select deadline
-5. **Step 4 - Priority**: Select priority
-6. **Step 5 - Confirm**: Review and assign
+1. **Bắt đầu wizard**: Gõ `/giaoviec` (không tham số)
+2. **Bước 1 - Nội dung**: Nhập mô tả công việc
+3. **Bước 2 - Người nhận**: Tag hoặc mention người dùng
+4. **Bước 3 - Deadline**: Chọn deadline
+5. **Bước 4 - Độ ưu tiên**: Chọn mức ưu tiên
+6. **Bước 5 - Xác nhận**: Xem lại và giao việc
 
-### Quick Mode (Direct Assignment)
+### Chế Độ Nhanh
 
 ```
 /giaoviec @user Nội dung việc 14h
 /giaoviec @user1 @user2 Việc nhóm 17h
 ```
 
-### Mentioning Users
+### Cách Mention Người Dùng
 
-**Two ways to mention:**
+**Hai cách mention:**
 
-1. **@username** - For users with Telegram username
+1. **@username** - Cho người có username Telegram
    ```
    @myduyenn2202 @xuanson319
    ```
 
-2. **Text mention** - For users WITHOUT username
-   - Tap on member's name in group
-   - Select "Mention" from popup
-   - Works even if user has no @username
+2. **Text mention** - Cho người KHÔNG có username
+   - Nhấn vào tên thành viên trong nhóm
+   - Chọn "Mention" từ popup
+   - Hoạt động ngay cả khi người dùng không có @username
 
-### Group Chat Notes
+### Lưu Ý Trong Nhóm
 
-In group chats, you must **REPLY** to the bot's message when entering text:
-- Swipe right on bot's message → Reply
-- This is due to Telegram's bot privacy mode
-
----
-
-## Task Types & IDs
-
-| ID Format | Type | Description |
-|-----------|------|-------------|
-| T-xxx | Individual Task | Single assignee task |
-| G-xxx | Group Task | Multi-assignee parent task |
-| P-xxx | Personal Task | Child task of group task |
+Trong nhóm chat, bạn phải **REPLY** tin nhắn của bot khi nhập text:
+- Vuốt phải tin nhắn bot → Reply
+- Do chế độ bảo mật của Telegram bot
 
 ---
 
-## Priority Levels
+## Loại Việc & Mã ID
 
-| Level | Icon | Description |
-|-------|------|-------------|
-| Khẩn cấp | 🔴 | Urgent - immediate attention |
-| Cao | 🟠 | High priority |
-| Bình thường | 🟡 | Normal (default) |
-| Thấp | 🟢 | Low priority |
-
----
-
-## Other Commands
-
-| Command | Description |
-|---------|-------------|
-| `/xemviec` | View tasks with category menu |
-| `/xemviec T-123` | View specific task details |
-| `/xong T-123` | Mark task as completed |
-| `/danglam T-123` | Mark task as in progress |
-| `/xoa T-123` | Delete a task |
-| `/viecdagiao` | View tasks you assigned to others |
-| `/vieccanhan` | Create personal task |
-| `/nhacviec T-123 14h` | Set reminder |
-| `/thongtin` | Bot information |
+| Định dạng | Loại | Mô tả |
+|-----------|------|-------|
+| T-xxx | Việc cá nhân | Việc một người nhận |
+| G-xxx | Việc nhóm | Việc nhiều người (cha) |
+| P-xxx | Việc con | Việc con của việc nhóm |
 
 ---
 
-## Statistics Commands
+## Mức Độ Ưu Tiên
 
-| Command | Description |
-|---------|-------------|
-| `/thongke` | Overview statistics (all time) |
-| `/thongketuan` | This week's statistics |
-| `/thongkethang` | This month's statistics |
-
-### Statistics Categories
-
-- **Việc đã giao**: Tasks you assigned to others
-- **Việc được giao**: Tasks assigned to you
-- **Việc cá nhân**: Personal tasks (self-assigned)
+| Mức | Icon | Mô tả |
+|-----|------|-------|
+| Khẩn cấp | 🔴 | Cần xử lý ngay |
+| Cao | 🟠 | Ưu tiên cao |
+| Bình thường | 🟡 | Mặc định |
+| Thấp | 🟢 | Ưu tiên thấp |
 
 ---
 
-## Overdue Tasks (`/viectrehan`)
+## Các Lệnh Khác
 
-View overdue tasks filtered by current month by default.
+| Lệnh | Mô tả |
+|------|-------|
+| `/xemviec` | Xem việc với menu phân loại |
+| `/xemviec T-123` | Xem chi tiết việc |
+| `/xong T-123` | Đánh dấu hoàn thành |
+| `/danglam T-123` | Đánh dấu đang làm |
+| `/xoa T-123` | Xóa việc |
+| `/viecdagiao` | Xem việc đã giao cho người khác |
+| `/vieccanhan` | Tạo việc cá nhân |
+| `/nhacviec T-123 14h` | Đặt nhắc nhở |
+| `/thongtin` | Thông tin bot |
 
-### How to Use
+---
+
+## Lệnh Thống Kê
+
+| Lệnh | Mô tả |
+|------|-------|
+| `/thongke` | Thống kê tổng hợp (tất cả) |
+| `/thongketuan` | Thống kê tuần này |
+| `/thongkethang` | Thống kê tháng này |
+
+### Phân Loại Thống Kê
+
+- **Việc đã giao**: Việc bạn giao cho người khác
+- **Việc được giao**: Việc người khác giao cho bạn
+- **Việc cá nhân**: Việc tự tạo cho mình
+
+---
+
+## Việc Trễ Hạn (`/viectrehan`)
+
+Xem việc trễ hạn, mặc định lọc theo tháng hiện tại.
+
+### Cách Sử Dụng
 
 ```
 /viectrehan
 ```
 
-Shows overdue tasks for the **current month** with filter buttons:
-- 📅 **Hôm nay** - Today's overdue tasks
-- 📆 **Tuần này** - This week's overdue tasks
-- 📊 **Tất cả** - All overdue tasks (all time)
+Hiển thị việc trễ hạn của **tháng hiện tại** với nút lọc:
+- 📅 **Hôm nay** - Việc trễ hạn hôm nay
+- 📆 **Tuần này** - Việc trễ hạn tuần này
+- 📊 **Tất cả** - Tất cả việc trễ hạn
 
-### Monthly Reset
+### Reset Hàng Tháng
 
-The overdue count resets automatically at the start of each new month. This helps track monthly performance without carrying over old overdue tasks.
-
----
-
-## Private Notifications
-
-When tasks are created in **group chats**, assignees receive private DM notifications from the bot.
-
-### How It Works
-
-1. Creator assigns task in group: `/giaoviec @user1 @user2 Nội dung`
-2. Bot replies in group with confirmation
-3. Each assignee receives a **private message** with task details
-
-### Benefits
-
-- Assignees don't miss tasks even if they mute the group
-- Task details available in private chat for easy reference
-- Works for both single and multiple assignees
+Số việc trễ hạn tự động reset đầu mỗi tháng mới. Giúp theo dõi hiệu suất theo tháng.
 
 ---
 
-## Editing Tasks
+## Thông Báo Riêng
 
-After viewing a task with `/xemviec T-123`, use the edit menu buttons.
+Khi tạo việc trong **nhóm chat**, người được giao nhận thông báo riêng qua tin nhắn DM từ bot.
 
-### Edit Options
+### Cách Hoạt Động
 
-| Button | Function |
-|--------|----------|
-| 📝 Sửa nội dung | Edit task content |
-| 📅 Sửa deadline | Change deadline |
-| 👤 Sửa người nhận | Change assignee(s) |
-| 🔔 Sửa độ ưu tiên | Change priority |
+1. Người tạo giao việc trong nhóm: `/giaoviec @user1 @user2 Nội dung`
+2. Bot trả lời trong nhóm với xác nhận
+3. Mỗi người nhận được **tin nhắn riêng** với chi tiết việc
 
-### Editing Assignee ("Sửa người nhận")
+### Lợi Ích
 
-**Two ways to change assignee:**
+- Người nhận không bỏ lỡ việc ngay cả khi tắt thông báo nhóm
+- Chi tiết việc có sẵn trong chat riêng để xem lại
+- Hoạt động với cả việc một và nhiều người
 
-1. **@username** - Type username directly
+---
+
+## Chỉnh Sửa Việc
+
+Sau khi xem việc với `/xemviec T-123`, sử dụng các nút menu chỉnh sửa.
+
+### Tùy Chọn Chỉnh Sửa
+
+| Nút | Chức năng |
+|-----|-----------|
+| 📝 Sửa nội dung | Chỉnh sửa nội dung việc |
+| 📅 Sửa deadline | Thay đổi deadline |
+| 👤 Sửa người nhận | Thay đổi người nhận |
+| 🔔 Sửa độ ưu tiên | Thay đổi mức ưu tiên |
+
+### Sửa Người Nhận
+
+**Hai cách thay đổi người nhận:**
+
+1. **@username** - Gõ username trực tiếp
    ```
    @newuser
    ```
 
-2. **Text mention** - For users WITHOUT @username
-   - Tap on member's name in group
-   - Select "Mention" from popup
-   - Reply to bot's edit prompt
+2. **Text mention** - Cho người KHÔNG có @username
+   - Nhấn vào tên thành viên trong nhóm
+   - Chọn "Mention" từ popup
+   - Reply tin nhắn chỉnh sửa của bot
 
-**Converting task types:**
-- 1 assignee → Individual task (P-ID)
-- Multiple assignees → Group task (G-ID with P-IDs)
+**Chuyển đổi loại việc:**
+- 1 người nhận → Việc cá nhân (P-ID)
+- Nhiều người nhận → Việc nhóm (G-ID với P-IDs)
 
-**Notes:**
-- Reply (vuốt phải) to bot message when entering text
-- Clickable mention links in confirmation messages
+**Lưu ý:**
+- Reply (vuốt phải) tin nhắn bot khi nhập text
+- Link mention có thể click trong tin nhắn xác nhận
 
 ---
 
-## Bulk Delete
+## Xóa Hàng Loạt
 
-Delete multiple tasks at once. Only the task creator can delete.
+Xóa nhiều việc cùng lúc. Chỉ người tạo việc mới có thể xóa.
 
-| Command | Description |
-|---------|-------------|
-| `/xoahet` | Delete all tasks you created |
-| `/xoaviecdagiao` | Delete tasks you assigned to others |
+| Lệnh | Mô tả |
+|------|-------|
+| `/xoahet` | Xóa tất cả việc bạn tạo |
+| `/xoaviecdagiao` | Xóa việc đã giao cho người khác |
 
-### How It Works
+### Cách Hoạt Động
 
-1. Run the command
-2. Bot shows list of tasks to be deleted (preview max 5)
-3. Press **"Xác nhận"** to delete or **"Hủy"** to cancel
+1. Chạy lệnh
+2. Bot hiển thị danh sách việc sẽ bị xóa (tối đa 5)
+3. Nhấn **"Xác nhận"** để xóa hoặc **"Hủy"** để hủy
 
-⚠️ **Warning:** Bulk delete cannot be undone!
+⚠️ **Cảnh báo:** Xóa hàng loạt không thể hoàn tác!
 
-### Example
+### Ví Dụ
 
 ```
 /xoahet
-→ Shows: "Bạn có 3 việc sẽ bị xóa"
+→ Hiển thị: "Bạn có 3 việc sẽ bị xóa"
 → • P-0001: Hoàn thành báo cáo...
 → • P-0002: Gửi email...
 → • T-0003: Review code...
@@ -254,174 +254,158 @@ Delete multiple tasks at once. Only the task creator can delete.
 
 ---
 
-## Export Reports (`/export`)
+## Xuất Báo Cáo (`/export`)
 
-Export task statistics as CSV, Excel, or PDF files.
+Xuất thống kê việc dưới dạng CSV, Excel, hoặc PDF.
 
-### How to Use
+### Cách Sử Dụng
 
-1. Run `/export`
-2. Select time period (7 days, 30 days, this week, this month, custom dates)
-3. Select task filter (all, created, assigned, received)
-4. Select format (CSV, Excel, PDF)
-5. Receive download link with password
+1. Chạy `/export`
+2. Chọn khoảng thời gian (7 ngày, 30 ngày, tuần này, tháng này, tùy chỉnh)
+3. Chọn bộ lọc việc (tất cả, đã tạo, đã giao, được giao)
+4. Chọn định dạng (CSV, Excel, PDF)
+5. Nhận link tải với mật khẩu
 
-### Report Access
+### Truy Cập Báo Cáo
 
-- Reports are password-protected
-- Download link expires after **72 hours**
-- MacOS-style web interface for password entry
-
-### Web Interface
-
-| Page | URL Pattern |
-|------|-------------|
-| Password Entry | `https://domain.com/report/{report_id}` |
-| User Guide | `https://domain.com/hdsdbot.html` |
+- Báo cáo được bảo vệ bằng mật khẩu
+- Link tải hết hạn sau **72 giờ**
+- Giao diện web kiểu MacOS để nhập mật khẩu
 
 ---
 
-## Google Calendar Integration (`/lichgoogle`)
+## Tích Hợp Google Calendar (`/lichgoogle`)
 
-Sync task deadlines with Google Calendar.
+Đồng bộ deadline việc với Google Calendar.
 
-### How to Connect
+### Cách Kết Nối
 
-1. Run `/lichgoogle`
-2. Click "🔗 Kết nối Google" button
-3. Sign in to Google account
-4. Grant calendar permissions
-5. Return to Telegram - see success message
+1. Chạy `/lichgoogle`
+2. Nhấn nút "🔗 Kết nối Google"
+3. Đăng nhập tài khoản Google
+4. Cấp quyền truy cập calendar
+5. Quay lại Telegram - thấy thông báo thành công
 
-### Settings Menu
+### Menu Cài Đặt
 
-After connecting, `/lichgoogle` shows a settings menu:
+Sau khi kết nối, `/lichgoogle` hiển thị menu cài đặt:
 
-| Button | Function |
-|--------|----------|
-| 🔄 Chế độ đồng bộ | Toggle sync mode (Auto/Manual) |
-| ⚡ Đồng bộ ngay | Sync all tasks to calendar now |
-| ❌ Ngắt kết nối | Disconnect Google account |
+| Nút | Chức năng |
+|-----|-----------|
+| 🔄 Chế độ đồng bộ | Chuyển chế độ (Tự động/Thủ công) |
+| ⚡ Đồng bộ ngay | Đồng bộ tất cả việc vào lịch ngay |
+| ❌ Ngắt kết nối | Ngắt kết nối tài khoản Google |
 
-### Sync Modes
+### Chế Độ Đồng Bộ
 
-| Mode | Description |
-|------|-------------|
-| **Tự động** | Sync immediately when tasks change |
-| **Thủ công** | Only sync when you press "Đồng bộ ngay" |
+| Chế độ | Mô tả |
+|--------|-------|
+| **Tự động** | Đồng bộ ngay khi việc thay đổi |
+| **Thủ công** | Chỉ đồng bộ khi nhấn "Đồng bộ ngay" |
 
-### What Gets Synced
+### Những Gì Được Đồng Bộ
 
-- ✅ Task creation → Calendar event created
-- ✅ Task update → Calendar event updated
-- ✅ Task delete → Calendar event removed
-- ✅ Task restore → Calendar event restored
-- ✅ Task complete → Calendar event shows ✅ prefix
+- ✅ Tạo việc → Tạo sự kiện calendar
+- ✅ Cập nhật việc → Cập nhật sự kiện calendar
+- ✅ Xóa việc → Xóa sự kiện calendar
+- ✅ Khôi phục việc → Khôi phục sự kiện calendar
+- ✅ Hoàn thành việc → Sự kiện hiển thị ✅ ở tiêu đề
 
-### Features
+### Tính Năng
 
-- Task deadlines become calendar events
-- Completed tasks show ✅ in calendar title
-- Deleted tasks are removed from calendar
-- Works with Google Calendar notifications
-
----
-
-## Settings (`/caidat`)
-
-Configure notifications and timezone preferences.
-
-### Menu Options
-
-| Button | Function |
-|--------|----------|
-| 🔔 Thông báo | Notification preferences |
-| 🌏 Múi giờ | Timezone settings |
-
-### Notification Preferences
-
-Control which notifications you receive:
-
-| Setting | Description |
-|---------|-------------|
-| 📥 Giao việc | When someone assigns you a task |
-| 📊 Trạng thái | When task status changes |
-| ⏰ Nhắc việc | Task reminders before deadline |
-| 📈 Báo cáo | Daily/weekly summary reports |
-
-### Reminder Settings
-
-Set when to receive task reminders:
-
-| Option | Timing |
-|--------|--------|
-| 24 giờ trước | 24 hours before deadline |
-| 1 giờ trước | 1 hour before deadline |
-| 30 phút trước | 30 minutes before deadline |
-| 5 phút trước | 5 minutes before deadline |
-| Khi trễ hạn | When task becomes overdue |
-
-### Reminder Source
-
-Choose where reminders come from:
-
-| Source | Description |
-|--------|-------------|
-| Telegram | Bot sends reminders in chat |
-| Google Calendar | Calendar app notifications |
-| Cả hai | Both Telegram and Calendar |
-
-### Timezone
-
-Select your timezone for correct deadline display:
-- Asia/Ho_Chi_Minh (UTC+7) - Default
-- Other major timezones available
+- Deadline việc trở thành sự kiện calendar
+- Việc hoàn thành hiển thị ✅ trong tiêu đề calendar
+- Việc đã xóa được xóa khỏi calendar
+- Hoạt động với thông báo Google Calendar
 
 ---
 
-## Web Interface
+## Cài Đặt (`/caidat`)
 
-TeleTask provides a MacOS-style web interface for various features.
+Cấu hình thông báo và múi giờ.
 
-### Design System
+### Tùy Chọn Menu
 
-| Element | Style |
+| Nút | Chức năng |
+|-----|-----------|
+| 🔔 Thông báo | Cài đặt thông báo |
+| 🌏 Múi giờ | Cài đặt múi giờ |
+
+### Cài Đặt Thông Báo
+
+Kiểm soát thông báo nào bạn nhận:
+
+| Cài đặt | Mô tả |
 |---------|-------|
-| Window | Frosted glass with traffic lights |
-| Colors | Apple blue (#007aff), green (#34c759), red (#ff3b30) |
-| Typography | SF Pro Display/Text |
-| Corners | Rounded (8-14px) |
+| 📥 Giao việc | Khi ai đó giao việc cho bạn |
+| 📊 Trạng thái | Khi trạng thái việc thay đổi |
+| ⏰ Nhắc việc | Nhắc nhở trước deadline |
+| 📈 Báo cáo | Báo cáo tổng hợp hàng ngày/tuần |
 
-### Pages
+### Cài Đặt Nhắc Nhở
 
-| Page | Purpose | URL |
-|------|---------|-----|
-| User Guide | Bot documentation | `/hdsdbot.html` |
-| Export Download | Password-protected report access | `/report/{id}` |
-| OAuth Callback | Google Calendar authorization | Internal |
+Đặt thời điểm nhận nhắc nhở:
 
-### Responsive Design
+| Tùy chọn | Thời điểm |
+|----------|-----------|
+| 24 giờ trước | 24 giờ trước deadline |
+| 1 giờ trước | 1 giờ trước deadline |
+| 30 phút trước | 30 phút trước deadline |
+| 5 phút trước | 5 phút trước deadline |
+| Khi trễ hạn | Khi việc trễ hạn |
 
-User guide page adapts to all screen sizes:
+### Nguồn Nhắc Nhở
 
-| Device | Feature Grid |
-|--------|--------------|
-| Desktop (>1024px) | 4 columns + sidebar |
-| Tablet (768-1024px) | 4 columns compact |
-| Mobile (520-768px) | 4 columns small |
-| Small Mobile (<520px) | 2x2 grid |
+Chọn nơi nhận nhắc nhở:
+
+| Nguồn | Mô tả |
+|-------|-------|
+| Telegram | Bot gửi nhắc nhở trong chat |
+| Google Calendar | Thông báo từ ứng dụng Calendar |
+| Cả hai | Cả Telegram và Calendar |
+
+### Múi Giờ
+
+Chọn múi giờ để hiển thị deadline chính xác:
+- Asia/Ho_Chi_Minh (UTC+7) - Mặc định
+- Các múi giờ chính khác có sẵn
 
 ---
 
-## Tips
+## Giao Diện Web
 
-1. **Use wizard mode** for complex tasks with multiple options
-2. **Use quick mode** for simple, fast task creation
-3. **Text mention** works for users without @username
-4. **Reply to bot messages** in group chats when entering text
-5. **Clickable mentions** in task confirmations notify assignees
-6. **Export reports** are password-protected for security
-7. **User guide** available at `domain/hdsdbot.html` for quick reference
-8. **Connect Google Calendar** (`/lichgoogle`) to get calendar notifications
-9. **Customize notifications** (`/caidat`) to control what alerts you receive
-10. **Use "Cả hai" reminder source** for redundant notifications via Telegram + Calendar
+TeleTask cung cấp giao diện web kiểu MacOS.
+
+### Các Trang
+
+| Trang | Mục đích | URL |
+|-------|----------|-----|
+| Hướng dẫn | Tài liệu bot | `/` |
+| Tải báo cáo | Truy cập báo cáo có mật khẩu | `/report/{id}` |
+| OAuth Callback | Xác thực Google Calendar | Nội bộ |
+
+### Thiết Kế Responsive
+
+Trang hướng dẫn tự động điều chỉnh theo kích thước màn hình:
+
+| Thiết bị | Bố cục |
+|----------|--------|
+| Desktop (>1024px) | 4 cột + sidebar |
+| Tablet (768-1024px) | 4 cột compact |
+| Mobile (520-768px) | 4 cột nhỏ |
+| Mobile nhỏ (<520px) | Lưới 2x2 |
+
+---
+
+## Mẹo Sử Dụng
+
+1. **Dùng wizard** cho việc phức tạp với nhiều tùy chọn
+2. **Dùng chế độ nhanh** cho việc đơn giản
+3. **Text mention** hoạt động với người không có @username
+4. **Reply tin nhắn bot** trong nhóm chat khi nhập text
+5. **Link mention** trong xác nhận để thông báo người nhận
+6. **Báo cáo xuất** được bảo vệ bằng mật khẩu
+7. **Hướng dẫn** có sẵn tại trang web để xem nhanh
+8. **Kết nối Google Calendar** (`/lichgoogle`) để nhận thông báo calendar
+9. **Tùy chỉnh thông báo** (`/caidat`) để kiểm soát cảnh báo nhận được
+10. **Dùng "Cả hai" nguồn nhắc** để nhận thông báo qua cả Telegram và Calendar
