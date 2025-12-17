@@ -261,6 +261,261 @@ print_help() {
     echo "  botpanel db-backup mybot"
 }
 
+#-------------------------------------------------------------------------------
+# Interactive Menu Functions
+#-------------------------------------------------------------------------------
+# Get list of bots as array
+get_bots_array() {
+    local bots=()
+    if [ -d "$BOTS_DIR" ]; then
+        for bot_dir in "$BOTS_DIR"/*/; do
+            if [ -d "$bot_dir" ]; then
+                bots+=("$(basename "$bot_dir")")
+            fi
+        done
+    fi
+    echo "${bots[@]}"
+}
+
+# Select bot from menu
+select_bot() {
+    local prompt="$1"
+    local bots=($(get_bots_array))
+
+    if [ ${#bots[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No bots found. Create one first.${NC}"
+        echo ""
+        read -p "Press Enter to continue..."
+        return 1
+    fi
+
+    echo -e "${YELLOW}$prompt${NC}"
+    echo ""
+
+    local i=1
+    for bot in "${bots[@]}"; do
+        # Check status
+        if pm2 describe "$bot" &>/dev/null; then
+            local status=$(pm2 jq "$bot" 2>/dev/null | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 || echo "unknown")
+            if [ "$status" = "online" ]; then
+                echo -e "  ${GREEN}$i)${NC} $bot ${GREEN}(online)${NC}"
+            else
+                echo -e "  ${RED}$i)${NC} $bot ${RED}($status)${NC}"
+            fi
+        else
+            echo -e "  ${YELLOW}$i)${NC} $bot ${YELLOW}(stopped)${NC}"
+        fi
+        ((i++))
+    done
+
+    echo ""
+    echo -e "  ${BLUE}0)${NC} Back to main menu"
+    echo ""
+
+    read -p "Select bot [0-$((i-1))]: " choice
+
+    if [ "$choice" = "0" ] || [ -z "$choice" ]; then
+        return 1
+    fi
+
+    if [ "$choice" -ge 1 ] && [ "$choice" -lt "$i" ] 2>/dev/null; then
+        SELECTED_BOT="${bots[$((choice-1))]}"
+        return 0
+    else
+        echo -e "${RED}Invalid selection${NC}"
+        sleep 1
+        return 1
+    fi
+}
+
+# Main interactive menu
+interactive_menu() {
+    while true; do
+        clear
+        print_banner
+
+        # Show quick status
+        local bots=($(get_bots_array))
+        local online_count=0
+        for bot in "${bots[@]}"; do
+            if pm2 describe "$bot" &>/dev/null; then
+                local status=$(pm2 jq "$bot" 2>/dev/null | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+                [ "$status" = "online" ] && ((online_count++))
+            fi
+        done
+
+        echo -e "  Bots: ${CYAN}${#bots[@]}${NC} total, ${GREEN}${online_count}${NC} online"
+        echo ""
+        echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+        echo ""
+        echo -e "${GREEN}  Bot Management${NC}"
+        echo "  1) Create new bot"
+        echo "  2) List all bots"
+        echo "  3) Start bot"
+        echo "  4) Stop bot"
+        echo "  5) Restart bot"
+        echo "  6) View logs"
+        echo ""
+        echo -e "${GREEN}  Database${NC}"
+        echo "  7) Database status"
+        echo "  8) Run migrations"
+        echo "  9) Backup database"
+        echo ""
+        echo -e "${GREEN}  Configuration${NC}"
+        echo "  10) Edit config"
+        echo "  11) Update bot token"
+        echo "  12) Google Calendar setup"
+        echo ""
+        echo -e "${GREEN}  Maintenance${NC}"
+        echo "  13) Update bot"
+        echo "  14) Delete bot"
+        echo "  15) System info"
+        echo "  16) Clean logs"
+        echo ""
+        echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+        echo ""
+        echo -e "  ${BLUE}h)${NC} Help (command reference)"
+        echo -e "  ${RED}q)${NC} Quit"
+        echo ""
+
+        read -p "Select option: " choice
+
+        case "$choice" in
+            1)
+                clear
+                cmd_create
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            2)
+                clear
+                cmd_list
+                read -p "Press Enter to continue..."
+                ;;
+            3)
+                clear
+                if select_bot "Select bot to START:"; then
+                    cmd_start "$SELECTED_BOT"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            4)
+                clear
+                if select_bot "Select bot to STOP:"; then
+                    cmd_stop "$SELECTED_BOT"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            5)
+                clear
+                if select_bot "Select bot to RESTART:"; then
+                    cmd_restart "$SELECTED_BOT"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            6)
+                clear
+                if select_bot "Select bot to view LOGS:"; then
+                    echo -e "${BLUE}[INFO]${NC} Showing logs for '$SELECTED_BOT' (Ctrl+C to exit)..."
+                    echo ""
+                    pm2 logs "$SELECTED_BOT" --lines 50
+                fi
+                ;;
+            7)
+                clear
+                if select_bot "Select bot for DATABASE STATUS:"; then
+                    cmd_db_status "$SELECTED_BOT"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            8)
+                clear
+                if select_bot "Select bot to run MIGRATIONS:"; then
+                    cmd_db_migrate "$SELECTED_BOT"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            9)
+                clear
+                if select_bot "Select bot to BACKUP:"; then
+                    cmd_db_backup "$SELECTED_BOT"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            10)
+                clear
+                if select_bot "Select bot to CONFIGURE:"; then
+                    cmd_config "$SELECTED_BOT"
+                fi
+                ;;
+            11)
+                clear
+                if select_bot "Select bot to update TOKEN:"; then
+                    cmd_token "$SELECTED_BOT"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            12)
+                clear
+                if select_bot "Select bot for GOOGLE CALENDAR:"; then
+                    cmd_gcal "$SELECTED_BOT"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            13)
+                clear
+                if select_bot "Select bot to UPDATE:"; then
+                    cmd_update "$SELECTED_BOT"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            14)
+                clear
+                if select_bot "Select bot to DELETE:"; then
+                    cmd_delete "$SELECTED_BOT"
+                    echo ""
+                    read -p "Press Enter to continue..."
+                fi
+                ;;
+            15)
+                clear
+                cmd_info
+                read -p "Press Enter to continue..."
+                ;;
+            16)
+                clear
+                cmd_clean
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            h|H)
+                clear
+                print_help
+                echo ""
+                read -p "Press Enter to continue..."
+                ;;
+            q|Q|0)
+                clear
+                echo -e "${CYAN}Goodbye!${NC}"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}Invalid option${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 # Get bot directory
 get_bot_dir() {
     local bot_name="$1"
@@ -907,8 +1162,10 @@ case "$1" in
     deps)       cmd_deps "$2" ;;
     clean)      cmd_clean ;;
     info)       cmd_info ;;
-    help|--help|-h|"")
+    help|--help|-h)
         print_help ;;
+    "")
+        interactive_menu ;;
     *)
         echo -e "${RED}[ERROR]${NC} Unknown command: $1"
         echo "Run 'botpanel help' for usage"
