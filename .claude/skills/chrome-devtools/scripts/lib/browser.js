@@ -101,8 +101,14 @@ export async function getBrowser(options = {}) {
   }
 
   // Launch new browser
+  // Try to find system chromium/chrome for ARM64 compatibility
+  const executablePath = options.executablePath ||
+    (fs.existsSync('/usr/bin/chromium-browser') ? '/usr/bin/chromium-browser' :
+     fs.existsSync('/snap/bin/chromium') ? '/snap/bin/chromium' : undefined);
+
   const launchOptions = {
     headless: options.headless !== false,
+    executablePath,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
