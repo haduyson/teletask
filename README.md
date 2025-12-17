@@ -131,6 +131,7 @@ botpanel help      # Xem tất cả lệnh
 
 - **Hướng dẫn sử dụng:** https://teletask.haduyson.com
 - **Release Notes:** [docs/release-notes-2025-12-17.md](docs/release-notes-2025-12-17.md)
+- **Project Roadmap:** [docs/project-roadmap.md](docs/project-roadmap.md)
 
 ## Phiên bản
 
