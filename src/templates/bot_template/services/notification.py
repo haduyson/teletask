@@ -30,24 +30,42 @@ async def send_reminder_notification(bot: Bot, reminder: Dict[str, Any]) -> None
         deadline = TZ.localize(deadline)
 
     # Format message based on type
-    if reminder["reminder_type"] == "after_deadline":
+    task_id = reminder["public_id"]
+    reminder_type = reminder.get("reminder_type", "")
+
+    if reminder_type == "creator_overdue":
+        # Special message for task creators when assigned task is overdue
+        overdue = now - deadline
+        text = format_creator_overdue_message(reminder, overdue)
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📝 Chi tiết", callback_data=f"task_detail:{task_id}"),
+            ],
+        ])
+    elif reminder_type == "after_deadline":
         overdue = now - deadline
         text = format_overdue_message(reminder, overdue)
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📊 Tiến độ", callback_data=f"task_progress:{task_id}"),
+                InlineKeyboardButton("⏰ Nhắc sau 30p", callback_data=f"snooze:{reminder['id']}:30"),
+            ],
+            [
+                InlineKeyboardButton("✅ HOÀN THÀNH", callback_data=f"task_complete:{task_id}"),
+            ],
+        ])
     else:
         time_left = deadline - now
         text = format_upcoming_message(reminder, time_left)
-
-    # Action buttons
-    task_id = reminder["public_id"]
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📊 Tiến độ", callback_data=f"task_progress:{task_id}"),
-            InlineKeyboardButton("⏰ Nhắc sau 30p", callback_data=f"snooze:{reminder['id']}:30"),
-        ],
-        [
-            InlineKeyboardButton("✅ HOÀN THÀNH", callback_data=f"task_complete:{task_id}"),
-        ],
-    ])
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📊 Tiến độ", callback_data=f"task_progress:{task_id}"),
+                InlineKeyboardButton("⏰ Nhắc sau 30p", callback_data=f"snooze:{reminder['id']}:30"),
+            ],
+            [
+                InlineKeyboardButton("✅ HOÀN THÀNH", callback_data=f"task_complete:{task_id}"),
+            ],
+        ])
 
     await bot.send_message(
         chat_id=reminder["telegram_id"],
@@ -178,6 +196,27 @@ Deadline: {deadline_str}
 Vui lòng hoàn thành sớm nhất!"""
 
 
+def format_creator_overdue_message(data: Dict[str, Any], overdue: timedelta) -> str:
+    """Format reminder message for task creators when assigned task is overdue."""
+    content = data.get("content", "")
+    if len(content) > 100:
+        content = content[:97] + "..."
+
+    deadline = data.get("deadline")
+    deadline_str = deadline.strftime("%H:%M %d/%m") if deadline else "N/A"
+
+    return f"""⚠️ VIỆC GIAO ĐÃ TRỄ HẠN!
+
+{data.get('public_id', '')}: {content}
+
+Deadline: {deadline_str}
+Đã trễ: {format_time_delta(overdue)}
+Tiến độ: {format_progress_bar(data.get('progress', 0))}
+
+Công việc bạn giao chưa được hoàn thành đúng hạn.
+Hãy liên hệ người nhận việc để cập nhật."""
+
+
 def format_simple_reminder(data: Dict[str, Any]) -> str:
     """Format simple reminder without deadline."""
     content = data.get("content", "")
@@ -267,6 +306,12 @@ async def send_group_task_created_notification(
         if assignee.get("telegram_id") == creator.get("telegram_id"):
             continue  # Skip notifying creator
 
+        # Check user notification preferences
+        if not assignee.get("notify_all", True):
+            continue  # User disabled all notifications
+        if not assignee.get("notify_task_assigned", True):
+            continue  # User disabled task assignment notifications
+
         child_task = child_tasks[i] if i < len(child_tasks) else None
         if not child_task:
             continue
@@ -332,10 +377,10 @@ async def send_member_completed_notification(
 
     parent = dict(parent)
 
-    # Get all child tasks with assignee info
+    # Get all child tasks with assignee info and notification preferences
     siblings = await db.fetch_all(
         """
-        SELECT t.*, u.telegram_id, u.display_name
+        SELECT t.*, u.telegram_id, u.display_name, u.notify_all, u.notify_task_status
         FROM tasks t
         JOIN users u ON t.assignee_id = u.id
         WHERE t.parent_task_id = $1 AND t.is_deleted = false
@@ -358,6 +403,12 @@ async def send_member_completed_notification(
             continue
         if sibling["status"] == "completed":
             continue  # Don't notify already completed members
+
+        # Check user notification preferences
+        if not sibling.get("notify_all", True):
+            continue  # User disabled all notifications
+        if not sibling.get("notify_task_status", True):
+            continue  # User disabled task status notifications
 
         text = f"""📊 CẬP NHẬT VIỆC NHÓM
 
@@ -392,14 +443,20 @@ async def send_group_completed_notification(
         db: Database connection
         group_task: The G-ID parent task that is now complete
     """
-    # Get creator
+    # Get creator with notification preferences
     creator = await db.fetch_one(
-        "SELECT telegram_id, display_name FROM users WHERE id = $1",
+        "SELECT telegram_id, display_name, notify_all, notify_task_status FROM users WHERE id = $1",
         group_task["creator_id"]
     )
 
     if not creator:
         return
+
+    # Check user notification preferences
+    if not creator.get("notify_all", True):
+        return  # User disabled all notifications
+    if not creator.get("notify_task_status", True):
+        return  # User disabled task status notifications
 
     # Get child task count
     children = await db.fetch_all(
@@ -440,5 +497,82 @@ Xem chi tiết: /xemviec {group_task['public_id']}"""
             text=text,
             reply_markup=keyboard,
         )
+    except Exception as e:
+        logger.warning(f"Could not notify creator {creator.get('telegram_id')}: {e}")
+
+
+async def send_task_completed_to_assigner(
+    bot: Bot,
+    db,
+    task: Dict[str, Any],
+    completer: Dict[str, Any],
+) -> None:
+    """
+    Notify the task assigner/creator when assigned task is completed.
+
+    Args:
+        bot: Telegram bot instance
+        db: Database connection
+        task: The completed task data
+        completer: User who completed the task
+    """
+    # Skip if this is a group task child (handled separately)
+    if task.get("parent_task_id"):
+        return
+
+    # Get creator info
+    creator_id = task.get("creator_id")
+    assignee_id = task.get("assignee_id")
+
+    # Skip if creator completed their own task
+    if not creator_id or not assignee_id or creator_id == assignee_id:
+        return
+
+    creator = await db.fetch_one(
+        "SELECT telegram_id, display_name, notify_all, notify_task_status FROM users WHERE id = $1",
+        creator_id
+    )
+
+    if not creator:
+        return
+
+    # Check user notification preferences
+    if not creator.get("notify_all", True):
+        return  # User disabled all notifications
+    if not creator.get("notify_task_status", True):
+        return  # User disabled task status notifications
+
+    content = task.get("content", "")
+    if len(content) > 100:
+        content = content[:97] + "..."
+
+    completed_at = task.get("completed_at")
+    if completed_at:
+        completed_str = completed_at.strftime("%H:%M %d/%m")
+    else:
+        completed_str = datetime.now(TZ).strftime("%H:%M %d/%m")
+
+    text = f"""✅ VIỆC ĐÃ HOÀN THÀNH!
+
+{task['public_id']}: {content}
+
+👤 Người thực hiện: {completer.get('display_name', 'N/A')}
+⏰ Hoàn thành lúc: {completed_str}
+
+Xem chi tiết: /xemviec {task['public_id']}"""
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📝 Chi tiết", callback_data=f"task_detail:{task['public_id']}"),
+        ],
+    ])
+
+    try:
+        await bot.send_message(
+            chat_id=creator["telegram_id"],
+            text=text,
+            reply_markup=keyboard,
+        )
+        logger.info(f"Notified creator {creator_id} about task {task['public_id']} completion")
     except Exception as e:
         logger.warning(f"Could not notify creator {creator.get('telegram_id')}: {e}")

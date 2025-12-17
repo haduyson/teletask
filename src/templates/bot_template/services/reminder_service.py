@@ -124,7 +124,8 @@ async def get_pending_reminders(db: Database) -> List[Dict[str, Any]]:
         SELECT r.*,
                t.content, t.public_id, t.status, t.priority, t.progress, t.deadline,
                u.telegram_id, u.display_name, u.reminder_source,
-               u.remind_24h, u.remind_1h, u.remind_30m, u.remind_5m, u.remind_overdue
+               u.remind_24h, u.remind_1h, u.remind_30m, u.remind_5m, u.remind_overdue,
+               u.notify_all
         FROM reminders r
         JOIN tasks t ON r.task_id = t.id
         JOIN users u ON r.user_id = u.id
@@ -133,6 +134,7 @@ async def get_pending_reminders(db: Database) -> List[Dict[str, Any]]:
           AND t.is_deleted = false
           AND t.status != 'completed'
           AND (u.reminder_source IS NULL OR u.reminder_source IN ('telegram', 'both'))
+          AND u.notify_all = true
         ORDER BY r.remind_at
         LIMIT 50
         """
@@ -147,9 +149,12 @@ async def get_pending_reminders(db: Database) -> List[Dict[str, Any]]:
 
         # Map reminder_offset to user setting
         if reminder_type == "after_deadline":
-            # Overdue reminders
+            # Overdue reminders for assignee
             if reminder.get("remind_overdue", True):
                 filtered.append(reminder)
+        elif reminder_type == "creator_overdue":
+            # Overdue reminder for creator - always send
+            filtered.append(reminder)
         elif offset == "24h":
             if reminder.get("remind_24h", True):
                 filtered.append(reminder)

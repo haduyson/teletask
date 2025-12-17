@@ -258,21 +258,32 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 parse_mode="Markdown",
             )
 
-            # Notify assignee with mention
+            # Notify assignee with mention (check notification preferences)
             try:
                 if assignee.get("telegram_id") != user.id:
-                    creator_mention = mention_user(db_user)
-                    await context.bot.send_message(
-                        chat_id=assignee["telegram_id"],
-                        text=MSG_TASK_RECEIVED_MD.format(
-                            task_id=task["public_id"],
-                            content=content,
-                            creator=creator_mention,
-                            deadline=deadline_str,
-                        ),
-                        parse_mode="Markdown",
-                        reply_markup=task_actions_keyboard(task["public_id"]),
+                    # Check if user wants to receive notifications
+                    assignee_prefs = await db.fetch_one(
+                        "SELECT notify_all, notify_task_assigned FROM users WHERE id = $1",
+                        assignee["id"]
                     )
+                    should_notify = (
+                        assignee_prefs
+                        and assignee_prefs.get("notify_all", True)
+                        and assignee_prefs.get("notify_task_assigned", True)
+                    )
+                    if should_notify:
+                        creator_mention = mention_user(db_user)
+                        await context.bot.send_message(
+                            chat_id=assignee["telegram_id"],
+                            text=MSG_TASK_RECEIVED_MD.format(
+                                task_id=task["public_id"],
+                                content=content,
+                                creator=creator_mention,
+                                deadline=deadline_str,
+                            ),
+                            parse_mode="Markdown",
+                            reply_markup=task_actions_keyboard(task["public_id"]),
+                        )
             except Exception as e:
                 logger.warning(f"Could not notify assignee {assignee['telegram_id']}: {e}")
 
@@ -306,26 +317,37 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 parse_mode="Markdown",
             )
 
-            # Notify each assignee with their personal P-ID
+            # Notify each assignee with their personal P-ID (check notification preferences)
             creator_mention = mention_user(db_user)
             for i, assignee in enumerate(assignees):
                 try:
                     if assignee.get("telegram_id") != user.id:
-                        # child_tasks[i] is tuple of (task_dict, assignee_dict)
-                        child_task, _ = child_tasks[i]
-                        await context.bot.send_message(
-                            chat_id=assignee["telegram_id"],
-                            text=MSG_GROUP_TASK_RECEIVED_MD.format(
-                                task_id=group_task["public_id"],
-                                content=content,
-                                creator=creator_mention,
-                                deadline=deadline_str,
-                                total_members=len(assignees),
-                                personal_id=child_task["public_id"],
-                            ),
-                            parse_mode="Markdown",
-                            reply_markup=task_actions_keyboard(child_task["public_id"]),
+                        # Check if user wants to receive notifications
+                        assignee_prefs = await db.fetch_one(
+                            "SELECT notify_all, notify_task_assigned FROM users WHERE id = $1",
+                            assignee["id"]
                         )
+                        should_notify = (
+                            assignee_prefs
+                            and assignee_prefs.get("notify_all", True)
+                            and assignee_prefs.get("notify_task_assigned", True)
+                        )
+                        if should_notify:
+                            # child_tasks[i] is tuple of (task_dict, assignee_dict)
+                            child_task, _ = child_tasks[i]
+                            await context.bot.send_message(
+                                chat_id=assignee["telegram_id"],
+                                text=MSG_GROUP_TASK_RECEIVED_MD.format(
+                                    task_id=group_task["public_id"],
+                                    content=content,
+                                    creator=creator_mention,
+                                    deadline=deadline_str,
+                                    total_members=len(assignees),
+                                    personal_id=child_task["public_id"],
+                                ),
+                                parse_mode="Markdown",
+                                reply_markup=task_actions_keyboard(child_task["public_id"]),
+                            )
                 except Exception as e:
                     logger.warning(f"Could not notify assignee {assignee['telegram_id']}: {e}")
 

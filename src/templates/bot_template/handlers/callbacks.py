@@ -197,29 +197,16 @@ async def handle_complete(query, db, db_user, task_id: str, bot) -> None:
         return
 
     # Update status
-    await update_task_status(db, task["id"], "completed", db_user["id"])
+    updated_task = await update_task_status(db, task["id"], "completed", db_user["id"])
 
     await query.edit_message_text(
         f"Đã hoàn thành việc {task_id}!\n\n"
         f"{task['content']}"
     )
 
-    # Notify creator
-    if task["creator_id"] != db_user["id"]:
-        try:
-            creator = await db.fetch_one(
-                "SELECT telegram_id FROM users WHERE id = $1",
-                task["creator_id"]
-            )
-            if creator:
-                await bot.send_message(
-                    chat_id=creator["telegram_id"],
-                    text=f"Việc {task_id} đã được hoàn thành!\n\n"
-                         f"Nội dung: {task['content']}\n"
-                         f"Người thực hiện: {db_user.get('display_name', 'N/A')}",
-                )
-        except Exception as e:
-            logger.warning(f"Could not notify creator: {e}")
+    # Notify task creator/assigner
+    from services.notification import send_task_completed_to_assigner
+    await send_task_completed_to_assigner(bot, db, updated_task or task, db_user)
 
 
 async def handle_progress_menu(query, task_id: str) -> None:

@@ -80,24 +80,13 @@ async def xong_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
             results.append(f"{task_id}: Hoàn thành!")
 
-            # Notify creator if different from person completing
-            user_mention = mention_user(db_user)
-            if task["creator_id"] != db_user["id"]:
-                try:
-                    creator = await db.fetch_one(
-                        "SELECT telegram_id FROM users WHERE id = $1",
-                        task["creator_id"]
-                    )
-                    if creator:
-                        await context.bot.send_message(
-                            chat_id=creator["telegram_id"],
-                            text=f"✅ Việc {task_id} đã được hoàn thành\\!\n\n"
-                                 f"📋 {task['content']}\n"
-                                 f"👤 Người thực hiện: {user_mention}",
-                            parse_mode="Markdown",
-                        )
-                except Exception as e:
-                    logger.warning(f"Could not notify creator: {e}")
+            # Notify creator/assigner if this is NOT a group task child
+            # (Group task children are handled separately below)
+            if not task.get("parent_task_id"):
+                from services.notification import send_task_completed_to_assigner
+                await send_task_completed_to_assigner(
+                    context.bot, db, updated or task, db_user
+                )
 
             # Check if this is a P-ID and handle group progress
             if task_id.startswith("P-") and task.get("group_task_id"):

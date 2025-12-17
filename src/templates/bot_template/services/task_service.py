@@ -110,7 +110,7 @@ async def create_task(
 
     # Create default reminders if deadline exists
     if deadline:
-        await create_default_reminders(db, task["id"], assignee_id, deadline)
+        await create_default_reminders(db, task["id"], assignee_id, deadline, creator_id)
 
     # Auto-sync to Google Calendar if enabled
     if deadline:
@@ -467,6 +467,63 @@ async def update_task_status(
                     )
         except Exception as e:
             logger.warning(f"Calendar update failed for task {task_id}: {e}")
+
+    # Update parent task progress if this is a child task
+    if current.get("parent_task_id"):
+        try:
+            parent_id = current["parent_task_id"]
+            # Get all child tasks' status
+            children = await db.fetch_all(
+                """
+                SELECT status, progress FROM tasks
+                WHERE parent_task_id = $1 AND is_deleted = false
+                """,
+                parent_id
+            )
+            if children:
+                total = len(children)
+                completed = sum(1 for c in children if c["status"] == "completed")
+                avg_progress = sum(c["progress"] or 0 for c in children) // total
+
+                # Determine parent status
+                if completed == total:
+                    parent_status = "completed"
+                    parent_progress = 100
+                elif completed > 0 or any(c["status"] == "in_progress" for c in children):
+                    parent_status = "in_progress"
+                    parent_progress = avg_progress
+                else:
+                    parent_status = "pending"
+                    parent_progress = 0
+
+                # Update parent
+                if parent_status == "completed":
+                    await db.execute(
+                        """
+                        UPDATE tasks SET
+                            status = $2,
+                            progress = $3,
+                            completed_at = NOW(),
+                            updated_at = NOW()
+                        WHERE id = $1
+                        """,
+                        parent_id, parent_status, parent_progress
+                    )
+                else:
+                    await db.execute(
+                        """
+                        UPDATE tasks SET
+                            status = $2,
+                            progress = $3,
+                            completed_at = NULL,
+                            updated_at = NOW()
+                        WHERE id = $1
+                        """,
+                        parent_id, parent_status, parent_progress
+                    )
+                logger.info(f"Updated parent task {parent_id}: status={parent_status}, progress={parent_progress}%")
+        except Exception as e:
+            logger.warning(f"Failed to update parent task: {e}")
 
     return dict(task) if task else None
 
@@ -1184,31 +1241,60 @@ async def add_task_history(
 async def create_default_reminders(
     db: Database,
     task_id: int,
-    user_id: int,
+    assignee_id: int,
     deadline: datetime,
+    creator_id: Optional[int] = None,
 ) -> None:
-    """Create default reminders for a task."""
-    # Reminder 24h before
+    """
+    Create default reminders for a task.
+
+    Args:
+        db: Database connection
+        task_id: Task internal ID
+        assignee_id: User assigned to task (receives before-deadline reminders)
+        deadline: Task deadline
+        creator_id: Task creator (receives 1-min overdue reminder if different from assignee)
+    """
+    now = datetime.now(TZ)
+
+    # Reminder 24h before for assignee
     remind_24h = deadline - timedelta(hours=24)
-    if remind_24h > datetime.now(TZ):
+    if remind_24h > now:
         await db.execute(
             """
             INSERT INTO reminders (task_id, user_id, remind_at, reminder_type, reminder_offset)
             VALUES ($1, $2, $3, 'before_deadline', '24h')
+            ON CONFLICT DO NOTHING
             """,
-            task_id, user_id, remind_24h
+            task_id, assignee_id, remind_24h
         )
 
-    # Reminder 1h before
+    # Reminder 1h before for assignee
     remind_1h = deadline - timedelta(hours=1)
-    if remind_1h > datetime.now(TZ):
+    if remind_1h > now:
         await db.execute(
             """
             INSERT INTO reminders (task_id, user_id, remind_at, reminder_type, reminder_offset)
             VALUES ($1, $2, $3, 'before_deadline', '1h')
+            ON CONFLICT DO NOTHING
             """,
-            task_id, user_id, remind_1h
+            task_id, assignee_id, remind_1h
         )
+
+    # Reminder 1 minute after deadline for CREATOR (if different from assignee)
+    # This notifies the creator when assigned task is overdue
+    if creator_id and creator_id != assignee_id:
+        remind_overdue_1m = deadline + timedelta(minutes=1)
+        if remind_overdue_1m > now:
+            await db.execute(
+                """
+                INSERT INTO reminders (task_id, user_id, remind_at, reminder_type, reminder_offset)
+                VALUES ($1, $2, $3, 'creator_overdue', '1m')
+                ON CONFLICT DO NOTHING
+                """,
+                task_id, creator_id, remind_overdue_1m
+            )
+            logger.info(f"Created 1-min overdue reminder for creator {creator_id} on task {task_id}")
 
 
 async def get_tasks_with_deadline(
@@ -1340,7 +1426,7 @@ async def create_group_task(
 
         # Create reminders
         if deadline:
-            await create_default_reminders(db, task["id"], assignee["id"], deadline)
+            await create_default_reminders(db, task["id"], assignee["id"], deadline, creator_id)
 
         individual_tasks.append((dict(task), assignee))
 
@@ -1586,7 +1672,7 @@ async def convert_individual_to_group(
 
         # Create reminders
         if task.get("deadline"):
-            await create_default_reminders(db, child["id"], assignee["id"], task["deadline"])
+            await create_default_reminders(db, child["id"], assignee["id"], task["deadline"], task["creator_id"])
 
     # Soft delete original task
     await db.execute(
@@ -1685,7 +1771,7 @@ async def update_group_assignees(
         new_children.append((dict(child), assignee))
 
         if parent.get("deadline"):
-            await create_default_reminders(db, child["id"], assignee["id"], parent["deadline"])
+            await create_default_reminders(db, child["id"], assignee["id"], parent["deadline"], parent["creator_id"])
 
     # Log history
     await add_task_history(
