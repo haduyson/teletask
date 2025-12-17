@@ -77,7 +77,7 @@ Ví dụ:
 
 ━━━━━ TÀI KHOẢN ━━━━━
 /menu - Menu tính năng (nút bấm)
-/caidat - Cài đặt nhắc nhở
+/caidat - Cài đặt cá nhân (thông báo, lịch, múi giờ)
 /thongtin - Thông tin tài khoản
 /start - Bắt đầu sử dụng bot
 /help - Xem hướng dẫn này
@@ -134,7 +134,7 @@ Ví dụ:
 
 ━━━━━ TÀI KHOẢN ━━━━━
 /menu - Menu tính năng (nút bấm)
-/caidat - Cài đặt nhắc nhở
+/caidat - Cài đặt cá nhân (thông báo, lịch, múi giờ)
 /thongtin - Thông tin tài khoản
 /start - Bắt đầu sử dụng bot
 /help - Xem hướng dẫn này

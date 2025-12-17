@@ -239,8 +239,10 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     elif action == "caidat":
         await query.message.reply_text(
             "⚙️ <b>CÀI ĐẶT</b>\n\n"
-            "Dùng lệnh /caidat để mở cài đặt.\n\n"
-            "Bao gồm: Ngôn ngữ, múi giờ, nhắc nhở, báo cáo tự động...",
+            "Dùng lệnh /caidat để mở menu cài đặt cá nhân.\n\n"
+            "<b>🔔 Thông báo:</b> Giao việc mới, trạng thái việc, nhắc việc, báo cáo\n"
+            "<b>📅 Google Calendar:</b> Chế độ đồng bộ (tự động/thủ công)\n"
+            "<b>🌏 Múi giờ:</b> Chọn múi giờ hiển thị",
             parse_mode="HTML",
         )
 
