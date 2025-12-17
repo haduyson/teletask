@@ -589,6 +589,30 @@ cmd_create() {
     read -p "Nhập Telegram User ID của bạn (để làm admin, tùy chọn): " ADMIN_ID
 
     echo ""
+    echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║                    CẤU HÌNH DOMAIN                           ║${NC}"
+    echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo "Domain dùng để:"
+    echo "  - Export báo cáo (PDF, Excel)"
+    echo "  - Hướng dẫn sử dụng bot"
+    echo "  - Google Calendar OAuth callback"
+    echo ""
+    read -p "Nhập domain (vd: teletask.example.com): " BOT_DOMAIN
+
+    if [ -z "$BOT_DOMAIN" ]; then
+        echo -e "${YELLOW}[CẢNH BÁO]${NC} Không có domain - export và OAuth sẽ không hoạt động"
+        EXPORT_BASE_URL=""
+        GOOGLE_REDIRECT_URI=""
+    else
+        # Remove protocol if user included it
+        BOT_DOMAIN=$(echo "$BOT_DOMAIN" | sed 's|^https\?://||' | sed 's|/$||')
+        EXPORT_BASE_URL="https://$BOT_DOMAIN"
+        GOOGLE_REDIRECT_URI="https://$BOT_DOMAIN/oauth/callback"
+        echo -e "${GREEN}[OK]${NC} Domain: $BOT_DOMAIN"
+    fi
+
+    echo ""
     echo -e "${BLUE}[INFO]${NC} Đang tạo bot '$BOT_SLUG'..."
 
     # Create bot directory
@@ -681,14 +705,22 @@ LOG_FILE=$LOG_DIR/${BOT_SLUG}.log
 ADMIN_IDS=$ADMIN_ID
 
 #-------------------------------------------------------------------------------
-# Features (optional)
+# Domain & Export
+#-------------------------------------------------------------------------------
+EXPORT_BASE_URL=$EXPORT_BASE_URL
+
+#-------------------------------------------------------------------------------
+# Google Calendar (optional)
 #-------------------------------------------------------------------------------
 GOOGLE_CALENDAR_ENABLED=false
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=
+GOOGLE_REDIRECT_URI=$GOOGLE_REDIRECT_URI
 OAUTH_CALLBACK_PORT=8081
 
+#-------------------------------------------------------------------------------
+# Monitoring (optional)
+#-------------------------------------------------------------------------------
 METRICS_ENABLED=false
 HEALTH_PORT=8080
 EOF
@@ -710,17 +742,20 @@ EOF
     # Set ownership
     chown -R botpanel:botpanel "$BOT_DIR"
 
-    # Start bot
+    # Start bot with PM2
     echo -e "${BLUE}[INFO]${NC} Đang khởi động bot..."
-    sudo -u botpanel bash -c "
-        cd '$BOT_DIR'
-        source venv/bin/activate
-        pm2 start '$BOT_DIR/venv/bin/python' \
-            --name '$BOT_SLUG' \
-            --interpreter none \
-            -- '$BOT_DIR/bot.py'
-        pm2 save
-    "
+    cd "$BOT_DIR"
+
+    pm2 start "$BOT_DIR/venv/bin/python" \
+        --name "$BOT_SLUG" \
+        --interpreter none \
+        --cwd "$BOT_DIR" \
+        --output "$LOG_DIR/${BOT_SLUG}-out.log" \
+        --error "$LOG_DIR/${BOT_SLUG}-error.log" \
+        --log "$LOG_DIR/${BOT_SLUG}.log" \
+        -- "$BOT_DIR/bot.py"
+
+    pm2 save
 
     echo -e "${GREEN}[OK]${NC} Bot đã khởi động"
 
@@ -836,15 +871,16 @@ cmd_start() {
     if pm2 describe "$bot_name" &>/dev/null; then
         pm2 restart "$bot_name"
     else
-        sudo -u botpanel bash -c "
-            cd '$bot_dir'
-            source venv/bin/activate
-            pm2 start '$bot_dir/venv/bin/python' \
-                --name '$bot_name' \
-                --interpreter none \
-                -- '$bot_dir/bot.py'
-            pm2 save
-        "
+        # Bot not in PM2 yet, start fresh
+        pm2 start "$bot_dir/venv/bin/python" \
+            --name "$bot_name" \
+            --interpreter none \
+            --cwd "$bot_dir" \
+            --output "$LOG_DIR/${bot_name}-out.log" \
+            --error "$LOG_DIR/${bot_name}-error.log" \
+            --log "$LOG_DIR/${bot_name}.log" \
+            -- "$bot_dir/bot.py"
+        pm2 save
     fi
 
     echo -e "${GREEN}[OK]${NC} Bot đã khởi động"
