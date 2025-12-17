@@ -79,7 +79,7 @@ Giao việc cho một hoặc nhiều người.
 
 1. **@username** - Cho người có username Telegram
    ```
-   @myduyenn2202 @xuanson319
+   @usertelegram2025 @hasontech2050
    ```
 
 2. **Text mention** - Cho người KHÔNG có username
