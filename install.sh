@@ -1,7 +1,10 @@
 #!/bin/bash
 #===============================================================================
-# TeleTask Bot - Automated Installation Script
+# TeleTask Bot - System Installation Script
 # Usage: curl -fsSL https://raw.githubusercontent.com/haduyson/teletask/main/install.sh | sudo bash
+#
+# This script installs system dependencies and botpanel CLI.
+# To create a bot, run: botpanel create
 #===============================================================================
 
 set -e
@@ -17,17 +20,11 @@ NC='\033[0m' # No Color
 # Configuration
 BOTPANEL_USER="botpanel"
 BOTPANEL_HOME="/home/$BOTPANEL_USER"
+BOTS_DIR="$BOTPANEL_HOME/bots"
 LOG_DIR="$BOTPANEL_HOME/logs"
 BACKUP_DIR="$BOTPANEL_HOME/backups"
 PYTHON_VERSION="3.11"
 TIMEZONE="Asia/Ho_Chi_Minh"
-
-# Will be set after asking for bot name
-BOT_SLUG=""
-BOT_DIR=""
-DB_NAME=""
-DB_USER="botpanel"
-DB_PASSWORD=""
 
 #-------------------------------------------------------------------------------
 # Helper functions
@@ -62,46 +59,6 @@ check_root() {
         log_error "Please run as root: sudo bash install.sh"
         exit 1
     fi
-}
-
-#-------------------------------------------------------------------------------
-# Ask for bot name and set up variables
-#-------------------------------------------------------------------------------
-setup_bot_config() {
-    echo -e "${CYAN}"
-    echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                    TeleTask Bot Installer                    ║"
-    echo "╚══════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-
-    echo -e "${YELLOW}Enter a name for your bot (e.g., mybot, taskbot, companybot):${NC}"
-    echo -e "This will be used as folder name and database name."
-    echo -e "Only lowercase letters, numbers, and underscores allowed.\n"
-
-    read -p "Bot name: " BOT_NAME_INPUT < /dev/tty
-
-    if [ -z "$BOT_NAME_INPUT" ]; then
-        log_error "Bot name is required!"
-        exit 1
-    fi
-
-    # Convert to slug: lowercase, replace spaces/special chars with underscore
-    BOT_SLUG=$(echo "$BOT_NAME_INPUT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
-
-    if [ -z "$BOT_SLUG" ]; then
-        log_error "Invalid bot name!"
-        exit 1
-    fi
-
-    # Set derived variables
-    BOT_DIR="$BOTPANEL_HOME/bots/$BOT_SLUG"
-    DB_NAME="${BOT_SLUG}_db"
-    DB_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
-
-    log_info "Bot slug: $BOT_SLUG"
-    log_info "Bot directory: $BOT_DIR"
-    log_info "Database name: $DB_NAME"
-    echo ""
 }
 
 #-------------------------------------------------------------------------------
@@ -141,30 +98,17 @@ install_postgresql() {
     systemctl start postgresql
     systemctl enable postgresql
 
+    # Create botpanel database user
+    if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$BOTPANEL_USER'" | grep -q 1; then
+        log_warn "Database user '$BOTPANEL_USER' already exists"
+    else
+        # Generate a master password for botpanel user
+        MASTER_DB_PASS=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
+        sudo -u postgres psql -c "CREATE USER $BOTPANEL_USER WITH PASSWORD '$MASTER_DB_PASS' CREATEDB;"
+        log_info "Database user created with CREATEDB privilege"
+    fi
+
     log_success "PostgreSQL installed"
-}
-
-setup_database() {
-    log_info "Setting up database..."
-
-    # Check if user exists
-    if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'" | grep -q 1; then
-        log_warn "Database user '$DB_USER' already exists, updating password..."
-        sudo -u postgres psql -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
-    else
-        sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';"
-    fi
-
-    # Check if database exists
-    if sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
-        log_warn "Database '$DB_NAME' already exists"
-    else
-        sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"
-    fi
-
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
-
-    log_success "Database configured"
 }
 
 #-------------------------------------------------------------------------------
@@ -196,7 +140,7 @@ install_nodejs() {
 }
 
 #-------------------------------------------------------------------------------
-# Step 5: Create botpanel user
+# Step 5: Create botpanel user and directories
 #-------------------------------------------------------------------------------
 create_user() {
     log_info "Creating botpanel user..."
@@ -208,7 +152,7 @@ create_user() {
     fi
 
     # Create directories
-    mkdir -p "$BOT_DIR"
+    mkdir -p "$BOTS_DIR"
     mkdir -p "$LOG_DIR"
     mkdir -p "$BACKUP_DIR"
 
@@ -218,91 +162,239 @@ create_user() {
 }
 
 #-------------------------------------------------------------------------------
-# Step 6: Clone repository
+# Step 6: Setup PM2 startup
 #-------------------------------------------------------------------------------
-clone_repository() {
-    log_info "Cloning TeleTask repository..."
+setup_pm2_startup() {
+    log_info "Configuring PM2 startup..."
 
-    # Check if bot files already exist
-    if [ -f "$BOT_DIR/bot.py" ]; then
-        log_warn "Bot files already exist, skipping clone"
-        log_success "Repository ready"
-        return 0
-    fi
+    # Setup PM2 to start on boot
+    pm2 startup systemd -u "$BOTPANEL_USER" --hp "$BOTPANEL_HOME"
 
-    # Clone to temp directory and copy template
-    TEMP_DIR=$(mktemp -d)
+    log_success "PM2 startup configured"
+}
 
-    git clone --depth 1 https://github.com/haduyson/teletask.git "$TEMP_DIR" || {
-        log_warn "Clone failed, checking for local template..."
-        rm -rf "$TEMP_DIR"
-        if [ -d "/root/teletask/src/templates/bot_template" ]; then
-            cp -r /root/teletask/src/templates/bot_template/* "$BOT_DIR/"
-            chown -R "$BOTPANEL_USER:$BOTPANEL_USER" "$BOT_DIR"
-            log_success "Repository ready"
+#-------------------------------------------------------------------------------
+# Step 7: Create botpanel CLI
+#-------------------------------------------------------------------------------
+create_botpanel_cli() {
+    # Check if botpanel already exists
+    if [ -f /usr/local/bin/botpanel ]; then
+        log_warn "botpanel CLI already exists at /usr/local/bin/botpanel"
+        read -p "Do you want to overwrite it? (y/N): " OVERWRITE < /dev/tty
+        if [[ ! "$OVERWRITE" =~ ^[Yy]$ ]]; then
+            log_info "Skipping CLI creation to preserve existing configuration"
             return 0
-        else
-            log_error "No source found. Please clone manually."
-            exit 1
         fi
-    }
-
-    # Copy only the bot template files
-    if [ -d "$TEMP_DIR/src/templates/bot_template" ]; then
-        cp -r "$TEMP_DIR/src/templates/bot_template/"* "$BOT_DIR/"
-        chown -R "$BOTPANEL_USER:$BOTPANEL_USER" "$BOT_DIR"
-    else
-        log_error "Template not found in repository"
-        rm -rf "$TEMP_DIR"
-        exit 1
+        log_info "Backing up existing botpanel to /usr/local/bin/botpanel.bak"
+        cp /usr/local/bin/botpanel /usr/local/bin/botpanel.bak
     fi
 
-    # Cleanup temp directory
-    rm -rf "$TEMP_DIR"
+    log_info "Creating botpanel CLI tool..."
 
-    log_success "Repository ready"
-}
+    cat > /usr/local/bin/botpanel << 'EOFCLI'
+#!/bin/bash
+#===============================================================================
+# botpanel - TeleTask Bot Management CLI
+# Usage: botpanel [command] [bot_name]
+#===============================================================================
 
-#-------------------------------------------------------------------------------
-# Step 7: Setup Python environment
-#-------------------------------------------------------------------------------
-setup_python_env() {
-    log_info "Setting up Python virtual environment..."
+BOTPANEL_HOME="/home/botpanel"
+BOTS_DIR="$BOTPANEL_HOME/bots"
+LOG_DIR="$BOTPANEL_HOME/logs"
+BACKUP_DIR="$BOTPANEL_HOME/backups"
+PYTHON_VERSION="3.11"
+TIMEZONE="Asia/Ho_Chi_Minh"
 
-    sudo -u "$BOTPANEL_USER" bash -c "
-        cd '$BOT_DIR'
-        python${PYTHON_VERSION} -m venv venv
-        source venv/bin/activate
-        pip install --upgrade pip -q
-        pip install -r requirements.txt -q
-    "
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m'
 
-    log_success "Python environment configured"
-}
-
-#-------------------------------------------------------------------------------
-# Step 8: Configure environment
-#-------------------------------------------------------------------------------
-configure_env() {
-    log_info "Creating .env configuration..."
-
-    # Prompt for bot token
-    echo -e "${YELLOW}"
+print_banner() {
+    echo -e "${CYAN}"
     echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                  TELEGRAM BOT CONFIGURATION                  ║"
+    echo "║                   TeleTask Bot Manager                       ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
+}
 
-    read -p "Enter your Telegram Bot Token (from @BotFather): " BOT_TOKEN < /dev/tty
+print_help() {
+    print_banner
+    echo -e "${GREEN}Usage:${NC} botpanel [command] [bot_name]"
+    echo ""
+    echo -e "${YELLOW}Bot Creation:${NC}"
+    echo "  create              Create a new bot"
+    echo "  list                List all bots"
+    echo "  delete <bot>        Delete a bot"
+    echo ""
+    echo -e "${YELLOW}Bot Management:${NC}"
+    echo "  start <bot>         Start a bot"
+    echo "  stop <bot>          Stop a bot"
+    echo "  restart <bot>       Restart a bot"
+    echo "  status [bot]        Show bot status (all if no bot specified)"
+    echo "  logs <bot>          Show bot logs (live)"
+    echo "  logs-err <bot>      Show error logs"
+    echo ""
+    echo -e "${YELLOW}Database:${NC}"
+    echo "  db-status <bot>     Check database connection"
+    echo "  db-migrate <bot>    Run database migrations"
+    echo "  db-backup <bot>     Backup database"
+    echo "  db-restore <bot>    Restore database from backup"
+    echo ""
+    echo -e "${YELLOW}Configuration:${NC}"
+    echo "  config <bot>        Edit .env configuration"
+    echo "  token <bot>         Update bot token"
+    echo "  gcal <bot>          Configure Google Calendar"
+    echo ""
+    echo -e "${YELLOW}Maintenance:${NC}"
+    echo "  update <bot>        Update bot to latest version"
+    echo "  deps <bot>          Reinstall dependencies"
+    echo "  clean               Clean logs and temp files"
+    echo "  info                Show system information"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo "  botpanel create"
+    echo "  botpanel start mybot"
+    echo "  botpanel logs taskbot"
+    echo "  botpanel db-backup mybot"
+}
 
-    if [ -z "$BOT_TOKEN" ]; then
-        log_error "Bot token is required!"
+# Get bot directory
+get_bot_dir() {
+    local bot_name="$1"
+    if [ -z "$bot_name" ]; then
+        echo -e "${RED}[ERROR]${NC} Bot name is required"
+        return 1
+    fi
+
+    local bot_dir="$BOTS_DIR/$bot_name"
+    if [ ! -d "$bot_dir" ]; then
+        echo -e "${RED}[ERROR]${NC} Bot '$bot_name' not found"
+        echo "Available bots:"
+        ls -1 "$BOTS_DIR" 2>/dev/null || echo "  (none)"
+        return 1
+    fi
+
+    echo "$bot_dir"
+}
+
+#-------------------------------------------------------------------------------
+# Create new bot
+#-------------------------------------------------------------------------------
+cmd_create() {
+    print_banner
+    echo -e "${YELLOW}Create a new TeleTask bot${NC}"
+    echo ""
+
+    # Ask for bot name
+    echo -e "Enter a name for your bot (e.g., mybot, taskbot, companybot):"
+    echo -e "Only lowercase letters, numbers, and underscores allowed."
+    echo ""
+    read -p "Bot name: " BOT_NAME_INPUT
+
+    if [ -z "$BOT_NAME_INPUT" ]; then
+        echo -e "${RED}[ERROR]${NC} Bot name is required!"
         exit 1
     fi
 
-    read -p "Enter your Telegram User ID (for admin notifications, optional): " ADMIN_ID < /dev/tty
+    # Convert to slug
+    BOT_SLUG=$(echo "$BOT_NAME_INPUT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
+
+    if [ -z "$BOT_SLUG" ]; then
+        echo -e "${RED}[ERROR]${NC} Invalid bot name!"
+        exit 1
+    fi
+
+    BOT_DIR="$BOTS_DIR/$BOT_SLUG"
+
+    # Check if bot already exists
+    if [ -d "$BOT_DIR" ]; then
+        echo -e "${RED}[ERROR]${NC} Bot '$BOT_SLUG' already exists at $BOT_DIR"
+        exit 1
+    fi
+
+    echo -e "${BLUE}[INFO]${NC} Bot slug: $BOT_SLUG"
+    echo ""
+
+    # Ask for bot token
+    echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${YELLOW}║                  TELEGRAM BOT CONFIGURATION                  ║${NC}"
+    echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+
+    read -p "Enter your Telegram Bot Token (from @BotFather): " BOT_TOKEN
+
+    if [ -z "$BOT_TOKEN" ]; then
+        echo -e "${RED}[ERROR]${NC} Bot token is required!"
+        exit 1
+    fi
+
+    read -p "Enter your Telegram User ID (for admin, optional): " ADMIN_ID
+
+    echo ""
+    echo -e "${BLUE}[INFO]${NC} Creating bot '$BOT_SLUG'..."
+
+    # Create bot directory
+    mkdir -p "$BOT_DIR"
+
+    # Clone template
+    echo -e "${BLUE}[INFO]${NC} Downloading bot template..."
+    TEMP_DIR=$(mktemp -d)
+
+    if git clone --depth 1 https://github.com/haduyson/teletask.git "$TEMP_DIR" 2>/dev/null; then
+        if [ -d "$TEMP_DIR/src/templates/bot_template" ]; then
+            cp -r "$TEMP_DIR/src/templates/bot_template/"* "$BOT_DIR/"
+        else
+            echo -e "${RED}[ERROR]${NC} Template not found in repository"
+            rm -rf "$TEMP_DIR" "$BOT_DIR"
+            exit 1
+        fi
+        rm -rf "$TEMP_DIR"
+    else
+        echo -e "${RED}[ERROR]${NC} Failed to download template"
+        rm -rf "$TEMP_DIR" "$BOT_DIR"
+        exit 1
+    fi
+
+    echo -e "${GREEN}[OK]${NC} Template downloaded"
+
+    # Setup Python environment
+    echo -e "${BLUE}[INFO]${NC} Setting up Python environment..."
+    cd "$BOT_DIR"
+    python${PYTHON_VERSION} -m venv venv
+    source venv/bin/activate
+    pip install --upgrade pip -q
+    pip install -r requirements.txt -q
+    deactivate
+
+    echo -e "${GREEN}[OK]${NC} Python environment ready"
+
+    # Create database
+    echo -e "${BLUE}[INFO]${NC} Creating database..."
+    DB_NAME="${BOT_SLUG}_db"
+    DB_USER="botpanel"
+    DB_PASSWORD=$(openssl rand -base64 16 | tr -dc 'a-zA-Z0-9' | head -c 16)
+
+    # Create database using botpanel user's createdb privilege or postgres
+    if sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" | grep -q 1; then
+        echo -e "${YELLOW}[WARN]${NC} Database '$DB_NAME' already exists"
+    else
+        sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" 2>/dev/null || {
+            # Fallback: create with postgres
+            sudo -u postgres createdb -O "$DB_USER" "$DB_NAME"
+        }
+    fi
+
+    # Update user password
+    sudo -u postgres psql -c "ALTER USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null || true
+
+    echo -e "${GREEN}[OK]${NC} Database created"
 
     # Create .env file
+    echo -e "${BLUE}[INFO]${NC} Creating configuration..."
     cat > "$BOT_DIR/.env" << EOF
 #-------------------------------------------------------------------------------
 # Telegram Bot
@@ -326,7 +418,7 @@ TZ=$TIMEZONE
 # Logging
 #-------------------------------------------------------------------------------
 LOG_LEVEL=INFO
-LOG_FILE=$LOG_DIR/teletask.log
+LOG_FILE=$LOG_DIR/${BOT_SLUG}.log
 
 #-------------------------------------------------------------------------------
 # Admin
@@ -346,143 +438,194 @@ METRICS_ENABLED=false
 HEALTH_PORT=8080
 EOF
 
-    chown "$BOTPANEL_USER:$BOTPANEL_USER" "$BOT_DIR/.env"
     chmod 600 "$BOT_DIR/.env"
+    echo -e "${GREEN}[OK]${NC} Configuration created"
 
-    log_success "Environment configured"
-}
+    # Run migrations
+    echo -e "${BLUE}[INFO]${NC} Running database migrations..."
+    cd "$BOT_DIR"
+    source venv/bin/activate
+    if alembic upgrade head 2>/dev/null; then
+        echo -e "${GREEN}[OK]${NC} Migrations completed"
+    else
+        echo -e "${YELLOW}[WARN]${NC} Migrations failed. Run later: botpanel db-migrate $BOT_SLUG"
+    fi
+    deactivate
 
-#-------------------------------------------------------------------------------
-# Step 9: Run database migrations
-#-------------------------------------------------------------------------------
-run_migrations() {
-    log_info "Running database migrations..."
+    # Set ownership
+    chown -R botpanel:botpanel "$BOT_DIR"
 
-    if sudo -u "$BOTPANEL_USER" bash -c "
+    # Start bot
+    echo -e "${BLUE}[INFO]${NC} Starting bot..."
+    sudo -u botpanel bash -c "
         cd '$BOT_DIR'
         source venv/bin/activate
-        alembic upgrade head
-    "; then
-        log_success "Database migrations completed"
-    else
-        log_warn "Database migrations failed. You can run manually later: botpanel db-migrate"
-    fi
-}
-
-#-------------------------------------------------------------------------------
-# Step 10: Create botpanel CLI
-#-------------------------------------------------------------------------------
-create_botpanel_cli() {
-    # Check if botpanel already exists
-    if [ -f /usr/local/bin/botpanel ]; then
-        log_warn "botpanel CLI already exists at /usr/local/bin/botpanel"
-        read -p "Do you want to overwrite it? (y/N): " OVERWRITE < /dev/tty
-        if [[ ! "$OVERWRITE" =~ ^[Yy]$ ]]; then
-            log_info "Skipping CLI creation to preserve existing configuration"
-            return 0
-        fi
-        log_info "Backing up existing botpanel to /usr/local/bin/botpanel.bak"
-        cp /usr/local/bin/botpanel /usr/local/bin/botpanel.bak
-    fi
-
-    log_info "Creating botpanel CLI tool..."
-
-    cat > /usr/local/bin/botpanel << 'EOFCLI'
-#!/bin/bash
-#===============================================================================
-# botpanel - TeleTask Bot Management CLI
-# Usage: botpanel [command]
-#===============================================================================
-
-BOT_DIR="__BOT_DIR__"
-LOG_DIR="/home/botpanel/logs"
-BACKUP_DIR="/home/botpanel/backups"
-PM2_NAME="__PM2_NAME__"
-
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-NC='\033[0m'
-
-print_banner() {
-    echo -e "${CYAN}"
-    echo "╔══════════════════════════════════════════════════════════════╗"
-    echo "║                   TeleTask Bot Manager                       ║"
-    echo "╚══════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-}
-
-print_help() {
-    print_banner
-    echo -e "${GREEN}Usage:${NC} botpanel [command]"
-    echo ""
-    echo -e "${YELLOW}Bot Management:${NC}"
-    echo "  start       Start the bot"
-    echo "  stop        Stop the bot"
-    echo "  restart     Restart the bot"
-    echo "  status      Show bot status"
-    echo "  logs        Show bot logs (live)"
-    echo "  logs-err    Show error logs"
-    echo ""
-    echo -e "${YELLOW}Database:${NC}"
-    echo "  db-status   Check database connection"
-    echo "  db-migrate  Run database migrations"
-    echo "  db-backup   Backup database"
-    echo "  db-restore  Restore database from backup"
-    echo ""
-    echo -e "${YELLOW}Configuration:${NC}"
-    echo "  config      Edit .env configuration"
-    echo "  token       Update bot token"
-    echo "  gcal        Configure Google Calendar"
-    echo ""
-    echo -e "${YELLOW}Maintenance:${NC}"
-    echo "  update      Update bot to latest version"
-    echo "  deps        Reinstall dependencies"
-    echo "  clean       Clean logs and temp files"
-    echo "  info        Show system information"
-    echo ""
-    echo -e "${YELLOW}Examples:${NC}"
-    echo "  botpanel start"
-    echo "  botpanel logs"
-    echo "  botpanel db-backup"
-}
-
-cmd_start() {
-    echo -e "${BLUE}[INFO]${NC} Starting TeleTask bot..."
-
-    if pm2 describe "$PM2_NAME" &>/dev/null; then
-        pm2 restart "$PM2_NAME"
-    else
-        cd "$BOT_DIR"
-        pm2 start "$BOT_DIR/venv/bin/python" \
-            --name "$PM2_NAME" \
+        pm2 start '$BOT_DIR/venv/bin/python' \
+            --name '$BOT_SLUG' \
             --interpreter none \
-            -- "$BOT_DIR/bot.py"
+            -- '$BOT_DIR/bot.py'
         pm2 save
+    "
+
+    echo -e "${GREEN}[OK]${NC} Bot started"
+
+    # Print summary
+    echo ""
+    echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${GREEN}║                  BOT CREATED SUCCESSFULLY                    ║${NC}"
+    echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo ""
+    echo -e "${YELLOW}Bot Information:${NC}"
+    echo "  Name: $BOT_SLUG"
+    echo "  Directory: $BOT_DIR"
+    echo "  PM2 Name: $BOT_SLUG"
+    echo ""
+    echo -e "${YELLOW}Database (save these!):${NC}"
+    echo "  Database: $DB_NAME"
+    echo "  User: $DB_USER"
+    echo "  Password: $DB_PASSWORD"
+    echo ""
+    echo -e "${YELLOW}Commands:${NC}"
+    echo "  botpanel status $BOT_SLUG"
+    echo "  botpanel logs $BOT_SLUG"
+    echo "  botpanel restart $BOT_SLUG"
+    echo ""
+    echo -e "${CYAN}Test your bot in Telegram: /start${NC}"
+}
+
+#-------------------------------------------------------------------------------
+# List all bots
+#-------------------------------------------------------------------------------
+cmd_list() {
+    print_banner
+    echo -e "${YELLOW}Available Bots:${NC}"
+    echo ""
+
+    if [ ! -d "$BOTS_DIR" ] || [ -z "$(ls -A "$BOTS_DIR" 2>/dev/null)" ]; then
+        echo "  No bots found."
+        echo ""
+        echo "  Create one with: botpanel create"
+        return
+    fi
+
+    for bot_dir in "$BOTS_DIR"/*/; do
+        if [ -d "$bot_dir" ]; then
+            bot_name=$(basename "$bot_dir")
+
+            # Check PM2 status
+            if pm2 describe "$bot_name" &>/dev/null; then
+                status=$(pm2 jq "$bot_name" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4 2>/dev/null || echo "unknown")
+                if [ "$status" = "online" ]; then
+                    status_icon="${GREEN}●${NC}"
+                else
+                    status_icon="${RED}●${NC}"
+                fi
+            else
+                status_icon="${YELLOW}○${NC}"
+                status="not started"
+            fi
+
+            echo -e "  $status_icon $bot_name ($status)"
+        fi
+    done
+    echo ""
+}
+
+#-------------------------------------------------------------------------------
+# Delete bot
+#-------------------------------------------------------------------------------
+cmd_delete() {
+    local bot_name="$1"
+    local bot_dir=$(get_bot_dir "$bot_name") || exit 1
+
+    echo -e "${YELLOW}[WARN]${NC} This will delete bot '$bot_name' and ALL its data!"
+    read -p "Are you sure? (yes/no): " CONFIRM
+
+    if [ "$CONFIRM" != "yes" ]; then
+        echo "Cancelled."
+        return
+    fi
+
+    # Stop PM2 process
+    pm2 stop "$bot_name" 2>/dev/null || true
+    pm2 delete "$bot_name" 2>/dev/null || true
+    pm2 save 2>/dev/null || true
+
+    # Get database name from .env
+    if [ -f "$bot_dir/.env" ]; then
+        source "$bot_dir/.env"
+        DB_NAME=$(echo $DATABASE_URL | sed 's/.*\/\([^?]*\).*/\1/')
+
+        # Drop database
+        sudo -u postgres psql -c "DROP DATABASE IF EXISTS $DB_NAME;" 2>/dev/null || true
+        echo -e "${GREEN}[OK]${NC} Database '$DB_NAME' dropped"
+    fi
+
+    # Remove directory
+    rm -rf "$bot_dir"
+
+    echo -e "${GREEN}[OK]${NC} Bot '$bot_name' deleted"
+}
+
+#-------------------------------------------------------------------------------
+# Bot management commands
+#-------------------------------------------------------------------------------
+cmd_start() {
+    local bot_name="$1"
+    local bot_dir=$(get_bot_dir "$bot_name") || exit 1
+
+    echo -e "${BLUE}[INFO]${NC} Starting bot '$bot_name'..."
+
+    if pm2 describe "$bot_name" &>/dev/null; then
+        pm2 restart "$bot_name"
+    else
+        sudo -u botpanel bash -c "
+            cd '$bot_dir'
+            source venv/bin/activate
+            pm2 start '$bot_dir/venv/bin/python' \
+                --name '$bot_name' \
+                --interpreter none \
+                -- '$bot_dir/bot.py'
+            pm2 save
+        "
     fi
 
     echo -e "${GREEN}[OK]${NC} Bot started"
-    pm2 status "$PM2_NAME"
+    pm2 status "$bot_name"
 }
 
 cmd_stop() {
-    echo -e "${BLUE}[INFO]${NC} Stopping TeleTask bot..."
-    pm2 stop "$PM2_NAME" 2>/dev/null || true
+    local bot_name="$1"
+    get_bot_dir "$bot_name" >/dev/null || exit 1
+
+    echo -e "${BLUE}[INFO]${NC} Stopping bot '$bot_name'..."
+    pm2 stop "$bot_name" 2>/dev/null || true
     echo -e "${GREEN}[OK]${NC} Bot stopped"
 }
 
 cmd_restart() {
-    echo -e "${BLUE}[INFO]${NC} Restarting TeleTask bot..."
-    pm2 restart "$PM2_NAME"
+    local bot_name="$1"
+    get_bot_dir "$bot_name" >/dev/null || exit 1
+
+    echo -e "${BLUE}[INFO]${NC} Restarting bot '$bot_name'..."
+    pm2 restart "$bot_name"
     echo -e "${GREEN}[OK]${NC} Bot restarted"
 }
 
 cmd_status() {
+    local bot_name="$1"
+
     print_banner
-    echo -e "${YELLOW}Bot Status:${NC}"
-    pm2 status "$PM2_NAME"
+
+    if [ -z "$bot_name" ]; then
+        echo -e "${YELLOW}All Bots Status:${NC}"
+        pm2 status
+    else
+        get_bot_dir "$bot_name" >/dev/null || exit 1
+        echo -e "${YELLOW}Bot '$bot_name' Status:${NC}"
+        pm2 status "$bot_name"
+    fi
+
     echo ""
     echo -e "${YELLOW}System:${NC}"
     echo "  Uptime: $(uptime -p)"
@@ -491,53 +634,65 @@ cmd_status() {
 }
 
 cmd_logs() {
-    pm2 logs "$PM2_NAME" --lines 100
+    local bot_name="$1"
+    get_bot_dir "$bot_name" >/dev/null || exit 1
+
+    pm2 logs "$bot_name" --lines 100
 }
 
 cmd_logs_err() {
-    pm2 logs "$PM2_NAME" --err --lines 100
+    local bot_name="$1"
+    get_bot_dir "$bot_name" >/dev/null || exit 1
+
+    pm2 logs "$bot_name" --err --lines 100
 }
 
+#-------------------------------------------------------------------------------
+# Database commands
+#-------------------------------------------------------------------------------
 cmd_db_status() {
-    echo -e "${BLUE}[INFO]${NC} Checking database connection..."
-    source "$BOT_DIR/.env"
+    local bot_name="$1"
+    local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    # Extract DB credentials from DATABASE_URL
+    echo -e "${BLUE}[INFO]${NC} Checking database connection..."
+    source "$bot_dir/.env"
+
     DB_PASS=$(echo $DATABASE_URL | sed 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/')
     DB_NAME=$(echo $DATABASE_URL | sed 's/.*\/\([^?]*\).*/\1/')
     DB_USER=$(echo $DATABASE_URL | sed 's/.*:\/\/\([^:]*\):.*/\1/')
 
     if PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -c "SELECT version();" &>/dev/null; then
         echo -e "${GREEN}[OK]${NC} Database connection successful"
-
-        # Show table counts
         echo ""
         echo -e "${YELLOW}Table Statistics:${NC}"
         PGPASSWORD="$DB_PASS" psql -h localhost -U "$DB_USER" -d "$DB_NAME" -c "
             SELECT 'users' as table_name, COUNT(*) as count FROM users
-            UNION ALL
-            SELECT 'tasks', COUNT(*) FROM tasks
-            UNION ALL
-            SELECT 'reminders', COUNT(*) FROM reminders;
-        "
+            UNION ALL SELECT 'tasks', COUNT(*) FROM tasks
+            UNION ALL SELECT 'reminders', COUNT(*) FROM reminders;
+        " 2>/dev/null || echo "  (tables not created yet)"
     else
         echo -e "${RED}[ERROR]${NC} Database connection failed"
     fi
 }
 
 cmd_db_migrate() {
+    local bot_name="$1"
+    local bot_dir=$(get_bot_dir "$bot_name") || exit 1
+
     echo -e "${BLUE}[INFO]${NC} Running database migrations..."
-    cd "$BOT_DIR"
+    cd "$bot_dir"
     source venv/bin/activate
     alembic upgrade head
     echo -e "${GREEN}[OK]${NC} Migrations completed"
 }
 
 cmd_db_backup() {
-    echo -e "${BLUE}[INFO]${NC} Creating database backup..."
-    source "$BOT_DIR/.env"
+    local bot_name="$1"
+    local bot_dir=$(get_bot_dir "$bot_name") || exit 1
 
-    # Extract DB credentials from DATABASE_URL
+    echo -e "${BLUE}[INFO]${NC} Creating database backup..."
+    source "$bot_dir/.env"
+
     DB_PASS=$(echo $DATABASE_URL | sed 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/')
     DB_NAME=$(echo $DATABASE_URL | sed 's/.*\/\([^?]*\).*/\1/')
     DB_USER=$(echo $DATABASE_URL | sed 's/.*:\/\/\([^:]*\):.*/\1/')
@@ -555,6 +710,9 @@ cmd_db_backup() {
 }
 
 cmd_db_restore() {
+    local bot_name="$1"
+    local bot_dir=$(get_bot_dir "$bot_name") || exit 1
+
     echo -e "${YELLOW}Available backups:${NC}"
     ls -la "$BACKUP_DIR"/*.sql 2>/dev/null || {
         echo "No backups found in $BACKUP_DIR"
@@ -565,7 +723,7 @@ cmd_db_restore() {
     read -p "Enter backup filename to restore: " BACKUP_FILE
 
     if [ -f "$BACKUP_DIR/$BACKUP_FILE" ]; then
-        source "$BOT_DIR/.env"
+        source "$bot_dir/.env"
         DB_PASS=$(echo $DATABASE_URL | sed 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/')
         DB_NAME=$(echo $DATABASE_URL | sed 's/.*\/\([^?]*\).*/\1/')
         DB_USER=$(echo $DATABASE_URL | sed 's/.*:\/\/\([^:]*\):.*/\1/')
@@ -578,20 +736,32 @@ cmd_db_restore() {
     fi
 }
 
+#-------------------------------------------------------------------------------
+# Configuration commands
+#-------------------------------------------------------------------------------
 cmd_config() {
-    ${EDITOR:-nano} "$BOT_DIR/.env"
-    echo -e "${YELLOW}[WARN]${NC} Restart bot to apply changes: botpanel restart"
+    local bot_name="$1"
+    local bot_dir=$(get_bot_dir "$bot_name") || exit 1
+
+    ${EDITOR:-nano} "$bot_dir/.env"
+    echo -e "${YELLOW}[WARN]${NC} Restart bot to apply changes: botpanel restart $bot_name"
 }
 
 cmd_token() {
+    local bot_name="$1"
+    local bot_dir=$(get_bot_dir "$bot_name") || exit 1
+
     read -p "Enter new Bot Token: " NEW_TOKEN
     if [ -n "$NEW_TOKEN" ]; then
-        sed -i "s/^BOT_TOKEN=.*/BOT_TOKEN=$NEW_TOKEN/" "$BOT_DIR/.env"
-        echo -e "${GREEN}[OK]${NC} Token updated. Restart bot: botpanel restart"
+        sed -i "s/^BOT_TOKEN=.*/BOT_TOKEN=$NEW_TOKEN/" "$bot_dir/.env"
+        echo -e "${GREEN}[OK]${NC} Token updated. Restart bot: botpanel restart $bot_name"
     fi
 }
 
 cmd_gcal() {
+    local bot_name="$1"
+    local bot_dir=$(get_bot_dir "$bot_name") || exit 1
+
     echo -e "${CYAN}Google Calendar Configuration${NC}"
     echo ""
 
@@ -602,44 +772,75 @@ cmd_gcal() {
         read -p "Google Client Secret: " GCAL_CLIENT_SECRET
         read -p "Redirect URI (e.g., https://yourdomain.com/oauth/callback): " GCAL_REDIRECT
 
-        sed -i "s/^GOOGLE_CALENDAR_ENABLED=.*/GOOGLE_CALENDAR_ENABLED=true/" "$BOT_DIR/.env"
-        sed -i "s/^GOOGLE_CLIENT_ID=.*/GOOGLE_CLIENT_ID=$GCAL_CLIENT_ID/" "$BOT_DIR/.env"
-        sed -i "s/^GOOGLE_CLIENT_SECRET=.*/GOOGLE_CLIENT_SECRET=$GCAL_CLIENT_SECRET/" "$BOT_DIR/.env"
-        sed -i "s|^GOOGLE_REDIRECT_URI=.*|GOOGLE_REDIRECT_URI=$GCAL_REDIRECT|" "$BOT_DIR/.env"
+        sed -i "s/^GOOGLE_CALENDAR_ENABLED=.*/GOOGLE_CALENDAR_ENABLED=true/" "$bot_dir/.env"
+        sed -i "s/^GOOGLE_CLIENT_ID=.*/GOOGLE_CLIENT_ID=$GCAL_CLIENT_ID/" "$bot_dir/.env"
+        sed -i "s/^GOOGLE_CLIENT_SECRET=.*/GOOGLE_CLIENT_SECRET=$GCAL_CLIENT_SECRET/" "$bot_dir/.env"
+        sed -i "s|^GOOGLE_REDIRECT_URI=.*|GOOGLE_REDIRECT_URI=$GCAL_REDIRECT|" "$bot_dir/.env"
 
-        echo -e "${GREEN}[OK]${NC} Google Calendar configured. Restart bot: botpanel restart"
+        echo -e "${GREEN}[OK]${NC} Google Calendar configured. Restart bot: botpanel restart $bot_name"
     else
-        sed -i "s/^GOOGLE_CALENDAR_ENABLED=.*/GOOGLE_CALENDAR_ENABLED=false/" "$BOT_DIR/.env"
+        sed -i "s/^GOOGLE_CALENDAR_ENABLED=.*/GOOGLE_CALENDAR_ENABLED=false/" "$bot_dir/.env"
         echo -e "${GREEN}[OK]${NC} Google Calendar disabled"
     fi
 }
 
+#-------------------------------------------------------------------------------
+# Maintenance commands
+#-------------------------------------------------------------------------------
 cmd_update() {
-    echo -e "${BLUE}[INFO]${NC} Updating TeleTask bot..."
+    local bot_name="$1"
+    local bot_dir=$(get_bot_dir "$bot_name") || exit 1
+
+    echo -e "${BLUE}[INFO]${NC} Updating bot '$bot_name'..."
 
     # Stop bot
-    pm2 stop "$PM2_NAME" 2>/dev/null || true
+    pm2 stop "$bot_name" 2>/dev/null || true
 
-    # Pull latest
-    cd "$BOT_DIR"
-    git pull origin main
+    # Download latest template
+    TEMP_DIR=$(mktemp -d)
+    git clone --depth 1 https://github.com/haduyson/teletask.git "$TEMP_DIR" 2>/dev/null || {
+        echo -e "${RED}[ERROR]${NC} Failed to download update"
+        rm -rf "$TEMP_DIR"
+        exit 1
+    }
+
+    # Backup .env
+    cp "$bot_dir/.env" "$bot_dir/.env.bak"
+
+    # Copy new files (preserve .env, venv, __pycache__)
+    rsync -av --exclude='.env' --exclude='venv' --exclude='__pycache__' \
+        "$TEMP_DIR/src/templates/bot_template/" "$bot_dir/"
+
+    rm -rf "$TEMP_DIR"
+
+    # Restore .env
+    mv "$bot_dir/.env.bak" "$bot_dir/.env"
 
     # Update dependencies
+    cd "$bot_dir"
     source venv/bin/activate
     pip install -r requirements.txt -q
 
     # Run migrations
-    alembic upgrade head
+    alembic upgrade head 2>/dev/null || true
+
+    deactivate
+
+    # Set ownership
+    chown -R botpanel:botpanel "$bot_dir"
 
     # Restart
-    pm2 restart "$PM2_NAME"
+    pm2 restart "$bot_name"
 
     echo -e "${GREEN}[OK]${NC} Update completed"
 }
 
 cmd_deps() {
+    local bot_name="$1"
+    local bot_dir=$(get_bot_dir "$bot_name") || exit 1
+
     echo -e "${BLUE}[INFO]${NC} Reinstalling dependencies..."
-    cd "$BOT_DIR"
+    cd "$bot_dir"
     source venv/bin/activate
     pip install -r requirements.txt --force-reinstall -q
     echo -e "${GREEN}[OK]${NC} Dependencies reinstalled"
@@ -649,13 +850,15 @@ cmd_clean() {
     echo -e "${BLUE}[INFO]${NC} Cleaning logs and temp files..."
 
     # Clean old logs
-    find "$LOG_DIR" -name "*.log" -mtime +7 -delete
+    find "$LOG_DIR" -name "*.log" -mtime +7 -delete 2>/dev/null || true
 
     # Clean PM2 logs
-    pm2 flush
+    pm2 flush 2>/dev/null || true
 
-    # Clean old backups (keep last 10)
-    cd "$BACKUP_DIR" && ls -t *.sql 2>/dev/null | tail -n +11 | xargs -r rm --
+    # Clean old backups (keep last 10 per bot)
+    for backup_prefix in $(ls "$BACKUP_DIR"/*.sql 2>/dev/null | sed 's/_[0-9]*_[0-9]*.sql$//' | sort -u); do
+        ls -t "${backup_prefix}"_*.sql 2>/dev/null | tail -n +11 | xargs -r rm -- 2>/dev/null || true
+    done
 
     echo -e "${GREEN}[OK]${NC} Cleanup completed"
 }
@@ -663,43 +866,45 @@ cmd_clean() {
 cmd_info() {
     print_banner
     echo -e "${YELLOW}System Information:${NC}"
-    echo "  OS: $(lsb_release -d | cut -f2)"
+    echo "  OS: $(lsb_release -d 2>/dev/null | cut -f2 || echo 'Unknown')"
     echo "  Kernel: $(uname -r)"
-    echo "  Python: $(python3.11 --version 2>/dev/null || echo 'Not found')"
+    echo "  Python: $(python${PYTHON_VERSION} --version 2>/dev/null || echo 'Not found')"
     echo "  Node.js: $(node --version 2>/dev/null || echo 'Not found')"
     echo "  PM2: $(pm2 --version 2>/dev/null || echo 'Not found')"
     echo "  PostgreSQL: $(psql --version 2>/dev/null | head -1 || echo 'Not found')"
     echo ""
-    echo -e "${YELLOW}Bot Information:${NC}"
-    echo "  Directory: $BOT_DIR"
+    echo -e "${YELLOW}Directories:${NC}"
+    echo "  Bots: $BOTS_DIR"
     echo "  Logs: $LOG_DIR"
     echo "  Backups: $BACKUP_DIR"
+    echo ""
 
-    if [ -f "$BOT_DIR/.env" ]; then
-        source "$BOT_DIR/.env"
-        echo "  Bot Name: $BOT_NAME"
-        echo "  Timezone: $TZ"
-        echo "  Google Calendar: $GOOGLE_CALENDAR_ENABLED"
-    fi
+    # List bots
+    cmd_list
 }
 
+#-------------------------------------------------------------------------------
 # Main
+#-------------------------------------------------------------------------------
 case "$1" in
-    start)      cmd_start ;;
-    stop)       cmd_stop ;;
-    restart)    cmd_restart ;;
-    status)     cmd_status ;;
-    logs)       cmd_logs ;;
-    logs-err)   cmd_logs_err ;;
-    db-status)  cmd_db_status ;;
-    db-migrate) cmd_db_migrate ;;
-    db-backup)  cmd_db_backup ;;
-    db-restore) cmd_db_restore ;;
-    config)     cmd_config ;;
-    token)      cmd_token ;;
-    gcal)       cmd_gcal ;;
-    update)     cmd_update ;;
-    deps)       cmd_deps ;;
+    create)     cmd_create ;;
+    list)       cmd_list ;;
+    delete)     cmd_delete "$2" ;;
+    start)      cmd_start "$2" ;;
+    stop)       cmd_stop "$2" ;;
+    restart)    cmd_restart "$2" ;;
+    status)     cmd_status "$2" ;;
+    logs)       cmd_logs "$2" ;;
+    logs-err)   cmd_logs_err "$2" ;;
+    db-status)  cmd_db_status "$2" ;;
+    db-migrate) cmd_db_migrate "$2" ;;
+    db-backup)  cmd_db_backup "$2" ;;
+    db-restore) cmd_db_restore "$2" ;;
+    config)     cmd_config "$2" ;;
+    token)      cmd_token "$2" ;;
+    gcal)       cmd_gcal "$2" ;;
+    update)     cmd_update "$2" ;;
+    deps)       cmd_deps "$2" ;;
     clean)      cmd_clean ;;
     info)       cmd_info ;;
     help|--help|-h|"")
@@ -711,45 +916,9 @@ case "$1" in
 esac
 EOFCLI
 
-    # Replace placeholders with actual values
-    sed -i "s|__BOT_DIR__|$BOT_DIR|g" /usr/local/bin/botpanel
-    sed -i "s|__PM2_NAME__|$BOT_SLUG|g" /usr/local/bin/botpanel
-
     chmod +x /usr/local/bin/botpanel
 
     log_success "botpanel CLI created"
-}
-
-#-------------------------------------------------------------------------------
-# Step 11: Setup PM2 startup
-#-------------------------------------------------------------------------------
-setup_pm2_startup() {
-    log_info "Configuring PM2 startup..."
-
-    # Setup PM2 to start on boot
-    pm2 startup systemd -u "$BOTPANEL_USER" --hp "$BOTPANEL_HOME"
-
-    log_success "PM2 startup configured"
-}
-
-#-------------------------------------------------------------------------------
-# Step 12: Start bot
-#-------------------------------------------------------------------------------
-start_bot() {
-    log_info "Starting TeleTask bot..."
-
-    # Start with PM2
-    sudo -u "$BOTPANEL_USER" bash -c "
-        cd '$BOT_DIR'
-        source venv/bin/activate
-        pm2 start '$BOT_DIR/venv/bin/python' \
-            --name '$BOT_SLUG' \
-            --interpreter none \
-            -- '$BOT_DIR/bot.py'
-        pm2 save
-    "
-
-    log_success "Bot started"
 }
 
 #-------------------------------------------------------------------------------
@@ -763,62 +932,50 @@ print_summary() {
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 
-    echo -e "${YELLOW}Bot Information:${NC}"
-    echo "  Bot Name: $BOT_SLUG"
-    echo "  PM2 Name: $BOT_SLUG"
-    echo "  Directory: $BOT_DIR"
+    echo -e "${YELLOW}System Components Installed:${NC}"
+    echo "  ✓ PostgreSQL database server"
+    echo "  ✓ Python $PYTHON_VERSION"
+    echo "  ✓ Node.js + PM2"
+    echo "  ✓ botpanel CLI tool"
     echo ""
 
-    echo -e "${YELLOW}Database Credentials (save these!):${NC}"
-    echo "  Database: $DB_NAME"
-    echo "  User: $DB_USER"
-    echo "  Password: $DB_PASSWORD"
+    echo -e "${YELLOW}Next Steps:${NC}"
+    echo "  1. Create your first bot:"
+    echo ""
+    echo -e "     ${CYAN}botpanel create${NC}"
+    echo ""
+    echo "  2. Manage your bots:"
+    echo ""
+    echo "     botpanel list          - List all bots"
+    echo "     botpanel status <bot>  - Check bot status"
+    echo "     botpanel logs <bot>    - View logs"
+    echo "     botpanel help          - Show all commands"
     echo ""
 
-    echo -e "${YELLOW}Bot Management:${NC}"
-    echo "  Use 'botpanel' command to manage the bot"
-    echo ""
-    echo "  botpanel status    - Check bot status"
-    echo "  botpanel logs      - View logs"
-    echo "  botpanel restart   - Restart bot"
-    echo "  botpanel config    - Edit configuration"
-    echo "  botpanel help      - Show all commands"
-    echo ""
-
-    echo -e "${YELLOW}Files:${NC}"
-    echo "  Config: $BOT_DIR/.env"
+    echo -e "${YELLOW}Directories:${NC}"
+    echo "  Bots: $BOTS_DIR/"
     echo "  Logs: $LOG_DIR/"
     echo "  Backups: $BACKUP_DIR/"
     echo ""
-
-    echo -e "${CYAN}Test your bot in Telegram: /start${NC}"
-    echo ""
-    echo -e "${YELLOW}Note:${NC} PM2 process name is '$BOT_SLUG' - use 'pm2 logs $BOT_SLUG' for raw logs"
 }
 
 #-------------------------------------------------------------------------------
 # Main installation
 #-------------------------------------------------------------------------------
 main() {
+    print_banner
     check_root
-    setup_bot_config
 
-    log_info "Starting TeleTask Bot installation..."
+    log_info "Starting TeleTask system installation..."
     echo ""
 
     prepare_system
     install_postgresql
-    setup_database
     install_python
     install_nodejs
     create_user
-    clone_repository
-    setup_python_env
-    configure_env
-    run_migrations
-    create_botpanel_cli
     setup_pm2_startup
-    start_bot
+    create_botpanel_cli
 
     print_summary
 }
