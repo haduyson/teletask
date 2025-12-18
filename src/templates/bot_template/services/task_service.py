@@ -19,28 +19,29 @@ TZ = pytz.timezone("Asia/Ho_Chi_Minh")
 
 async def generate_task_id(db: Database, prefix: str = "P") -> str:
     """
-    Generate unique task ID.
+    Generate unique task ID using PostgreSQL sequence.
+
+    Uses atomic sequence to prevent race conditions in concurrent task creation.
 
     Args:
         db: Database connection
-        prefix: Task ID prefix - T (regular), G (group parent), P (group child)
+        prefix: Task ID prefix - P (personal/individual), G (group parent)
 
     Returns:
-        Task ID like T-0001, G-0001, or P-0001
+        Task ID like P0001, G0001
     """
-    # Get and increment counter
+    # Validate prefix
+    if prefix not in ("P", "G"):
+        prefix = "P"
+
+    # Atomic sequence increment - no race conditions
     result = await db.fetch_one(
-        """
-        UPDATE bot_config
-        SET value = (CAST(value AS INTEGER) + 1)::TEXT, updated_at = NOW()
-        WHERE key = 'task_id_counter'
-        RETURNING value
-        """
+        "SELECT nextval('task_id_seq') as counter"
     )
 
-    counter = int(result["value"]) if result else 1
+    counter = int(result["counter"]) if result else 1
 
-    # Format: P0001-P9999 (4 digits), P10000+ (grows automatically, unlimited)
+    # Format: P0001-P9999 (4 digits), P10000+ grows automatically
     return f"{prefix}{counter:04d}"
 
 

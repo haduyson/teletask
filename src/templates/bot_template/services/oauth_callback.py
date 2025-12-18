@@ -11,6 +11,7 @@ from database import get_db
 from services.calendar_service import (
     exchange_code_for_tokens,
     save_user_tokens,
+    verify_oauth_state,
 )
 from services.user_service import get_user_by_telegram_id
 
@@ -145,11 +146,11 @@ async def oauth_callback_handler(request: web.Request) -> web.Response:
 
     Query params:
         code: Authorization code
-        state: User's Telegram ID
+        state: Cryptographically signed state with user ID
     """
     try:
         code = request.query.get("code")
-        state = request.query.get("state")  # Telegram user ID
+        state = request.query.get("state")  # Signed state parameter
         error = request.query.get("error")
 
         if error:
@@ -174,6 +175,21 @@ async def oauth_callback_handler(request: web.Request) -> web.Response:
                 content_type="text/html"
             )
 
+        # Verify state parameter (CSRF protection)
+        is_valid, telegram_id, error_msg = verify_oauth_state(state)
+        if not is_valid:
+            logger.warning(f"OAuth state verification failed: {error_msg}")
+            return web.Response(
+                text=_macos_page(
+                    "Lỗi",
+                    "❌",
+                    "Xác thực thất bại",
+                    f"Liên kết không hợp lệ hoặc đã hết hạn.<br><br>"
+                    "Vui lòng tạo liên kết mới trong Telegram bằng lệnh <code>/lichgoogle</code>"
+                ),
+                content_type="text/html"
+            )
+
         # Exchange code for tokens
         tokens = await exchange_code_for_tokens(code)
 
@@ -188,9 +204,8 @@ async def oauth_callback_handler(request: web.Request) -> web.Response:
                 content_type="text/html"
             )
 
-        # Get user by Telegram ID
+        # Get user by Telegram ID (already verified from state)
         db = get_db()
-        telegram_id = int(state)
         db_user = await get_user_by_telegram_id(db, telegram_id)
 
         if not db_user:

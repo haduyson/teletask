@@ -70,6 +70,7 @@ from .formatters import (
     format_task_detail,
     format_task_list,
     truncate,
+    escape_html,
     escape_markdown,
     progress_bar,
     format_stats_overview,
@@ -111,6 +112,13 @@ from .validators import (
     parse_task_command,
     is_valid_public_id,
     sanitize_html,
+)
+
+from .db_utils import (
+    validate_user_setting_column,
+    get_report_column,
+    InvalidColumnError,
+    USER_SETTING_COLUMNS,
 )
 
 __all__ = [
@@ -167,6 +175,7 @@ __all__ = [
     "format_task_detail",
     "format_task_list",
     "truncate",
+    "escape_html",
     "escape_markdown",
     "progress_bar",
     "format_stats_overview",
@@ -204,4 +213,9 @@ __all__ = [
     "parse_task_command",
     "is_valid_public_id",
     "sanitize_html",
+    # DB utils
+    "validate_user_setting_column",
+    "get_report_column",
+    "InvalidColumnError",
+    "USER_SETTING_COLUMNS",
 ]

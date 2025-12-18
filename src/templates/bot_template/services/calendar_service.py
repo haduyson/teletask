@@ -3,11 +3,16 @@ Google Calendar Service
 Per-user calendar integration for task sync
 """
 
+import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
+import secrets
+import time
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -24,12 +29,139 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "")
 
+# Secret for signing OAuth state (must be set in .env for security)
+OAUTH_STATE_SECRET = os.getenv("OAUTH_STATE_SECRET", "")
+
+# State expiration time in seconds (5 minutes)
+OAUTH_STATE_EXPIRY = 300
+
+# In-memory store for used states (prevents replay attacks)
+# Format: {state_token: expiry_timestamp}
+_used_states: Dict[str, float] = {}
+
 
 def is_calendar_enabled() -> bool:
     """Check if Google Calendar integration is enabled."""
     enabled = os.getenv("GOOGLE_CALENDAR_ENABLED", "false").lower() == "true"
     has_credentials = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
     return enabled and has_credentials
+
+
+def _cleanup_expired_states() -> None:
+    """Remove expired states from memory."""
+    current_time = time.time()
+    expired = [token for token, expiry in _used_states.items() if current_time > expiry]
+    for token in expired:
+        del _used_states[token]
+
+
+def generate_oauth_state(user_id: int) -> str:
+    """
+    Generate a cryptographically signed OAuth state parameter.
+
+    The state contains:
+    - user_id: Telegram user ID
+    - timestamp: Creation time for expiration check
+    - nonce: Random token for uniqueness
+
+    Format: base64(user_id.timestamp.nonce.signature)
+
+    Args:
+        user_id: Telegram user ID
+
+    Returns:
+        Signed state string
+    """
+    if not OAUTH_STATE_SECRET:
+        logger.warning("OAUTH_STATE_SECRET not set, using fallback (insecure)")
+        # Fallback to old behavior if secret not configured
+        return str(user_id)
+
+    # Create state payload
+    timestamp = int(time.time())
+    nonce = secrets.token_hex(16)
+    payload = f"{user_id}.{timestamp}.{nonce}"
+
+    # Sign with HMAC-SHA256
+    signature = hmac.new(
+        OAUTH_STATE_SECRET.encode(),
+        payload.encode(),
+        hashlib.sha256
+    ).hexdigest()
+
+    # Combine payload and signature
+    state_data = f"{payload}.{signature}"
+
+    # Base64 encode for URL safety
+    return base64.urlsafe_b64encode(state_data.encode()).decode()
+
+
+def verify_oauth_state(state: str) -> Tuple[bool, Optional[int], str]:
+    """
+    Verify and decode an OAuth state parameter.
+
+    Checks:
+    - Signature validity (HMAC)
+    - Expiration (5 minutes)
+    - One-time use (prevents replay)
+
+    Args:
+        state: The state parameter from OAuth callback
+
+    Returns:
+        Tuple of (is_valid, user_id, error_message)
+    """
+    if not OAUTH_STATE_SECRET:
+        # Fallback: treat state as plain user_id (legacy behavior)
+        try:
+            return True, int(state), ""
+        except (ValueError, TypeError):
+            return False, None, "Invalid state format"
+
+    try:
+        # Decode base64
+        state_data = base64.urlsafe_b64decode(state.encode()).decode()
+        parts = state_data.split(".")
+
+        if len(parts) != 4:
+            return False, None, "Invalid state format"
+
+        user_id_str, timestamp_str, nonce, signature = parts
+
+        # Verify signature
+        payload = f"{user_id_str}.{timestamp_str}.{nonce}"
+        expected_sig = hmac.new(
+            OAUTH_STATE_SECRET.encode(),
+            payload.encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        if not hmac.compare_digest(signature, expected_sig):
+            logger.warning(f"OAuth state signature mismatch for user {user_id_str}")
+            return False, None, "Invalid signature"
+
+        # Check expiration
+        timestamp = int(timestamp_str)
+        if time.time() - timestamp > OAUTH_STATE_EXPIRY:
+            return False, None, "State expired"
+
+        # Check one-time use
+        state_key = f"{user_id_str}.{nonce}"
+        if state_key in _used_states:
+            logger.warning(f"OAuth state replay attempt for user {user_id_str}")
+            return False, None, "State already used"
+
+        # Mark as used (with expiry for cleanup)
+        _used_states[state_key] = time.time() + OAUTH_STATE_EXPIRY
+
+        # Cleanup old states periodically
+        _cleanup_expired_states()
+
+        return True, int(user_id_str), ""
+
+    except Exception as e:
+        logger.error(f"Error verifying OAuth state: {e}")
+        return False, None, "Verification failed"
 
 
 def get_oauth_url(user_id: int) -> Optional[str]:
@@ -62,12 +194,14 @@ def get_oauth_url(user_id: int) -> Optional[str]:
             redirect_uri=GOOGLE_REDIRECT_URI
         )
 
-        # Include user_id in state for callback
+        # Generate cryptographically signed state with user_id
+        secure_state = generate_oauth_state(user_id)
+
         auth_url, _ = flow.authorization_url(
             access_type="offline",
             include_granted_scopes="true",
             prompt="consent",
-            state=str(user_id)
+            state=secure_state
         )
 
         return auth_url

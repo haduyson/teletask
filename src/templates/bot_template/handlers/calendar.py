@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes, CommandHandler, CallbackQueryHandler
 
 from database import get_db
 from services import get_or_create_user
+from utils.db_utils import validate_user_setting_column, InvalidColumnError
 from services.calendar_service import (
     is_calendar_enabled,
     get_oauth_url,
@@ -51,9 +52,15 @@ async def get_user_calendar_data(db, telegram_id: int) -> dict:
 
 
 async def update_user_setting(db, telegram_id: int, column: str, value) -> None:
-    """Update a single user setting in database."""
+    """Update a single user setting in database with column validation."""
+    try:
+        validated_column = validate_user_setting_column(column)
+    except InvalidColumnError:
+        logger.warning(f"Attempted invalid column update: {column}")
+        return
+
     await db.execute(
-        f"UPDATE users SET {column} = $1 WHERE telegram_id = $2",
+        f"UPDATE users SET {validated_column} = $1 WHERE telegram_id = $2",
         value, telegram_id
     )
 

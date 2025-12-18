@@ -212,6 +212,55 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+#-------------------------------------------------------------------------------
+# Input Validation Functions (Security)
+#-------------------------------------------------------------------------------
+
+# Validate bot name - alphanumeric and underscore only, 3-32 chars
+validate_bot_name() {
+    local name="$1"
+    if [[ ! "$name" =~ ^[a-z][a-z0-9_]{2,31}$ ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Validate Telegram bot token format
+validate_bot_token() {
+    local token="$1"
+    # Token format: <bot_id>:<alphanumeric_string> (35-50 chars after colon)
+    if [[ ! "$token" =~ ^[0-9]+:[A-Za-z0-9_-]{35,50}$ ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Validate domain name
+validate_domain() {
+    local domain="$1"
+    # Basic domain validation - alphanumeric, dots, hyphens
+    if [[ ! "$domain" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*[a-zA-Z0-9]$ ]]; then
+        return 1
+    fi
+    # No consecutive dots or starting/ending with dot
+    if [[ "$domain" =~ \.\. ]] || [[ "$domain" =~ ^\. ]] || [[ "$domain" =~ \.$ ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# Validate Telegram user ID (numeric only)
+validate_telegram_id() {
+    local id="$1"
+    if [ -z "$id" ]; then
+        return 0  # Optional field
+    fi
+    if [[ ! "$id" =~ ^[0-9]+$ ]]; then
+        return 1
+    fi
+    return 0
+}
+
 print_banner() {
     echo -e "${CYAN}"
     echo "╔══════════════════════════════════════════════════════════════╗"
@@ -543,24 +592,30 @@ cmd_create() {
     echo -e "${YELLOW}Tạo bot TeleTask mới${NC}"
     echo ""
 
-    # Ask for bot name
+    # Ask for bot name with validation loop
     echo -e "Nhập tên cho bot (ví dụ: mybot, taskbot, companybot):"
-    echo -e "Chỉ dùng chữ thường, số và dấu gạch dưới."
+    echo -e "3-32 ký tự, bắt đầu bằng chữ, chỉ dùng chữ thường/số/gạch dưới."
     echo ""
-    read -p "Tên bot: " BOT_NAME_INPUT
 
-    if [ -z "$BOT_NAME_INPUT" ]; then
-        echo -e "${RED}[LỖI]${NC} Phải nhập tên bot!"
-        exit 1
-    fi
+    while true; do
+        read -p "Tên bot: " BOT_NAME_INPUT
 
-    # Convert to slug
-    BOT_SLUG=$(echo "$BOT_NAME_INPUT" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/_/g' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
+        if [ -z "$BOT_NAME_INPUT" ]; then
+            echo -e "${RED}[LỖI]${NC} Phải nhập tên bot!"
+            continue
+        fi
 
-    if [ -z "$BOT_SLUG" ]; then
-        echo -e "${RED}[LỖI]${NC} Tên bot không hợp lệ!"
-        exit 1
-    fi
+        # Convert to slug (sanitize input)
+        BOT_SLUG=$(echo "$BOT_NAME_INPUT" | tr '[:upper:]' '[:lower:]' | tr -dc 'a-z0-9_' | sed 's/__*/_/g' | sed 's/^_//;s/_$//')
+
+        if ! validate_bot_name "$BOT_SLUG"; then
+            echo -e "${RED}[LỖI]${NC} Tên bot không hợp lệ!"
+            echo "Yêu cầu: 3-32 ký tự, bắt đầu bằng chữ, chỉ chữ/số/gạch dưới"
+            continue
+        fi
+
+        break
+    done
 
     BOT_DIR="$BOTS_DIR/$BOT_SLUG"
 
@@ -579,14 +634,35 @@ cmd_create() {
     echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
 
-    read -p "Nhập Bot Token (lấy từ @BotFather): " BOT_TOKEN
+    # Bot token with validation loop
+    while true; do
+        read -p "Nhập Bot Token (lấy từ @BotFather): " BOT_TOKEN
 
-    if [ -z "$BOT_TOKEN" ]; then
-        echo -e "${RED}[LỖI]${NC} Phải nhập bot token!"
-        exit 1
-    fi
+        if [ -z "$BOT_TOKEN" ]; then
+            echo -e "${RED}[LỖI]${NC} Phải nhập bot token!"
+            continue
+        fi
 
-    read -p "Nhập Telegram User ID của bạn (để làm admin, tùy chọn): " ADMIN_ID
+        if ! validate_bot_token "$BOT_TOKEN"; then
+            echo -e "${RED}[LỖI]${NC} Định dạng token không hợp lệ!"
+            echo "Token có dạng: 123456789:ABCdefGHI..."
+            continue
+        fi
+
+        break
+    done
+
+    # Admin ID with validation loop
+    while true; do
+        read -p "Nhập Telegram User ID của bạn (để làm admin, tùy chọn): " ADMIN_ID
+
+        if ! validate_telegram_id "$ADMIN_ID"; then
+            echo -e "${RED}[LỖI]${NC} ID phải là số!"
+            continue
+        fi
+
+        break
+    done
 
     echo ""
     echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════╗${NC}"
@@ -598,19 +674,30 @@ cmd_create() {
     echo "  - Hướng dẫn sử dụng bot"
     echo "  - Google Calendar OAuth callback"
     echo ""
-    read -p "Nhập domain (vd: teletask.example.com): " BOT_DOMAIN
+    # Domain with validation loop
+    while true; do
+        read -p "Nhập domain (vd: teletask.example.com, để trống bỏ qua): " BOT_DOMAIN
 
-    if [ -z "$BOT_DOMAIN" ]; then
-        echo -e "${YELLOW}[CẢNH BÁO]${NC} Không có domain - export và OAuth sẽ không hoạt động"
-        EXPORT_BASE_URL=""
-        GOOGLE_REDIRECT_URI=""
-    else
-        # Remove protocol if user included it
-        BOT_DOMAIN=$(echo "$BOT_DOMAIN" | sed 's|^https\?://||' | sed 's|/$||')
+        if [ -z "$BOT_DOMAIN" ]; then
+            echo -e "${YELLOW}[CẢNH BÁO]${NC} Không có domain - export và OAuth sẽ không hoạt động"
+            EXPORT_BASE_URL=""
+            GOOGLE_REDIRECT_URI=""
+            break
+        fi
+
+        # Remove protocol if user included it (sanitize)
+        BOT_DOMAIN=$(echo "$BOT_DOMAIN" | sed 's|^https\?://||' | sed 's|/$||' | tr -dc 'a-zA-Z0-9.-')
+
+        if ! validate_domain "$BOT_DOMAIN"; then
+            echo -e "${RED}[LỖI]${NC} Domain không hợp lệ!"
+            continue
+        fi
+
         EXPORT_BASE_URL="https://$BOT_DOMAIN"
         GOOGLE_REDIRECT_URI="https://$BOT_DOMAIN/oauth/callback"
         echo -e "${GREEN}[OK]${NC} Domain: $BOT_DOMAIN"
-    fi
+        break
+    done
 
     echo ""
     echo -e "${BLUE}[INFO]${NC} Đang tạo bot '$BOT_SLUG'..."

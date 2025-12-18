@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 
 import pytz
 
+from utils.db_utils import get_report_column, InvalidColumnError
+
 logger = logging.getLogger(__name__)
 
 TZ = pytz.timezone("Asia/Ho_Chi_Minh")
@@ -203,8 +205,13 @@ async def get_group_rankings(
 
 async def get_active_users_for_report(db, report_type: str = "weekly") -> List[Dict]:
     """Get users who have report notification enabled."""
-    column = "notify_weekly_report" if report_type == "weekly" else "notify_monthly_report"
+    try:
+        column = get_report_column(report_type)
+    except InvalidColumnError:
+        logger.warning(f"Invalid report type: {report_type}")
+        return []
 
+    # Use validated column - safe from SQL injection
     rows = await db.fetch_all(
         f"""
         SELECT id, telegram_id, display_name, username

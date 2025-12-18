@@ -4,6 +4,8 @@ Routes inline button callbacks to appropriate handlers
 """
 
 import logging
+import re
+from typing import Optional, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
 
@@ -43,18 +45,149 @@ from handlers.task_delete import process_delete, process_restore
 logger = logging.getLogger(__name__)
 
 
+# Callback validation constants
+# Task ID pattern: P0001, G0001, etc.
+TASK_ID_PATTERN = re.compile(r'^[PG]\d{4,8}$')
+
+# Valid priorities
+VALID_PRIORITIES = {"low", "normal", "high", "urgent"}
+
+# Valid list types
+VALID_LIST_TYPES = {"all", "personal", "assigned", "received"}
+
+# Valid filter types
+VALID_FILTER_TYPES = {"all", "individual", "group"}
+
+# Valid category types
+VALID_CATEGORIES = {"menu", "personal", "assigned", "received", "all"}
+
+
+def validate_task_id(task_id: str) -> Optional[str]:
+    """
+    Validate task ID format.
+
+    Args:
+        task_id: Task ID to validate
+
+    Returns:
+        Validated task ID or None if invalid
+    """
+    if not task_id:
+        return None
+
+    task_id = task_id.strip().upper()
+
+    if not TASK_ID_PATTERN.match(task_id):
+        return None
+
+    return task_id
+
+
+def validate_int(value: str, min_val: int = 0, max_val: int = 10000) -> Optional[int]:
+    """
+    Validate and convert string to integer with bounds.
+
+    Args:
+        value: String value to convert
+        min_val: Minimum allowed value
+        max_val: Maximum allowed value
+
+    Returns:
+        Validated integer or None if invalid
+    """
+    if not value:
+        return None
+
+    try:
+        num = int(value)
+        if min_val <= num <= max_val:
+            return num
+        return None
+    except (ValueError, TypeError):
+        return None
+
+
+def validate_priority(priority: str) -> Optional[str]:
+    """
+    Validate priority value.
+
+    Args:
+        priority: Priority string
+
+    Returns:
+        Validated priority or None if invalid
+    """
+    if not priority:
+        return None
+
+    priority = priority.strip().lower()
+    return priority if priority in VALID_PRIORITIES else None
+
+
+def validate_list_type(list_type: str) -> str:
+    """
+    Validate list type, default to 'all'.
+
+    Args:
+        list_type: List type string
+
+    Returns:
+        Validated list type or 'all'
+    """
+    if not list_type:
+        return "all"
+
+    list_type = list_type.strip().lower()
+    return list_type if list_type in VALID_LIST_TYPES else "all"
+
+
+def parse_callback_data(data: str) -> Tuple[str, list]:
+    """
+    Parse callback data safely.
+
+    Args:
+        data: Raw callback data string
+
+    Returns:
+        Tuple of (action, params)
+    """
+    if not data:
+        return ("", [])
+
+    # Limit total length to prevent abuse
+    if len(data) > 200:
+        return ("", [])
+
+    parts = data.split(":")
+    action = parts[0].strip().lower() if parts else ""
+
+    return (action, parts[1:])
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Route callback queries to appropriate handlers.
 
     Callback data format: action:param1:param2:...
+    All parameters are validated before use.
     """
     query = update.callback_query
     await query.answer()
 
     data = query.data
-    parts = data.split(":")
-    action = parts[0]
+
+    # Parse and validate callback data
+    action, params = parse_callback_data(data)
+
+    # Handle special prefixes first (before main routing)
+    if data and data.startswith("overdue_"):
+        from handlers.statistics import handle_overdue_callback
+        await handle_overdue_callback(update, context)
+        return
+
+    if data and data.startswith("cal_"):
+        # Calendar callbacks handled elsewhere
+        return
 
     try:
         db = get_db()
@@ -63,41 +196,57 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         # Task complete
         if action == "task_complete":
-            task_id = parts[1]
+            task_id = validate_task_id(params[0] if params else "")
+            if not task_id:
+                await query.edit_message_text("Mã việc không hợp lệ.")
+                return
             await handle_complete(query, db, db_user, task_id, context.bot)
 
         # Task progress
         elif action == "task_progress":
-            task_id = parts[1]
+            task_id = validate_task_id(params[0] if params else "")
+            if not task_id:
+                await query.edit_message_text("Mã việc không hợp lệ.")
+                return
             await handle_progress_menu(query, task_id)
 
         # Progress update
         elif action == "progress":
-            task_id = parts[1]
-            try:
-                value = int(parts[2])
-                if not 0 <= value <= 100:
-                    await query.edit_message_text("Giá trị tiến độ phải từ 0-100.")
-                    return
-            except (ValueError, IndexError):
-                await query.edit_message_text("Dữ liệu không hợp lệ.")
+            task_id = validate_task_id(params[0] if params else "")
+            value = validate_int(params[1] if len(params) > 1 else "", min_val=0, max_val=100)
+
+            if not task_id:
+                await query.edit_message_text("Mã việc không hợp lệ.")
                 return
+            if value is None:
+                await query.edit_message_text("Giá trị tiến độ phải từ 0-100.")
+                return
+
             await handle_progress_update(query, db, db_user, task_id, value)
 
         # Task detail
         elif action == "task_detail":
-            task_id = parts[1]
+            task_id = validate_task_id(params[0] if params else "")
+            if not task_id:
+                await query.edit_message_text("Mã việc không hợp lệ.")
+                return
             await handle_detail(query, db, db_user, task_id)
 
         # Task delete
         elif action == "task_delete":
-            task_id = parts[1]
+            task_id = validate_task_id(params[0] if params else "")
+            if not task_id:
+                await query.edit_message_text("Mã việc không hợp lệ.")
+                return
             await handle_delete_confirm(query, task_id)
 
         # Confirm delete
         elif action == "confirm":
-            if parts[1] == "delete":
-                task_id = parts[2]
+            if len(params) >= 2 and params[0] == "delete":
+                task_id = validate_task_id(params[1])
+                if not task_id:
+                    await query.edit_message_text("Mã việc không hợp lệ.")
+                    return
                 await handle_delete(query, db, db_user, task_id, context.bot, context)
 
         # Cancel action
@@ -106,31 +255,24 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         # Undo delete
         elif action == "task_undo":
-            try:
-                undo_id = int(parts[1])
-            except (ValueError, IndexError):
+            undo_id = validate_int(params[0] if params else "", min_val=1)
+            if undo_id is None:
                 await query.edit_message_text("Dữ liệu không hợp lệ.")
                 return
             await handle_undo(query, db, undo_id, context)
 
         # Bulk undo delete
         elif action == "bulk_undo":
-            try:
-                undo_id = int(parts[1])
-            except (ValueError, IndexError):
+            undo_id = validate_int(params[0] if params else "", min_val=1)
+            if undo_id is None:
                 await query.edit_message_text("Dữ liệu không hợp lệ.")
                 return
             await handle_bulk_undo(query, db, undo_id, context)
 
         # List navigation
         elif action == "list":
-            list_type = parts[1] if len(parts) > 1 else "all"
-            try:
-                page = int(parts[2]) if len(parts) > 2 else 1
-                if page < 1:
-                    page = 1
-            except ValueError:
-                page = 1
+            list_type = validate_list_type(params[0] if params else "all")
+            page = validate_int(params[1] if len(params) > 1 else "1", min_val=1, max_val=1000) or 1
             await handle_list_page(query, db, db_user, list_type, page)
 
         # No-op (for pagination display)
@@ -139,44 +281,71 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         # Task edit menu
         elif action == "task_edit":
-            task_id = parts[1]
+            task_id = validate_task_id(params[0] if params else "")
+            if not task_id:
+                await query.edit_message_text("Mã việc không hợp lệ.")
+                return
             await handle_edit_menu(query, db, db_user, task_id)
 
         # Edit content prompt
         elif action == "edit_content":
-            task_id = parts[1]
+            task_id = validate_task_id(params[0] if params else "")
+            if not task_id:
+                await query.edit_message_text("Mã việc không hợp lệ.")
+                return
             await handle_edit_content_prompt(query, db, db_user, task_id, context)
 
         # Edit deadline prompt
         elif action == "edit_deadline":
-            task_id = parts[1]
+            task_id = validate_task_id(params[0] if params else "")
+            if not task_id:
+                await query.edit_message_text("Mã việc không hợp lệ.")
+                return
             await handle_edit_deadline_prompt(query, db, db_user, task_id, context)
 
         # Edit priority menu
         elif action == "edit_priority":
-            task_id = parts[1]
+            task_id = validate_task_id(params[0] if params else "")
+            if not task_id:
+                await query.edit_message_text("Mã việc không hợp lệ.")
+                return
             await handle_edit_priority_menu(query, db, db_user, task_id)
 
         # Set priority
         elif action == "set_priority":
-            task_id = parts[1]
-            priority = parts[2]
+            task_id = validate_task_id(params[0] if params else "")
+            priority = validate_priority(params[1] if len(params) > 1 else "")
+
+            if not task_id:
+                await query.edit_message_text("Mã việc không hợp lệ.")
+                return
+            if not priority:
+                await query.edit_message_text("Độ ưu tiên không hợp lệ.")
+                return
+
             await handle_set_priority(query, db, db_user, task_id, priority)
 
         # Edit assignee prompt
         elif action == "edit_assignee":
-            task_id = parts[1]
+            task_id = validate_task_id(params[0] if params else "")
+            if not task_id:
+                await query.edit_message_text("Mã việc không hợp lệ.")
+                return
             await handle_edit_assignee_prompt(query, db, db_user, task_id, context)
 
         # Task category menu
         elif action == "task_category":
-            category = parts[1]
+            category = params[0].lower() if params else "menu"
+            if category not in VALID_CATEGORIES:
+                category = "menu"
             await handle_task_category(query, db, db_user, category)
 
         # Task type filter (Individual/Group)
         elif action == "task_filter":
-            filter_type = parts[1] if len(parts) > 1 else "all"
-            list_type = parts[2] if len(parts) > 2 else "all"
+            filter_type = params[0].lower() if params else "all"
+            if filter_type not in VALID_FILTER_TYPES:
+                filter_type = "all"
+            list_type = validate_list_type(params[1] if len(params) > 1 else "all")
             await handle_task_filter(query, db, db_user, filter_type, list_type)
 
         # Statistics callbacks
@@ -184,20 +353,31 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             from handlers.statistics import handle_stats_callback
             await handle_stats_callback(update, context)
 
-        # Overdue task callbacks
-        elif data.startswith("overdue_"):
-            from handlers.statistics import handle_overdue_callback
-            await handle_overdue_callback(update, context)
-
         # Bulk delete callbacks
         elif action == "bulk_delete":
-            delete_type = parts[1]  # "all" or "assigned"
-            confirm_action = parts[2]  # "confirm" or "cancel"
+            if len(params) < 2:
+                await query.edit_message_text("Dữ liệu không hợp lệ.")
+                return
+
+            delete_type = params[0].lower()
+            confirm_action = params[1].lower()
+
+            if delete_type not in {"all", "assigned"}:
+                await query.edit_message_text("Loại xóa không hợp lệ.")
+                return
+            if confirm_action not in {"confirm", "cancel"}:
+                await query.edit_message_text("Hành động không hợp lệ.")
+                return
+
             await handle_bulk_delete(query, db, db_user, delete_type, confirm_action, context)
 
         else:
-            logger.warning(f"Unknown callback action: {action}")
+            if action:
+                logger.warning(f"Unknown callback action: {action}")
 
+    except IndexError:
+        logger.warning(f"Callback data missing params: {data}")
+        await query.edit_message_text("Dữ liệu không đầy đủ.")
     except Exception as e:
         logger.error(f"Error in callback_router: {e}")
         await query.edit_message_text("Lỗi hệ thống. Vui lòng thử lại.")

@@ -3,6 +3,7 @@ Message Formatters
 Format task data for display
 """
 
+import html
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 import pytz
@@ -187,39 +188,85 @@ def truncate(text: str, max_length: int = 50) -> str:
     return text[: max_length - 3] + "..."
 
 
+def escape_html(text: str) -> str:
+    """
+    Escape HTML special characters to prevent XSS.
+
+    Escapes: & < > " '
+
+    Args:
+        text: Text to escape
+
+    Returns:
+        HTML-safe string
+    """
+    if not text:
+        return ""
+    return html.escape(text, quote=True)
+
+
 def mention_user(user: Dict[str, Any]) -> str:
     """
     Create Telegram mention link for user.
     Format: [Display Name](tg://user?id=telegram_id)
     Works even if user has no username.
+
+    Display name is escaped to prevent Markdown injection.
     """
     display_name = user.get("display_name") or user.get("username") or "User"
     telegram_id = user.get("telegram_id")
 
+    # Escape Markdown special characters in display name
+    safe_name = escape_markdown(display_name)
+
     if telegram_id:
-        return f"[{display_name}](tg://user?id={telegram_id})"
-    return display_name
+        # telegram_id should be numeric, but sanitize anyway
+        safe_id = str(int(telegram_id)) if isinstance(telegram_id, (int, str)) and str(telegram_id).isdigit() else ""
+        if safe_id:
+            return f"[{safe_name}](tg://user?id={safe_id})"
+
+    return safe_name
 
 
 def mention_user_html(user: Dict[str, Any]) -> str:
     """
     Create Telegram mention link for user (HTML format).
     Format: <a href="tg://user?id=telegram_id">Display Name</a>
+
+    Display name is escaped to prevent XSS.
     """
     display_name = user.get("display_name") or user.get("username") or "User"
     telegram_id = user.get("telegram_id")
 
+    # Escape display name to prevent XSS
+    safe_name = escape_html(display_name)
+
     if telegram_id:
-        return f'<a href="tg://user?id={telegram_id}">{display_name}</a>'
-    return display_name
+        # telegram_id should be numeric, but sanitize anyway
+        safe_id = str(int(telegram_id)) if isinstance(telegram_id, (int, str)) and str(telegram_id).isdigit() else ""
+        if safe_id:
+            return f'<a href="tg://user?id={safe_id}">{safe_name}</a>'
+
+    return safe_name
 
 
 def escape_markdown(text: str) -> str:
-    """Escape markdown special characters."""
-    chars = ["_", "*", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!"]
-    for char in chars:
-        text = text.replace(char, f"\\{char}")
-    return text
+    """
+    Escape Markdown V2 special characters.
+
+    Characters: _ * [ ] ( ) ~ ` > # + - = | { } . ! \\
+    """
+    if not text:
+        return ""
+
+    # MarkdownV2 special characters (backslash must be first)
+    special_chars = ['\\', '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+
+    result = text
+    for char in special_chars:
+        result = result.replace(char, f'\\{char}')
+
+    return result
 
 
 def progress_bar(percentage: float, width: int = 10) -> str:
