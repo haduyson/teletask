@@ -24,6 +24,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column('users', 'notify_status')
+    op.drop_column('users', 'notify_task_status')
     op.drop_column('users', 'notify_task_assigned')
     op.drop_column('users', 'notify_all')

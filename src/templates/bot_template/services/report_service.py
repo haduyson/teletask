@@ -7,6 +7,7 @@ import os
 import csv
 import logging
 import hashlib
+import hmac
 import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -19,8 +20,9 @@ logger = logging.getLogger(__name__)
 
 TZ = pytz.timezone("Asia/Ho_Chi_Minh")
 
-# Export directory
-EXPORT_DIR = Path("/home/botpanel/bots/bot_001/exports")
+# Export directory - dynamically set based on bot location
+BOT_NAME = os.environ.get("BOT_NAME", "default")
+EXPORT_DIR = Path(f"/home/botpanel/bots/{BOT_NAME}/exports")
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Report TTL (72 hours)
@@ -38,13 +40,31 @@ def generate_password() -> str:
 
 
 def hash_password(password: str) -> str:
-    """Hash password for storage."""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash password for storage using PBKDF2 with salt."""
+    salt = secrets.token_hex(16)
+    key = hashlib.pbkdf2_hmac(
+        'sha256',
+        password.encode(),
+        salt.encode(),
+        iterations=100000
+    )
+    return f"{salt}${key.hex()}"
 
 
 def verify_password(password: str, password_hash: str) -> bool:
     """Verify password against hash."""
-    return hashlib.sha256(password.encode()).hexdigest() == password_hash
+    try:
+        salt, stored_key = password_hash.split('$')
+        key = hashlib.pbkdf2_hmac(
+            'sha256',
+            password.encode(),
+            salt.encode(),
+            iterations=100000
+        )
+        return hmac.compare_digest(key.hex(), stored_key)
+    except (ValueError, AttributeError):
+        # Fallback for legacy SHA-256 hashes (no salt)
+        return hashlib.sha256(password.encode()).hexdigest() == password_hash
 
 
 async def get_tasks_for_export(

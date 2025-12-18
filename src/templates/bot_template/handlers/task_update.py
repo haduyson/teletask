@@ -108,6 +108,7 @@ async def xong_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                             )
                             if creator:
                                 progress_info = await get_group_task_progress(db, group_task_id)
+                                user_mention = mention_user(db_user)
                                 await context.bot.send_message(
                                     chat_id=creator["telegram_id"],
                                     text=f"🎉 *VIỆC NHÓM ĐÃ HOÀN THÀNH\\!*\n\n"
@@ -130,6 +131,7 @@ async def xong_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                                 parent_task["creator_id"]
                             )
                             if creator:
+                                user_mention = mention_user(db_user)
                                 await context.bot.send_message(
                                     chat_id=creator["telegram_id"],
                                     text=f"📊 *CẬP NHẬT TIẾN ĐỘ VIỆC NHÓM*\n\n"

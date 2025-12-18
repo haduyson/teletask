@@ -384,6 +384,15 @@ async def _countdown_update_job(context) -> None:
     seconds = job_data["seconds"]
 
     try:
+        # Check if undo was already performed
+        db = get_db()
+        undo_record = await db.fetch_one(
+            "SELECT is_restored FROM deleted_tasks_undo WHERE id = $1",
+            undo_id
+        )
+        if not undo_record or undo_record["is_restored"]:
+            return  # Undo already performed, skip update
+
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=message_id,
@@ -401,8 +410,18 @@ async def _countdown_expired_job(context) -> None:
     chat_id = job_data["chat_id"]
     message_id = job_data["message_id"]
     task_id = job_data["task_id"]
+    undo_id = job_data["undo_id"]
 
     try:
+        # Check if undo was already performed
+        db = get_db()
+        undo_record = await db.fetch_one(
+            "SELECT is_restored FROM deleted_tasks_undo WHERE id = $1",
+            undo_id
+        )
+        if not undo_record or undo_record["is_restored"]:
+            return  # Undo already performed, skip expiry message
+
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=message_id,

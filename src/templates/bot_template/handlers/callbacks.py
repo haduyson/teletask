@@ -74,7 +74,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # Progress update
         elif action == "progress":
             task_id = parts[1]
-            value = int(parts[2])
+            try:
+                value = int(parts[2])
+                if not 0 <= value <= 100:
+                    await query.edit_message_text("Giá trị tiến độ phải từ 0-100.")
+                    return
+            except (ValueError, IndexError):
+                await query.edit_message_text("Dữ liệu không hợp lệ.")
+                return
             await handle_progress_update(query, db, db_user, task_id, value)
 
         # Task detail
@@ -99,18 +106,31 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         # Undo delete
         elif action == "task_undo":
-            undo_id = int(parts[1])
+            try:
+                undo_id = int(parts[1])
+            except (ValueError, IndexError):
+                await query.edit_message_text("Dữ liệu không hợp lệ.")
+                return
             await handle_undo(query, db, undo_id, context)
 
         # Bulk undo delete
         elif action == "bulk_undo":
-            undo_id = int(parts[1])
+            try:
+                undo_id = int(parts[1])
+            except (ValueError, IndexError):
+                await query.edit_message_text("Dữ liệu không hợp lệ.")
+                return
             await handle_bulk_undo(query, db, undo_id, context)
 
         # List navigation
         elif action == "list":
-            list_type = parts[1]
-            page = int(parts[2]) if len(parts) > 2 else 1
+            list_type = parts[1] if len(parts) > 1 else "all"
+            try:
+                page = int(parts[2]) if len(parts) > 2 else 1
+                if page < 1:
+                    page = 1
+            except ValueError:
+                page = 1
             await handle_list_page(query, db, db_user, list_type, page)
 
         # No-op (for pagination display)
@@ -330,6 +350,15 @@ async def countdown_update_job(context) -> None:
     seconds = job_data["seconds"]
 
     try:
+        # Check if undo was already performed
+        db = get_db()
+        undo_record = await db.fetch_one(
+            "SELECT is_restored FROM deleted_tasks_undo WHERE id = $1",
+            undo_id
+        )
+        if not undo_record or undo_record["is_restored"]:
+            return  # Undo already performed, skip update
+
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=message_id,
@@ -351,6 +380,15 @@ async def countdown_expired_job(context) -> None:
     undo_id = job_data["undo_id"]
 
     try:
+        # Check if undo was already performed
+        db = get_db()
+        undo_record = await db.fetch_one(
+            "SELECT is_restored FROM deleted_tasks_undo WHERE id = $1",
+            undo_id
+        )
+        if not undo_record or undo_record["is_restored"]:
+            return  # Undo already performed, skip expiry message
+
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=message_id,

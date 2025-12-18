@@ -261,7 +261,7 @@ Trong BotFather:
 ```bash
 # Tạo user riêng cho bot
 sudo useradd -m -s /bin/bash botpanel
-sudo mkdir -p /home/botpanel/bots/bot_001
+sudo mkdir -p /home/botpanel/bots/mybot
 sudo mkdir -p /home/botpanel/logs
 sudo chown -R botpanel:botpanel /home/botpanel
 ```
@@ -270,7 +270,7 @@ sudo chown -R botpanel:botpanel /home/botpanel
 
 ```bash
 sudo -u botpanel bash -c "
-    cd /home/botpanel/bots/bot_001
+    cd /home/botpanel/bots/mybot
     git clone https://github.com/haduyson/teletask.git .
 "
 ```
@@ -278,15 +278,15 @@ sudo -u botpanel bash -c "
 Hoặc copy từ template:
 
 ```bash
-sudo cp -r /path/to/teletask/src/templates/bot_template/* /home/botpanel/bots/bot_001/
-sudo chown -R botpanel:botpanel /home/botpanel/bots/bot_001
+sudo cp -r /path/to/teletask/src/templates/bot_template/* /home/botpanel/bots/mybot/
+sudo chown -R botpanel:botpanel /home/botpanel/bots/mybot
 ```
 
 ### Tạo file .env
 
 ```bash
 sudo -u botpanel bash -c "
-    cd /home/botpanel/bots/bot_001
+    cd /home/botpanel/bots/mybot
     cp .env.example .env
 "
 ```
@@ -294,7 +294,7 @@ sudo -u botpanel bash -c "
 ### Chỉnh sửa cấu hình
 
 ```bash
-sudo -u botpanel nano /home/botpanel/bots/bot_001/.env
+sudo -u botpanel nano /home/botpanel/bots/mybot/.env
 ```
 
 Nội dung file `.env`:
@@ -354,7 +354,7 @@ HEALTH_PORT=8080
 
 ```bash
 sudo -u botpanel bash -c "
-    cd /home/botpanel/bots/bot_001
+    cd /home/botpanel/bots/mybot
     python3.11 -m venv venv
     source venv/bin/activate
     pip install --upgrade pip
@@ -383,7 +383,7 @@ sudo -u botpanel bash -c "
 
 ```bash
 sudo -u botpanel bash -c "
-    cd /home/botpanel/bots/bot_001
+    cd /home/botpanel/bots/mybot
     source venv/bin/activate
     alembic upgrade head
 "
@@ -393,7 +393,7 @@ sudo -u botpanel bash -c "
 
 ```bash
 sudo -u botpanel bash -c "
-    cd /home/botpanel/bots/bot_001
+    cd /home/botpanel/bots/mybot
     source venv/bin/activate
     alembic current
 "
@@ -421,7 +421,7 @@ sudo -u botpanel bash -c "
 
 ```bash
 sudo -u botpanel bash -c "
-    cd /home/botpanel/bots/bot_001
+    cd /home/botpanel/bots/mybot
     source venv/bin/activate
     python bot.py
 "
@@ -470,7 +470,7 @@ sudo npm install -g pm2
 ### Tạo file ecosystem
 
 ```bash
-sudo -u botpanel nano /home/botpanel/bots/bot_001/ecosystem.config.js
+sudo -u botpanel nano /home/botpanel/bots/mybot/ecosystem.config.js
 ```
 
 Nội dung:
@@ -479,12 +479,12 @@ Nội dung:
 module.exports = {
   apps: [{
     name: 'teletask-bot',
-    script: '/home/botpanel/bots/bot_001/venv/bin/python',
-    args: '/home/botpanel/bots/bot_001/bot.py',
-    cwd: '/home/botpanel/bots/bot_001',
+    script: '/home/botpanel/bots/mybot/venv/bin/python',
+    args: '/home/botpanel/bots/mybot/bot.py',
+    cwd: '/home/botpanel/bots/mybot',
     interpreter: 'none',
     env: {
-      PATH: '/home/botpanel/bots/bot_001/venv/bin:' + process.env.PATH
+      PATH: '/home/botpanel/bots/mybot/venv/bin:' + process.env.PATH
     },
     max_memory_restart: '500M',
     restart_delay: 5000,
@@ -501,7 +501,7 @@ module.exports = {
 ### Khởi động bot với PM2
 
 ```bash
-cd /home/botpanel/bots/bot_001
+cd /home/botpanel/bots/mybot
 pm2 start ecosystem.config.js
 ```
 
@@ -660,7 +660,7 @@ sudo certbot --nginx -d yourdomain.com
 
 2. **Kiểm tra .env:**
    ```bash
-   cat /home/botpanel/bots/bot_001/.env | grep -v "^#"
+   cat /home/botpanel/bots/mybot/.env | grep -v "^#"
    ```
 
 3. **Kiểm tra database:**
@@ -698,7 +698,7 @@ sudo certbot --nginx -d yourdomain.com
 
 1. **Xem trạng thái:**
    ```bash
-   cd /home/botpanel/bots/bot_001
+   cd /home/botpanel/bots/mybot
    source venv/bin/activate
    alembic current
    alembic history
@@ -730,7 +730,7 @@ sudo certbot --nginx -d yourdomain.com
 
 1. **Kiểm tra cấu hình:**
    ```bash
-   grep GOOGLE /home/botpanel/bots/bot_001/.env
+   grep GOOGLE /home/botpanel/bots/mybot/.env
    ```
 
 2. **Kiểm tra OAuth server:**
@@ -776,7 +776,7 @@ sudo certbot --nginx -d yourdomain.com
 
 ```bash
 sudo -u botpanel bash -c "
-    cd /home/botpanel/bots/bot_001
+    cd /home/botpanel/bots/mybot
     git pull origin main
 "
 ```
@@ -785,7 +785,7 @@ sudo -u botpanel bash -c "
 
 ```bash
 sudo -u botpanel bash -c "
-    cd /home/botpanel/bots/bot_001
+    cd /home/botpanel/bots/mybot
     source venv/bin/activate
     pip install -r requirements.txt
 "
@@ -795,7 +795,7 @@ sudo -u botpanel bash -c "
 
 ```bash
 sudo -u botpanel bash -c "
-    cd /home/botpanel/bots/bot_001
+    cd /home/botpanel/bots/mybot
     source venv/bin/activate
     alembic upgrade head
 "

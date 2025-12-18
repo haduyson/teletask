@@ -50,20 +50,22 @@ async def post_init(application: Application) -> None:
     from telegram import BotCommandScopeAllPrivateChats, BotCommandScopeAllGroupChats
 
     # Commands for private chat (no giaoviec, viecdagiao)
+    # Quick actions prioritized at top for easy access
     private_commands = [
+        ("menu", "📋 Menu thao tác nhanh"),
+        ("taoviec", "➕ Tạo việc mới"),
+        ("xemviec", "👁️ Xem việc"),
+        ("xoa", "🗑️ Xóa việc"),
+        ("thongke", "📊 Thống kê"),
         ("start", "Bắt đầu sử dụng bot"),
         ("help", "Xem hướng dẫn sử dụng"),
-        ("taoviec", "Tạo việc cá nhân mới"),
         ("vieccanhan", "Xem danh sách việc cá nhân"),
-        ("xemviec", "Xem chi tiết việc"),
         ("xong", "Đánh dấu việc hoàn thành"),
         ("tiendo", "Cập nhật tiến độ việc"),
-        ("xoa", "Xóa việc"),
         ("timviec", "Tìm kiếm việc"),
         ("nhacviec", "Đặt nhắc việc tự động"),
         ("vieclaplai", "Tạo việc lặp lại tự động"),
         ("danhsachvieclaplai", "Xem danh sách việc lặp lại"),
-        ("thongke", "Xem thống kê tổng hợp"),
         ("thongketuan", "Xem thống kê tuần này"),
         ("thongkethang", "Xem thống kê tháng này"),
         ("viectrehan", "Xem việc trễ hạn"),
@@ -74,22 +76,24 @@ async def post_init(application: Application) -> None:
     ]
 
     # Commands for group chat (includes giaoviec, viecdagiao)
+    # Quick actions prioritized at top for easy access
     group_commands = [
+        ("menu", "📋 Menu thao tác nhanh"),
+        ("taoviec", "➕ Tạo việc mới"),
+        ("giaoviec", "👥 Giao việc cho người khác"),
+        ("xemviec", "👁️ Xem việc"),
+        ("xoa", "🗑️ Xóa việc"),
+        ("thongke", "📊 Thống kê"),
         ("start", "Bắt đầu sử dụng bot"),
         ("help", "Xem hướng dẫn sử dụng"),
-        ("taoviec", "Tạo việc cá nhân mới"),
-        ("giaoviec", "Giao việc cho người khác"),
         ("vieccanhan", "Xem danh sách việc cá nhân"),
         ("viecdagiao", "Xem việc bạn đã giao"),
-        ("xemviec", "Xem chi tiết việc"),
         ("xong", "Đánh dấu việc hoàn thành"),
         ("tiendo", "Cập nhật tiến độ việc"),
-        ("xoa", "Xóa việc"),
         ("timviec", "Tìm kiếm việc"),
         ("nhacviec", "Đặt nhắc việc tự động"),
         ("vieclaplai", "Tạo việc lặp lại tự động"),
         ("danhsachvieclaplai", "Xem danh sách việc lặp lại"),
-        ("thongke", "Xem thống kê tổng hợp"),
         ("thongketuan", "Xem thống kê tuần này"),
         ("thongkethang", "Xem thống kê tháng này"),
         ("viectrehan", "Xem việc trễ hạn"),

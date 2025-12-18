@@ -262,7 +262,8 @@ async def start_oauth_server(app_runner=None) -> web.AppRunner:
     runner = web.AppRunner(app)
     await runner.setup()
 
-    site = web.TCPSite(runner, "0.0.0.0", OAUTH_PORT)
+    # Bind to localhost only - nginx proxies external traffic
+    site = web.TCPSite(runner, "127.0.0.1", OAUTH_PORT)
     await site.start()
 
     logger.info(f"OAuth callback server started on port {OAUTH_PORT}")
