@@ -16,6 +16,14 @@
 - [x] Automated installation script
 - [x] Dynamic website bot name
 
+### Security Fixes (v1.2.0)
+- [x] Fixed password exposure in logs
+- [x] Changed OAuth binding from 0.0.0.0 to 127.0.0.1 (localhost only)
+- [x] Added PBKDF2-SHA256 with salt for report PDF passwords (100,000 iterations)
+- [x] Implemented input validation for callback data
+- [x] Fixed race condition in countdown timers
+- [x] Improved error logging without exposing sensitive data
+
 ---
 
 ## Phase 1: Core Improvements (v1.3)
