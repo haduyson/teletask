@@ -3,12 +3,14 @@
 # TeleTask Bot - Cài Đặt Tự Động
 # Hỗ trợ Ubuntu 22.04/24.04
 #
-# Cài đặt một lệnh:
+# Cài đặt hệ thống (MẶC ĐỊNH):
 #   curl -fsSL https://raw.githubusercontent.com/haduyson/teletask/master/install.sh | sudo bash
+#   → Cài dependencies, PostgreSQL, PM2, BotPanel
+#   → Dùng botpanel để thêm bot sau
 #
-# Hoặc với tham số:
+# Cài đặt kèm bot (tùy chọn):
 #   curl -fsSL https://raw.githubusercontent.com/haduyson/teletask/master/install.sh | sudo bash -s -- \
-#     --domain teletask.example.com --email admin@example.com --bot-id mybot
+#     --bot-id mybot --bot-token TOKEN --domain teletask.example.com --email admin@example.com
 #
 
 set -e
@@ -62,6 +64,8 @@ EMAIL=""
 BOT_TOKEN=""
 ADMIN_IDS=""
 SKIP_INTERACTIVE=false
+SYSTEM_ONLY=false
+ADD_BOT_MODE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -71,10 +75,18 @@ while [[ $# -gt 0 ]]; do
         --bot-token)   BOT_TOKEN="$2"; shift 2 ;;
         --admin-ids)   ADMIN_IDS="$2"; shift 2 ;;
         --skip-interactive) SKIP_INTERACTIVE=true; shift ;;
+        --system-only) SYSTEM_ONLY=true; shift ;;
+        --add-bot)     ADD_BOT_MODE=true; shift ;;
         --help)
             echo "Sử dụng: install.sh [TÙY CHỌN]"
             echo ""
+            echo "Chế độ mặc định (không tham số):"
+            echo "  Cài đặt hệ thống + BotPanel, không cài bot"
+            echo "  Dùng 'botpanel' sau đó để thêm bot"
+            echo ""
             echo "Tùy chọn:"
+            echo "  --system-only      Chỉ cài hệ thống (mặc định nếu không có bot-id)"
+            echo "  --add-bot          Chế độ thêm bot (gọi từ botpanel)"
             echo "  --bot-id ID        ID cho bot (vd: mybot)"
             echo "  --domain DOMAIN    Domain cho nginx (vd: teletask.example.com)"
             echo "  --email EMAIL      Email cho SSL Let's Encrypt"
@@ -87,6 +99,11 @@ while [[ $# -gt 0 ]]; do
         *) log_error "Tùy chọn không hợp lệ: $1"; exit 1 ;;
     esac
 done
+
+# Auto-detect mode: system-only if no bot params provided
+if [[ -z "$BOT_ID" && -z "$BOT_TOKEN" && "$ADD_BOT_MODE" != "true" ]]; then
+    SYSTEM_ONLY=true
+fi
 
 # ============================================================================
 # CHECK PREREQUISITES
@@ -692,7 +709,7 @@ view_logs() {
 add_bot() {
     echo -e "\n${BOLD}Thêm Bot Mới${NC}"
     echo "─────────────────────────────────────────"
-    echo -e "  ${DIM}1)${NC} 📦 Cài đặt từ GitHub (TeleTask)"
+    echo -e "  ${DIM}1)${NC} 📦 Cài đặt TeleTask Bot"
     echo -e "  ${DIM}2)${NC} 📁 Cài đặt từ thư mục local"
     echo -e "  ${DIM}0)${NC} Quay lại"
     echo ""
@@ -701,8 +718,67 @@ add_bot() {
 
     case $choice in
         1)
-            log_info "Đang tải installer..."
-            curl -fsSL "$INSTALLER_URL" | sudo bash
+            echo ""
+            log_info "Cấu hình bot mới"
+            echo "─────────────────────────────────────────"
+
+            # Bot ID
+            local bot_id=""
+            while true; do
+                read -p "Bot ID (chữ thường, không dấu, vd: mybot): " bot_id
+                if [[ "$bot_id" =~ ^[a-z][a-z0-9_-]*$ ]]; then
+                    if [[ -d "$BOTS_DIR/$bot_id" ]]; then
+                        log_error "Bot '$bot_id' đã tồn tại"
+                    else
+                        break
+                    fi
+                else
+                    log_error "ID không hợp lệ. Chỉ dùng chữ thường, số, gạch ngang."
+                fi
+            done
+
+            # Bot Token
+            local bot_token=""
+            read -p "Bot Token từ @BotFather: " bot_token
+            if [[ -z "$bot_token" ]]; then
+                log_error "Chưa nhập Bot Token"
+                return 1
+            fi
+
+            # Admin IDs
+            local admin_ids=""
+            read -p "Admin Telegram ID (để nhận thông báo): " admin_ids
+
+            # Domain (optional)
+            local domain=""
+            local email=""
+            read -p "Domain (để trống nếu không dùng): " domain
+            if [[ -n "$domain" ]]; then
+                read -p "Email cho SSL ($domain): " email
+            fi
+
+            echo ""
+            log_info "Xác nhận cấu hình:"
+            echo "  Bot ID:    $bot_id"
+            echo "  Bot Token: ${bot_token:0:10}..."
+            echo "  Admin IDs: ${admin_ids:-'(không)'}"
+            echo "  Domain:    ${domain:-'(không)'}"
+            echo ""
+
+            read -p "Tiếp tục cài đặt? (y/n): " -n 1 -r
+            echo
+            [[ ! $REPLY =~ ^[Yy]$ ]] && return 1
+
+            # Run installer in add-bot mode
+            log_info "Đang cài đặt bot..."
+            curl -fsSL "$INSTALLER_URL" | sudo bash -s -- \
+                --add-bot \
+                --bot-id "$bot_id" \
+                --bot-token "$bot_token" \
+                ${admin_ids:+--admin-ids "$admin_ids"} \
+                ${domain:+--domain "$domain"} \
+                ${email:+--email "$email"} \
+                --skip-interactive
             ;;
         2)
             read -p "Đường dẫn thư mục bot: " bot_path
@@ -1145,9 +1221,56 @@ start_bot() {
 }
 
 # ============================================================================
-# MAIN
+# MAIN - SYSTEM ONLY MODE
 # ============================================================================
-main() {
+main_system_only() {
+    print_banner
+
+    echo -e "${CYAN}Chế độ: Cài đặt hệ thống${NC}"
+    echo ""
+
+    check_root
+    check_ubuntu
+
+    echo ""
+    log_info "Bắt đầu cài đặt hệ thống..."
+    echo "═══════════════════════════════════════════════════════════"
+
+    # Create directories
+    mkdir -p "$BOTS_DIR" "$LOGS_DIR"
+
+    install_system_deps
+    install_postgresql
+    install_pm2
+    install_botpanel
+
+    # Setup PM2 startup
+    pm2 startup systemd -u root --hp /root 2>/dev/null || true
+
+    echo ""
+    echo "═══════════════════════════════════════════════════════════"
+    echo -e "${GREEN}CÀI ĐẶT HỆ THỐNG HOÀN TẤT!${NC}"
+    echo "═══════════════════════════════════════════════════════════"
+    echo ""
+    echo "Hệ thống đã sẵn sàng:"
+    echo "  ✓ Python 3.11"
+    echo "  ✓ PostgreSQL"
+    echo "  ✓ Node.js & PM2"
+    echo "  ✓ BotPanel"
+    echo ""
+    echo -e "${CYAN}Bước tiếp theo - Thêm bot mới:${NC}"
+    echo "  botpanel              # Menu tương tác"
+    echo "  → Chọn '6) Thêm bot mới'"
+    echo ""
+    echo "Hoặc chạy lệnh:"
+    echo "  botpanel add"
+    echo ""
+}
+
+# ============================================================================
+# MAIN - FULL INSTALL (with bot)
+# ============================================================================
+main_with_bot() {
     print_banner
 
     check_root
@@ -1189,7 +1312,7 @@ main() {
         echo ""
     fi
     echo -e "${CYAN}Quản lý bot với BotPanel:${NC}"
-    echo "  botpanel              # Menu tương tác (phím mũi tên)"
+    echo "  botpanel              # Menu tương tác"
     echo "  botpanel status       # Xem trạng thái"
     echo "  botpanel logs $BOT_ID # Xem logs"
     echo "  botpanel restart $BOT_ID"
@@ -1198,4 +1321,26 @@ main() {
     echo ""
 }
 
-main "$@"
+# ============================================================================
+# MAIN ENTRY POINT
+# ============================================================================
+if [[ "$SYSTEM_ONLY" == "true" ]]; then
+    main_system_only
+elif [[ "$ADD_BOT_MODE" == "true" ]]; then
+    # Called from botpanel to add a bot (system already installed)
+    check_root
+    prompt_config
+    if [[ -z "$BOT_ID" || -z "$BOT_TOKEN" ]]; then
+        log_error "Thiếu Bot ID hoặc Bot Token"
+        exit 1
+    fi
+    setup_database
+    install_nginx
+    setup_ssl
+    setup_bot
+    start_bot
+    echo ""
+    log_success "Bot '$BOT_ID' đã được thêm và khởi động!"
+else
+    main_with_bot
+fi
