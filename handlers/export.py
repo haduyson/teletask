@@ -395,8 +395,8 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 period_end=data.get("custom_end"),
             )
 
-            # Get report URL from environment
-            base_url = os.getenv("EXPORT_BASE_URL", "http://localhost:8080")
+            # Get report URL from environment (prefer EXPORT_BASE_URL, fallback to BOT_DOMAIN)
+            base_url = os.getenv("EXPORT_BASE_URL") or os.getenv("BOT_DOMAIN") or "http://localhost:8080"
             report_url = f"{base_url}/report/{result['report_id']}"
 
             # Format file size

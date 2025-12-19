@@ -439,6 +439,7 @@ DATABASE_URL=$DATABASE_URL
 
 # Domain
 BOT_DOMAIN=${DOMAIN:+https://$DOMAIN}
+EXPORT_BASE_URL=${DOMAIN:+https://$DOMAIN}
 
 # Timezone
 TZ=Asia/Ho_Chi_Minh
