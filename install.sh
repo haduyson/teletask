@@ -64,6 +64,8 @@ DOMAIN=""
 EMAIL=""
 BOT_TOKEN=""
 ADMIN_IDS=""
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
 SKIP_INTERACTIVE=false
 SYSTEM_ONLY=false
 ADD_BOT_MODE=false
@@ -81,6 +83,8 @@ while [[ $# -gt 0 ]]; do
         --email)       EMAIL="$2"; shift 2 ;;
         --bot-token)   BOT_TOKEN="$2"; shift 2 ;;
         --admin-ids)   ADMIN_IDS="$2"; shift 2 ;;
+        --google-client-id)     GOOGLE_CLIENT_ID="$2"; shift 2 ;;
+        --google-client-secret) GOOGLE_CLIENT_SECRET="$2"; shift 2 ;;
         --skip-interactive) SKIP_INTERACTIVE=true; shift ;;
         --system-only) SYSTEM_ONLY=true; shift ;;
         --add-bot)     ADD_BOT_MODE=true; shift ;;
@@ -99,7 +103,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --domain DOMAIN    Domain cho nginx (vd: teletask.example.com)"
             echo "  --email EMAIL      Email cho SSL Let's Encrypt"
             echo "  --bot-token TOKEN  Bot token từ @BotFather"
-            echo "  --admin-ids IDS    Admin Telegram (@username hoặc ID số)"
+            echo "  --admin-ids IDS    Admin Telegram (User ID hoặc Group ID, tùy chọn)"
             echo "  --skip-interactive Bỏ qua các câu hỏi tương tác"
             echo "  --help             Hiện hướng dẫn này"
             exit 0
@@ -126,8 +130,7 @@ check_root() {
 check_ubuntu() {
     if ! grep -qi "ubuntu" /etc/os-release 2>/dev/null; then
         log_warn "Script được thiết kế cho Ubuntu. Hệ điều hành khác có thể gặp lỗi."
-        read -p "Tiếp tục? (y/n): " -n 1 -r
-        echo
+        read -p "Tiếp tục? (y/n): " -r
         [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
     fi
 }
@@ -176,9 +179,19 @@ prompt_config() {
         read -p "Bot Token từ @BotFather: " BOT_TOKEN
     fi
 
-    # Admin (accepts @username or numeric ID)
+    # Admin (accepts User ID or Group ID, optional)
     if [[ -z "$ADMIN_IDS" ]]; then
-        read -p "Admin Telegram (@username hoặc ID số): " ADMIN_IDS
+        read -p "Admin Telegram (User ID hoặc Group ID, để trống nếu không cần): " ADMIN_IDS
+    fi
+
+    # Google Calendar OAuth (optional)
+    if [[ -z "$GOOGLE_CLIENT_ID" ]]; then
+        echo ""
+        log_info "Google Calendar (tùy chọn - để trống nếu không cần)"
+        read -p "Google Client ID: " GOOGLE_CLIENT_ID
+        if [[ -n "$GOOGLE_CLIENT_ID" ]]; then
+            read -p "Google Client Secret: " GOOGLE_CLIENT_SECRET
+        fi
     fi
 
     echo ""
@@ -189,10 +202,10 @@ prompt_config() {
     echo "  Email:     ${EMAIL:-'(không)'}"
     echo "  Bot Token: ${BOT_TOKEN:0:10}..."
     echo "  Admin:     ${ADMIN_IDS:-'(không)'}"
+    echo "  Google:    ${GOOGLE_CLIENT_ID:+'Đã cấu hình'}"
     echo ""
 
-    read -p "Tiếp tục cài đặt? (y/n): " -n 1 -r
-    echo
+    read -p "Tiếp tục cài đặt? (y/n): " -r
     [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
 }
 
@@ -364,8 +377,7 @@ setup_bot() {
             rm -rf "$BOT_DIR"
         else
             log_warn "Thư mục $BOT_DIR đã tồn tại"
-            read -p "Ghi đè? (y/n): " -n 1 -r </dev/tty
-            echo
+            read -p "Ghi đè? (y/n): " -r </dev/tty
             if [[ $REPLY =~ ^[Yy]$ ]]; then
                 rm -rf "$BOT_DIR"
             else
@@ -439,8 +451,12 @@ LOG_LEVEL=INFO
 # Security
 ENCRYPTION_KEY=$ENCRYPTION_KEY
 
+# Google Calendar
+GOOGLE_CALENDAR_ENABLED=${GOOGLE_CLIENT_ID:+true}
+GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID
+GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET
+
 # Optional
-GOOGLE_CALENDAR_ENABLED=false
 METRICS_ENABLED=false
 REDIS_ENABLED=false
 EOF
@@ -807,9 +823,9 @@ add_bot() {
                 return 1
             fi
 
-            # Admin (accepts @username or numeric ID)
+            # Admin (accepts User ID or Group ID, optional)
             local admin_ids=""
-            read -p "Admin Telegram (@username hoặc ID số): " admin_ids
+            read -p "Admin Telegram (User ID hoặc Group ID, để trống nếu không cần): " admin_ids
 
             # Domain (optional)
             local domain=""
@@ -819,6 +835,16 @@ add_bot() {
                 read -p "Email cho SSL ($domain): " email
             fi
 
+            # Google Calendar (optional)
+            local google_client_id=""
+            local google_client_secret=""
+            echo ""
+            log_info "Google Calendar (tùy chọn - để trống nếu không cần)"
+            read -p "Google Client ID: " google_client_id
+            if [[ -n "$google_client_id" ]]; then
+                read -p "Google Client Secret: " google_client_secret
+            fi
+
             echo ""
             log_info "Xác nhận cấu hình:"
             echo "  Tên Bot:   $bot_name"
@@ -826,10 +852,10 @@ add_bot() {
             echo "  Bot Token: ${bot_token:0:10}..."
             echo "  Admin:     ${admin_ids:-'(không)'}"
             echo "  Domain:    ${domain:-'(không)'}"
+            echo "  Google:    ${google_client_id:+'Đã cấu hình'}"
             echo ""
 
-            read -p "Tiếp tục cài đặt? (y/n): " -n 1 -r
-            echo
+            read -p "Tiếp tục cài đặt? (y/n): " -r
             [[ ! $REPLY =~ ^[Yy]$ ]] && return 1
 
             # Run installer in add-bot mode
@@ -842,6 +868,8 @@ add_bot() {
                 ${admin_ids:+--admin-ids "$admin_ids"} \
                 ${domain:+--domain "$domain"} \
                 ${email:+--email "$email"} \
+                ${google_client_id:+--google-client-id "$google_client_id"} \
+                ${google_client_secret:+--google-client-secret "$google_client_secret"} \
                 --skip-interactive
             ;;
         2)
@@ -868,8 +896,7 @@ add_bot() {
             cp -r "$bot_path" "$dest"
             log_success "Bot '$bot_name' đã được thêm vào $dest"
 
-            read -p "Khởi động bot ngay? (y/n): " -n 1 -r
-            echo
+            read -p "Khởi động bot ngay? (y/n): " -r
             [[ $REPLY =~ ^[Yy]$ ]] && start_bot "$bot_slug"
             ;;
         0|"")
@@ -1019,8 +1046,7 @@ restore_bot() {
 
     if [[ -d "$dest" ]]; then
         log_warn "Bot '$new_bot_id' đã tồn tại"
-        read -p "Ghi đè? (y/n): " -n 1 -r
-        echo
+        read -p "Ghi đè? (y/n): " -r
         [[ ! $REPLY =~ ^[Yy]$ ]] && return 1
         rm -rf "$dest"
     fi
@@ -1041,12 +1067,176 @@ restore_bot() {
 
     log_success "Virtual environment đã tạo"
 
-    read -p "Khởi động bot ngay? (y/n): " -n 1 -r
-    echo
+    read -p "Khởi động bot ngay? (y/n): " -r
     [[ $REPLY =~ ^[Yy]$ ]] && start_bot "$new_bot_id"
 }
 
-# Edit .env
+# Interactive .env editor
+env_editor() {
+    local env_file="$1"
+    local bot_id="$2"
+
+    while true; do
+        echo -e "\n${BOLD}Cấu Hình Bot${NC}"
+        echo "─────────────────────────────────────────"
+        echo -e "  ${DIM}1)${NC} 🤖 Telegram Bot (BOT_TOKEN, BOT_NAME)"
+        echo -e "  ${DIM}2)${NC} 🗄️  Database (xem thông tin)"
+        echo -e "  ${DIM}3)${NC} 🌐 Domain (BOT_DOMAIN)"
+        echo -e "  ${DIM}4)${NC} 📊 Monitoring (ADMIN_IDS, HEALTH_PORT, LOG_LEVEL)"
+        echo -e "  ${DIM}5)${NC} 📅 Google Calendar (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)"
+        echo -e "  ${DIM}6)${NC} 🔴 Redis (REDIS_ENABLED, REDIS_URL)"
+        echo -e "  ${DIM}7)${NC} 📈 Metrics (METRICS_ENABLED)"
+        echo -e "  ${DIM}8)${NC} ⏰ Timezone (TZ)"
+        echo -e "  ${DIM}9)${NC} 📝 Mở nano (chỉnh sửa thủ công)"
+        echo -e "  ${DIM}0)${NC} 🔙 Quay lại"
+        echo ""
+
+        read -p "Chọn [0-9]: " choice
+
+        case $choice in
+            1)
+                echo -e "\n${CYAN}=== Telegram Bot ===${NC}"
+                local current_token=$(grep "^BOT_TOKEN=" "$env_file" | cut -d'=' -f2-)
+                local current_name=$(grep "^BOT_NAME=" "$env_file" | cut -d'=' -f2-)
+                echo "BOT_TOKEN hiện tại: ${current_token:0:15}..."
+                echo "BOT_NAME hiện tại: $current_name"
+                echo ""
+                read -p "BOT_TOKEN mới (Enter để giữ nguyên): " new_token
+                read -p "BOT_NAME mới (Enter để giữ nguyên): " new_name
+                [[ -n "$new_token" ]] && sed -i "s|^BOT_TOKEN=.*|BOT_TOKEN=$new_token|" "$env_file"
+                [[ -n "$new_name" ]] && sed -i "s|^BOT_NAME=.*|BOT_NAME=$new_name|" "$env_file"
+                log_success "Đã cập nhật Telegram Bot"
+                ;;
+            2)
+                echo -e "\n${CYAN}=== Database (Chỉ xem) ===${NC}"
+                local current_db=$(grep "^DATABASE_URL=" "$env_file" | cut -d'=' -f2-)
+                # Parse DATABASE_URL: postgresql://user:password@host:port/dbname
+                if [[ "$current_db" =~ postgresql://([^:]+):([^@]+)@([^:]+):([0-9]+)/(.+) ]]; then
+                    local db_user="${BASH_REMATCH[1]}"
+                    local db_pass="${BASH_REMATCH[2]}"
+                    local db_host="${BASH_REMATCH[3]}"
+                    local db_port="${BASH_REMATCH[4]}"
+                    local db_name="${BASH_REMATCH[5]}"
+                    echo -e "Database Name: ${GREEN}$db_name${NC}"
+                    echo -e "Database User: ${GREEN}$db_user${NC}"
+                    echo -e "Database Pass: ${GREEN}$db_pass${NC}"
+                    echo -e "Host: $db_host:$db_port"
+                else
+                    echo "DATABASE_URL: $current_db"
+                fi
+                echo ""
+                echo -e "${DIM}(Để thay đổi database, dùng tùy chọn 9 - Mở nano)${NC}"
+                read -p "Nhấn Enter để quay lại..." _
+                ;;
+            3)
+                echo -e "\n${CYAN}=== Domain ===${NC}"
+                local current_domain=$(grep "^BOT_DOMAIN=" "$env_file" | cut -d'=' -f2-)
+                echo "BOT_DOMAIN hiện tại: ${current_domain:-'(không)'}"
+                echo ""
+                read -p "BOT_DOMAIN mới (Enter để giữ nguyên): " new_domain
+                [[ -n "$new_domain" ]] && sed -i "s|^BOT_DOMAIN=.*|BOT_DOMAIN=$new_domain|" "$env_file"
+                log_success "Đã cập nhật Domain"
+                ;;
+            4)
+                echo -e "\n${CYAN}=== Monitoring ===${NC}"
+                local current_admin=$(grep "^ADMIN_IDS=" "$env_file" | cut -d'=' -f2-)
+                local current_port=$(grep "^HEALTH_PORT=" "$env_file" | cut -d'=' -f2-)
+                local current_log=$(grep "^LOG_LEVEL=" "$env_file" | cut -d'=' -f2-)
+                echo "ADMIN_IDS hiện tại: ${current_admin:-'(không)'}"
+                echo "HEALTH_PORT hiện tại: ${current_port:-8080}"
+                echo "LOG_LEVEL hiện tại: ${current_log:-INFO}"
+                echo ""
+                read -p "ADMIN_IDS mới (User ID/Group ID, Enter để giữ nguyên): " new_admin
+                read -p "HEALTH_PORT mới (Enter để giữ nguyên): " new_port
+                read -p "LOG_LEVEL mới (DEBUG/INFO/WARNING/ERROR, Enter để giữ nguyên): " new_log
+                [[ -n "$new_admin" ]] && sed -i "s|^ADMIN_IDS=.*|ADMIN_IDS=$new_admin|" "$env_file"
+                [[ -n "$new_port" ]] && sed -i "s|^HEALTH_PORT=.*|HEALTH_PORT=$new_port|" "$env_file"
+                [[ -n "$new_log" ]] && sed -i "s|^LOG_LEVEL=.*|LOG_LEVEL=$new_log|" "$env_file"
+                log_success "Đã cập nhật Monitoring"
+                ;;
+            5)
+                echo -e "\n${CYAN}=== Google Calendar ===${NC}"
+                local current_gcal=$(grep "^GOOGLE_CALENDAR_ENABLED=" "$env_file" | cut -d'=' -f2-)
+                local current_gid=$(grep "^GOOGLE_CLIENT_ID=" "$env_file" | cut -d'=' -f2-)
+                local current_gsec=$(grep "^GOOGLE_CLIENT_SECRET=" "$env_file" | cut -d'=' -f2-)
+                echo "GOOGLE_CALENDAR_ENABLED: ${current_gcal:-false}"
+                echo "GOOGLE_CLIENT_ID: ${current_gid:-'(không)'}"
+                echo "GOOGLE_CLIENT_SECRET: ${current_gsec:+'(đã cấu hình)'}"
+                echo ""
+                read -p "GOOGLE_CLIENT_ID mới (Enter để giữ nguyên): " new_gid
+                if [[ -n "$new_gid" ]]; then
+                    read -p "GOOGLE_CLIENT_SECRET mới: " new_gsec
+                    sed -i "s|^GOOGLE_CLIENT_ID=.*|GOOGLE_CLIENT_ID=$new_gid|" "$env_file"
+                    sed -i "s|^GOOGLE_CLIENT_SECRET=.*|GOOGLE_CLIENT_SECRET=$new_gsec|" "$env_file"
+                    sed -i "s|^GOOGLE_CALENDAR_ENABLED=.*|GOOGLE_CALENDAR_ENABLED=true|" "$env_file"
+                    log_success "Đã cập nhật Google Calendar"
+                fi
+                ;;
+            6)
+                echo -e "\n${CYAN}=== Redis ===${NC}"
+                local current_redis=$(grep "^REDIS_ENABLED=" "$env_file" | cut -d'=' -f2-)
+                local current_redis_url=$(grep "^REDIS_URL=" "$env_file" | cut -d'=' -f2-)
+                echo "REDIS_ENABLED hiện tại: ${current_redis:-false}"
+                echo "REDIS_URL hiện tại: ${current_redis_url:-'(không)'}"
+                echo ""
+                read -p "Bật Redis? (true/false, Enter để giữ nguyên): " new_redis
+                if [[ -n "$new_redis" ]]; then
+                    if grep -q "^REDIS_ENABLED=" "$env_file"; then
+                        sed -i "s|^REDIS_ENABLED=.*|REDIS_ENABLED=$new_redis|" "$env_file"
+                    else
+                        echo "REDIS_ENABLED=$new_redis" >> "$env_file"
+                    fi
+                fi
+                if [[ "$new_redis" == "true" || "$current_redis" == "true" ]]; then
+                    read -p "REDIS_URL mới (vd: redis://localhost:6379, Enter để giữ nguyên): " new_redis_url
+                    if [[ -n "$new_redis_url" ]]; then
+                        if grep -q "^REDIS_URL=" "$env_file"; then
+                            sed -i "s|^REDIS_URL=.*|REDIS_URL=$new_redis_url|" "$env_file"
+                        else
+                            echo "REDIS_URL=$new_redis_url" >> "$env_file"
+                        fi
+                    fi
+                fi
+                log_success "Đã cập nhật Redis"
+                ;;
+            7)
+                echo -e "\n${CYAN}=== Metrics ===${NC}"
+                local current_metrics=$(grep "^METRICS_ENABLED=" "$env_file" | cut -d'=' -f2-)
+                echo "METRICS_ENABLED hiện tại: ${current_metrics:-false}"
+                echo ""
+                read -p "Bật Metrics? (true/false, Enter để giữ nguyên): " new_metrics
+                if [[ -n "$new_metrics" ]]; then
+                    if grep -q "^METRICS_ENABLED=" "$env_file"; then
+                        sed -i "s|^METRICS_ENABLED=.*|METRICS_ENABLED=$new_metrics|" "$env_file"
+                    else
+                        echo "METRICS_ENABLED=$new_metrics" >> "$env_file"
+                    fi
+                    log_success "Đã cập nhật Metrics"
+                fi
+                ;;
+            8)
+                echo -e "\n${CYAN}=== Timezone ===${NC}"
+                local current_tz=$(grep "^TZ=" "$env_file" | cut -d'=' -f2-)
+                echo "TZ hiện tại: ${current_tz:-Asia/Ho_Chi_Minh}"
+                echo ""
+                read -p "TZ mới (vd: Asia/Ho_Chi_Minh, Enter để giữ nguyên): " new_tz
+                [[ -n "$new_tz" ]] && sed -i "s|^TZ=.*|TZ=$new_tz|" "$env_file"
+                log_success "Đã cập nhật Timezone"
+                ;;
+            9)
+                ${EDITOR:-nano} "$env_file"
+                ;;
+            0|"")
+                return 0
+                ;;
+            *)
+                log_error "Lựa chọn không hợp lệ"
+                ;;
+        esac
+    done
+}
+
+# Edit .env (wrapper)
 edit_env() {
     local bot_id="$1"
 
@@ -1068,10 +1258,9 @@ edit_env() {
         return 1
     fi
 
-    ${EDITOR:-nano} "$env_file"
+    env_editor "$env_file" "$bot_id"
 
-    read -p "Khởi động lại bot để áp dụng? (y/n): " -n 1 -r
-    echo
+    read -p "Khởi động lại bot để áp dụng? (y/n): " -r
     [[ $REPLY =~ ^[Yy]$ ]] && restart_bot "$bot_id"
 }
 
@@ -1132,7 +1321,7 @@ show_menu() {
     echo ""
     echo -e "  ${DIM}6)${NC} ➕ Thêm bot mới"
     echo -e "  ${DIM}7)${NC} 🗑️  Xóa bot"
-    echo -e "  ${DIM}8)${NC} ⚙️  Chỉnh sửa .env"
+    echo -e "  ${DIM}8)${NC} 🤖 Cấu hình thông tin bot"
     echo ""
     echo -e "  ${DIM}9)${NC} 💾 Backup bot"
     echo -e "  ${DIM}10)${NC} 📥 Restore bot"
@@ -1189,7 +1378,8 @@ print_usage() {
     echo "  backup <bot-id>     Backup bot"
     echo "  restore <file>      Restore từ backup"
     echo "  backups             Liệt kê backups"
-    echo "  env <bot-id>        Chỉnh sửa .env"
+    echo "  config <bot-id>     Cấu hình thông tin bot"
+    echo "  env <bot-id>        Alias cho config"
     echo "  info                Thông tin hệ thống"
     echo "  help                Hiển thị trợ giúp"
     echo ""
@@ -1243,7 +1433,7 @@ main() {
         backups)
             list_backups
             ;;
-        env)
+        config|env)
             edit_env "$2"
             ;;
         info)

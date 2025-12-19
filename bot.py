@@ -207,33 +207,32 @@ async def main() -> None:
     init_report_scheduler(reminder_scheduler.scheduler, application.bot, db)
     logger.info("Report scheduler started")
 
-    # Initialize monitoring (optional - only if admin IDs configured)
+    # Initialize monitoring
     health_server = None
     alert_service = None
     resource_monitor = None
     start_time = datetime.now()
 
+    # Parse admin IDs (supports User ID and Group ID - negative numbers)
     admin_ids_str = os.getenv('ADMIN_IDS', '')
-    # Support both personal IDs (positive) and group IDs (negative)
     admin_ids = []
     for x in admin_ids_str.split(','):
         x = x.strip()
         if x.lstrip('-').isdigit() and x:
             admin_ids.append(int(x))
 
-    if admin_ids:
-        try:
-            from monitoring import HealthCheckServer, AlertService, ResourceMonitor
+    # Start health check server (always, for nginx/domain to work)
+    try:
+        from monitoring import HealthCheckServer, AlertService, ResourceMonitor
 
-            # Initialize alert service
+        health_port = int(os.getenv('HEALTH_PORT', 8080))
+        health_server = HealthCheckServer(application, db, port=health_port)
+        await health_server.start()
+        logger.info(f"Health check server started on port {health_port}")
+
+        # Start alert service and resource monitor only if admin IDs configured
+        if admin_ids:
             alert_service = AlertService(application.bot, admin_ids)
-
-            # Start health check server
-            health_port = int(os.getenv('HEALTH_PORT', 8080))
-            health_server = HealthCheckServer(application, db, port=health_port)
-            await health_server.start()
-
-            # Start resource monitor
             resource_monitor = ResourceMonitor(db, alert_service, start_time)
             await resource_monitor.start()
 
@@ -243,13 +242,13 @@ async def main() -> None:
             # Send startup alert
             await alert_service.alert_bot_start()
 
-            logger.info(f"Monitoring started (health port: {health_port}, admins: {len(admin_ids)})")
-        except ImportError as e:
-            logger.warning(f"Monitoring not available: {e}")
-        except Exception as e:
-            logger.error(f"Failed to start monitoring: {e}")
-    else:
-        logger.info("Monitoring disabled (no ADMIN_IDS configured)")
+            logger.info(f"Monitoring alerts enabled (admins: {len(admin_ids)})")
+        else:
+            logger.info("Monitoring alerts disabled (no ADMIN_IDS configured)")
+    except ImportError as e:
+        logger.warning(f"Monitoring not available: {e}")
+    except Exception as e:
+        logger.error(f"Failed to start monitoring: {e}")
 
     # Start OAuth callback server (for Google Calendar)
     oauth_runner = None
