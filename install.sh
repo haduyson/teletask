@@ -446,13 +446,16 @@ read_key() {
     IFS= read -rsn1 key 2>/dev/null
     if [[ $key == $'\x1b' ]]; then
         read -rsn2 -t 0.1 key 2>/dev/null
-        case "$key" in
-            '[A') echo "UP" ;; '[B') echo "DOWN" ;; *) echo "ESC" ;;
-        esac
+        case "$key" in '[A') echo "UP" ;; '[B') echo "DOWN" ;; *) echo "ESC" ;; esac
     elif [[ $key == "" ]]; then echo "ENTER"
     elif [[ $key == "q" ]] || [[ $key == "Q" ]]; then echo "QUIT"
     elif [[ $key == "j" ]]; then echo "DOWN"
     elif [[ $key == "k" ]]; then echo "UP"
+    elif [[ $key =~ ^[0-9]$ ]]; then
+        if [[ $key == "0" ]]; then
+            local second; IFS= read -rsn1 -t 0.3 second 2>/dev/null
+            [[ $second == "0" ]] && echo "EXIT" || echo "NUM_0"
+        else echo "NUM_$key"; fi
     else echo "$key"; fi
 }
 
@@ -462,16 +465,31 @@ select_menu() {
     hide_cursor; stty -echo 2>/dev/null
     while true; do
         echo -e "\n${BOLD}${title}${NC}"
-        echo -e "${DIM}↑↓ di chuyển • Enter chọn • q thoát${NC}\n"
+        echo -e "${DIM}↑↓/1-9 chọn • Enter xác nhận • 0 quay lại • 00 thoát${NC}\n"
         for i in "${!options[@]}"; do
-            if [[ $i -eq $selected ]]; then
-                echo -e "  ${REVERSE}${GREEN} › ${options[$i]} ${NC}"
-            else echo -e "    ${options[$i]}"; fi
+            local num_label
+            if [[ $i -eq $((num_options - 1)) ]]; then num_label="${DIM}0${NC}"
+            elif [[ $i -lt 9 ]]; then num_label="${DIM}$((i + 1))${NC}"
+            else num_label="${DIM} ${NC}"; fi
+            if [[ $i -eq $selected ]]; then echo -e "${num_label} ${REVERSE}${GREEN} › ${options[$i]} ${NC}"
+            else echo -e "${num_label}   ${options[$i]}"; fi
         done
         local key=$(read_key); local lines_up=$((num_options + 3))
         case "$key" in
             UP) ((selected--)); [[ $selected -lt 0 ]] && selected=$((num_options - 1)) ;;
             DOWN) ((selected++)); [[ $selected -ge $num_options ]] && selected=0 ;;
+            NUM_[1-9]) local num=${key#NUM_}
+                if [[ $num -le $num_options ]]; then
+                    show_cursor; stty echo 2>/dev/null; SELECTED_INDEX=$((num - 1))
+                    cursor_up $lines_up; for ((i=0; i<lines_up; i++)); do clear_line; echo ""; done
+                    cursor_up $lines_up; return 0
+                fi ;;
+            NUM_0) show_cursor; stty echo 2>/dev/null; SELECTED_INDEX=$((num_options - 1))
+                cursor_up $lines_up; for ((i=0; i<lines_up; i++)); do clear_line; echo ""; done
+                cursor_up $lines_up; return 0 ;;
+            EXIT) show_cursor; stty echo 2>/dev/null; SELECTED_INDEX=-1
+                cursor_up $lines_up; for ((i=0; i<lines_up; i++)); do clear_line; echo ""; done
+                cursor_up $lines_up; echo -e "\n${GREEN}Tạm biệt!${NC}\n"; exit 0 ;;
             ENTER) show_cursor; stty echo 2>/dev/null; SELECTED_INDEX=$selected
                 cursor_up $lines_up; for ((i=0; i<lines_up; i++)); do clear_line; echo ""; done
                 cursor_up $lines_up; return 0 ;;
