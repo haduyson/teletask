@@ -247,7 +247,8 @@ setup_database() {
     sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" 2>/dev/null || true
     sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null || true
 
-    DATABASE_URL="postgresql+asyncpg://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME"
+    # Use plain postgresql:// - asyncpg doesn't accept +asyncpg suffix
+    DATABASE_URL="postgresql://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME"
     log_success "Database '$DB_NAME' đã tạo"
 }
 
@@ -456,9 +457,9 @@ EOF
 }
 EOF
 
-    # Run database migrations
+    # Run database migrations (alembic.ini is at BOT_DIR root)
     log_info "Đang chạy database migrations..."
-    cd "$BOT_DIR/database/migrations"
+    cd "$BOT_DIR"
     "$BOT_DIR/venv/bin/alembic" upgrade head
     cd - > /dev/null
 

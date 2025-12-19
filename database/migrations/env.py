@@ -22,9 +22,12 @@ load_dotenv()
 config = context.config
 
 # Set SQLAlchemy URL from environment
+# Alembic uses sync psycopg2, so we use plain postgresql:// URL
 database_url = os.getenv("DATABASE_URL")
 if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+    # Remove any async driver suffix for sync migrations
+    sync_url = database_url.replace("+asyncpg", "")
+    config.set_main_option("sqlalchemy.url", sync_url)
 
 # Interpret the config file for logging
 if config.config_file_name is not None:
