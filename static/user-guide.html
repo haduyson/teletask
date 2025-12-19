@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tài Liệu Đầy Đủ - TeleTask Bot</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+            background: linear-gradient(180deg, #f5f5f7 0%, #e8e8ed 100%);
+            min-height: 100vh;
+            padding: 30px;
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            border-radius: 12px;
+            box-shadow: 0 22px 70px 4px rgba(0,0,0,0.12);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(180deg, #e8e8e8 0%, #d6d6d6 100%);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .traffic-lights { display: flex; gap: 8px; }
+        .traffic-light { width: 12px; height: 12px; border-radius: 50%; }
+        .light-close { background: #ff5f57; }
+        .light-minimize { background: #febc2e; }
+        .light-maximize { background: #28c840; }
+        .header-title { flex: 1; text-align: center; font-size: 13px; font-weight: 500; color: #4d4d4d; }
+        .back-btn {
+            background: none;
+            border: none;
+            font-size: 14px;
+            color: #007aff;
+            cursor: pointer;
+            padding: 4px 12px;
+            border-radius: 6px;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .back-btn:hover { background: rgba(0,122,255,0.1); }
+        .content { padding: 40px; }
+
+        /* Typography */
+        h1 { font-size: 28px; font-weight: 700; color: #1d1d1f; margin-bottom: 12px; text-align: center; }
+        .subtitle { font-size: 16px; color: #86868b; text-align: center; margin-bottom: 40px; }
+        h2 { font-size: 22px; font-weight: 600; color: #1d1d1f; margin: 40px 0 16px; padding-bottom: 10px; border-bottom: 2px solid #007aff; }
+        h3 { font-size: 17px; font-weight: 600; color: #1d1d1f; margin: 24px 0 12px; }
+        p { font-size: 15px; color: #1d1d1f; margin-bottom: 12px; }
+
+        /* Lists */
+        ul, ol { margin: 12px 0 12px 24px; }
+        li { font-size: 15px; color: #1d1d1f; margin-bottom: 8px; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin: 16px 0 24px; }
+        th, td { padding: 12px 16px; text-align: left; border-bottom: 1px solid rgba(0,0,0,0.08); }
+        th { background: #f5f5f7; font-weight: 600; font-size: 13px; color: #86868b; text-transform: uppercase; }
+        td { font-size: 14px; }
+        tr:hover { background: rgba(0,122,255,0.04); }
+
+        /* Code */
+        code {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+            background: rgba(0,122,255,0.08);
+            color: #007aff;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        pre {
+            background: #1d1d1f;
+            color: #f5f5f7;
+            padding: 16px 20px;
+            border-radius: 10px;
+            overflow-x: auto;
+            margin: 12px 0 20px;
+        }
+        pre code { background: none; color: inherit; padding: 0; }
+
+        /* Info boxes */
+        .info-box {
+            padding: 16px 20px;
+            border-radius: 10px;
+            margin: 16px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .info-box.tip { background: rgba(52,199,89,0.08); border: 1px solid rgba(52,199,89,0.15); }
+        .info-box.warning { background: rgba(255,149,0,0.08); border: 1px solid rgba(255,149,0,0.15); }
+        .info-box.note { background: rgba(0,122,255,0.06); border: 1px solid rgba(0,122,255,0.1); }
+        .info-box-icon { font-size: 20px; flex-shrink: 0; }
+        .info-box-content { font-size: 14px; }
+        .info-box-content strong { color: #248a3d; }
+        .info-box.warning .info-box-content strong { color: #c93400; }
+        .info-box.note .info-box-content strong { color: #0055d4; }
+
+        /* Section cards */
+        .section-card {
+            background: #f5f5f7;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 16px 0;
+        }
+        .section-card h4 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: #1d1d1f; }
+
+        /* Divider */
+        hr { border: none; border-top: 1px solid rgba(0,0,0,0.08); margin: 32px 0; }
+
+        /* Footer */
+        .footer { text-align: center; padding: 30px; border-top: 1px solid rgba(0,0,0,0.08); margin-top: 40px; }
+        .footer p { font-size: 13px; color: #86868b; }
+
+        /* TOC */
+        .toc {
+            background: #f5f5f7;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 32px;
+        }
+        .toc h3 { margin-top: 0; font-size: 15px; margin-bottom: 12px; }
+        .toc ul { list-style: none; margin: 0; }
+        .toc li { margin-bottom: 6px; }
+        .toc a { color: #007aff; text-decoration: none; font-size: 14px; }
+        .toc a:hover { text-decoration: underline; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .content { padding: 24px; }
+            h1 { font-size: 24px; }
+            h2 { font-size: 20px; }
+            table { font-size: 13px; }
+            th, td { padding: 10px 12px; }
+        }
+        @media (max-width: 520px) {
+            body { padding: 8px; }
+            .content { padding: 16px; }
+            h1 { font-size: 20px; }
+            h2 { font-size: 18px; }
+            .header-title { font-size: 12px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <a href="/" class="back-btn">← Quay lại</a>
+            <div class="traffic-lights">
+                <div class="traffic-light light-close"></div>
+                <div class="traffic-light light-minimize"></div>
+                <div class="traffic-light light-maximize"></div>
+            </div>
+            <div class="header-title">Tài Liệu Đầy Đủ</div>
+            <div style="width: 80px;"></div>
+        </div>
+
+        <div class="content">
+            <h1>📋 Hướng Dẫn Sử Dụng TeleTask Bot</h1>
+            <p class="subtitle">Bot quản lý công việc qua Telegram cho nhóm và cá nhân</p>
+
+            <div class="toc">
+                <h3>📑 Mục Lục</h3>
+                <ul>
+                    <li><a href="#start">Bắt Đầu Nhanh</a></li>
+                    <li><a href="#taoviec">Tạo Việc (/taoviec)</a></li>
+                    <li><a href="#giaoviec">Giao Việc (/giaoviec)</a></li>
+                    <li><a href="#taskids">Loại Việc & Mã ID</a></li>
+                    <li><a href="#commands">Các Lệnh Khác</a></li>
+                    <li><a href="#stats">Thống Kê</a></li>
+                    <li><a href="#calendar">Google Calendar</a></li>
+                    <li><a href="#settings">Cài Đặt</a></li>
+                    <li><a href="#tips">Mẹo Sử Dụng</a></li>
+                </ul>
+            </div>
+
+            <h2 id="start">🚀 Bắt Đầu Nhanh</h2>
+            <ol>
+                <li>Khởi động bot: <code>/start</code></li>
+                <li>Tạo việc: <code>/taoviec</code> (chế độ wizard)</li>
+                <li>Giao việc: <code>/giaoviec</code> (chế độ wizard)</li>
+                <li>Xem việc: <code>/xemviec</code></li>
+            </ol>
+
+            <hr>
+
+            <h2 id="taoviec">📝 Tạo Việc (<code>/taoviec</code>)</h2>
+            <p>Tạo việc từng bước với nút bấm hướng dẫn.</p>
+
+            <h3>Cách Sử Dụng</h3>
+            <ol>
+                <li><strong>Bắt đầu wizard:</strong> Gõ <code>/taoviec</code> (không tham số)</li>
+                <li><strong>Bước 1 - Nội dung:</strong> Nhập mô tả công việc</li>
+                <li><strong>Bước 2 - Deadline:</strong> Chọn từ nút hoặc nhập thời gian</li>
+                <li><strong>Bước 3 - Người nhận:</strong> Chọn "Cho mình" hoặc "Giao người khác"</li>
+                <li><strong>Bước 4 - Độ ưu tiên:</strong> Chọn mức ưu tiên</li>
+                <li><strong>Bước 5 - Xác nhận:</strong> Xem lại và tạo việc</li>
+            </ol>
+
+            <h3>Chế Độ Nhanh</h3>
+            <p>Bỏ qua wizard bằng cách nhập trực tiếp:</p>
+            <pre><code>/taoviec Hoàn thành báo cáo 17h</code></pre>
+
+            <h3>Tùy Chọn Deadline</h3>
+            <table>
+                <tr><th>Nút</th><th>Ý nghĩa</th></tr>
+                <tr><td>Hôm nay</td><td>Cuối ngày hôm nay (23:59)</td></tr>
+                <tr><td>Ngày mai</td><td>Cuối ngày mai (23:59)</td></tr>
+                <tr><td>Tuần sau</td><td>7 ngày từ bây giờ</td></tr>
+                <tr><td>Tháng sau</td><td>30 ngày từ bây giờ</td></tr>
+                <tr><td>Nhập thời gian</td><td>Nhập thời gian tùy chỉnh</td></tr>
+                <tr><td>Bỏ qua</td><td>Không có deadline</td></tr>
+            </table>
+
+            <h3>Định Dạng Thời Gian</h3>
+            <pre><code>14h30          → Hôm nay 14:30
+ngày mai 10h   → Ngày mai 10:00
+thứ 6 15h      → Thứ 6 tuần này 15:00
+20/12 9h       → Ngày 20/12 lúc 09:00</code></pre>
+
+            <hr>
+
+            <h2 id="giaoviec">👥 Giao Việc (<code>/giaoviec</code>)</h2>
+            <p>Giao việc cho một hoặc nhiều người.</p>
+
+            <h3>Cách Sử Dụng</h3>
+            <ol>
+                <li><strong>Bắt đầu wizard:</strong> Gõ <code>/giaoviec</code> (không tham số)</li>
+                <li><strong>Bước 1 - Nội dung:</strong> Nhập mô tả công việc</li>
+                <li><strong>Bước 2 - Người nhận:</strong> Tag hoặc mention người dùng</li>
+                <li><strong>Bước 3 - Deadline:</strong> Chọn deadline</li>
+                <li><strong>Bước 4 - Độ ưu tiên:</strong> Chọn mức ưu tiên</li>
+                <li><strong>Bước 5 - Xác nhận:</strong> Xem lại và giao việc</li>
+            </ol>
+
+            <h3>Chế Độ Nhanh</h3>
+            <pre><code>/giaoviec @user Nội dung việc 14h
+/giaoviec @user1 @user2 Việc nhóm 17h</code></pre>
+
+            <h3>Cách Mention Người Dùng</h3>
+            <div class="section-card">
+                <h4>Hai cách mention:</h4>
+                <ol>
+                    <li><strong>@username</strong> - Cho người có username Telegram<br><code>@usertelegram2025 @hasontech2050</code></li>
+                    <li><strong>Text mention</strong> - Cho người KHÔNG có username
+                        <ul>
+                            <li>Nhấn vào tên thành viên trong nhóm</li>
+                            <li>Chọn "Mention" từ popup</li>
+                            <li>Hoạt động ngay cả khi người dùng không có @username</li>
+                        </ul>
+                    </li>
+                </ol>
+            </div>
+
+            <div class="info-box note">
+                <span class="info-box-icon">ℹ️</span>
+                <div class="info-box-content">
+                    <strong>Lưu ý trong nhóm:</strong> Bạn phải REPLY tin nhắn của bot khi nhập text (vuốt phải tin nhắn bot → Reply). Do chế độ bảo mật của Telegram bot.
+                </div>
+            </div>
+
+            <hr>
+
+            <h2 id="taskids">🏷️ Loại Việc & Mã ID</h2>
+            <table>
+                <tr><th>Định dạng</th><th>Loại</th><th>Mô tả</th></tr>
+                <tr><td><code>T-xxx</code></td><td>Việc cá nhân</td><td>Việc một người nhận</td></tr>
+                <tr><td><code>G-xxx</code></td><td>Việc nhóm</td><td>Việc nhiều người (cha)</td></tr>
+                <tr><td><code>P-xxx</code></td><td>Việc con</td><td>Việc con của việc nhóm</td></tr>
+            </table>
+
+            <h3>Mức Độ Ưu Tiên</h3>
+            <table>
+                <tr><th>Mức</th><th>Icon</th><th>Mô tả</th></tr>
+                <tr><td>Khẩn cấp</td><td>🔴</td><td>Cần xử lý ngay</td></tr>
+                <tr><td>Cao</td><td>🟠</td><td>Ưu tiên cao</td></tr>
+                <tr><td>Bình thường</td><td>🟡</td><td>Mặc định</td></tr>
+                <tr><td>Thấp</td><td>🟢</td><td>Ưu tiên thấp</td></tr>
+            </table>
+
+            <hr>
+
+            <h2 id="commands">⌨️ Các Lệnh Khác</h2>
+            <table>
+                <tr><th>Lệnh</th><th>Mô tả</th></tr>
+                <tr><td><code>/xemviec</code></td><td>Xem việc với menu phân loại</td></tr>
+                <tr><td><code>/xemviec T-123</code></td><td>Xem chi tiết việc</td></tr>
+                <tr><td><code>/xong T-123</code></td><td>Đánh dấu hoàn thành</td></tr>
+                <tr><td><code>/danglam T-123</code></td><td>Đánh dấu đang làm</td></tr>
+                <tr><td><code>/xoa T-123</code></td><td>Xóa việc</td></tr>
+                <tr><td><code>/viecdagiao</code></td><td>Xem việc đã giao cho người khác</td></tr>
+                <tr><td><code>/vieccanhan</code></td><td>Tạo việc cá nhân</td></tr>
+                <tr><td><code>/nhacviec T-123 14h</code></td><td>Đặt nhắc nhở</td></tr>
+                <tr><td><code>/thongtin</code></td><td>Thông tin bot</td></tr>
+            </table>
+
+            <h3>Xóa Hàng Loạt</h3>
+            <table>
+                <tr><th>Lệnh</th><th>Mô tả</th></tr>
+                <tr><td><code>/xoahet</code></td><td>Xóa tất cả việc bạn tạo</td></tr>
+                <tr><td><code>/xoaviecdagiao</code></td><td>Xóa việc đã giao cho người khác</td></tr>
+            </table>
+
+            <div class="info-box warning">
+                <span class="info-box-icon">⚠️</span>
+                <div class="info-box-content">
+                    <strong>Cảnh báo:</strong> Xóa hàng loạt không thể hoàn tác!
+                </div>
+            </div>
+
+            <hr>
+
+            <h2 id="stats">📊 Thống Kê</h2>
+            <table>
+                <tr><th>Lệnh</th><th>Mô tả</th></tr>
+                <tr><td><code>/thongke</code></td><td>Thống kê tổng hợp (tất cả)</td></tr>
+                <tr><td><code>/thongketuan</code></td><td>Thống kê tuần này</td></tr>
+                <tr><td><code>/thongkethang</code></td><td>Thống kê tháng này</td></tr>
+                <tr><td><code>/viectrehan</code></td><td>Xem việc trễ hạn</td></tr>
+                <tr><td><code>/export</code></td><td>Xuất báo cáo (CSV, Excel, PDF)</td></tr>
+            </table>
+
+            <h3>Phân Loại Thống Kê</h3>
+            <ul>
+                <li><strong>Việc đã giao:</strong> Việc bạn giao cho người khác</li>
+                <li><strong>Việc được giao:</strong> Việc người khác giao cho bạn</li>
+                <li><strong>Việc cá nhân:</strong> Việc tự tạo cho mình</li>
+            </ul>
+
+            <hr>
+
+            <h2 id="calendar">📅 Google Calendar (<code>/lichgoogle</code>)</h2>
+            <p>Đồng bộ deadline việc với Google Calendar.</p>
+
+            <h3>Cách Kết Nối</h3>
+            <ol>
+                <li>Chạy <code>/lichgoogle</code></li>
+                <li>Nhấn nút "🔗 Kết nối Google"</li>
+                <li>Đăng nhập tài khoản Google</li>
+                <li>Cấp quyền truy cập calendar</li>
+                <li>Quay lại Telegram - thấy thông báo thành công</li>
+            </ol>
+
+            <h3>Menu Cài Đặt</h3>
+            <table>
+                <tr><th>Nút</th><th>Chức năng</th></tr>
+                <tr><td>🔄 Chế độ đồng bộ</td><td>Chuyển chế độ (Tự động/Thủ công)</td></tr>
+                <tr><td>⚡ Đồng bộ ngay</td><td>Đồng bộ tất cả việc vào lịch ngay</td></tr>
+                <tr><td>❌ Ngắt kết nối</td><td>Ngắt kết nối tài khoản Google</td></tr>
+            </table>
+
+            <h3>Những Gì Được Đồng Bộ</h3>
+            <ul>
+                <li>✅ Tạo việc → Tạo sự kiện calendar</li>
+                <li>✅ Cập nhật việc → Cập nhật sự kiện calendar</li>
+                <li>✅ Xóa việc → Xóa sự kiện calendar</li>
+                <li>✅ Khôi phục việc → Khôi phục sự kiện calendar</li>
+                <li>✅ Hoàn thành việc → Sự kiện hiển thị ✅ ở tiêu đề</li>
+            </ul>
+
+            <hr>
+
+            <h2 id="settings">⚙️ Cài Đặt (<code>/caidat</code>)</h2>
+            <p>Cấu hình thông báo và múi giờ.</p>
+
+            <h3>Menu Cài Đặt</h3>
+            <table>
+                <tr><th>Nút</th><th>Chức năng</th></tr>
+                <tr><td>🔔 Thông báo</td><td>Cài đặt thông báo</td></tr>
+                <tr><td>🌏 Múi giờ</td><td>Cài đặt múi giờ</td></tr>
+            </table>
+
+            <h3>Cài Đặt Thông Báo</h3>
+            <table>
+                <tr><th>Cài đặt</th><th>Mô tả</th></tr>
+                <tr><td>📥 Giao việc</td><td>Khi ai đó giao việc cho bạn</td></tr>
+                <tr><td>📊 Trạng thái</td><td>Khi trạng thái việc thay đổi</td></tr>
+                <tr><td>⏰ Nhắc việc</td><td>Nhắc nhở trước deadline</td></tr>
+                <tr><td>📈 Báo cáo</td><td>Báo cáo tổng hợp hàng ngày/tuần</td></tr>
+            </table>
+
+            <h3>Cài Đặt Nhắc Nhở</h3>
+            <table>
+                <tr><th>Tùy chọn</th><th>Thời điểm</th></tr>
+                <tr><td>24 giờ trước</td><td>24 giờ trước deadline</td></tr>
+                <tr><td>1 giờ trước</td><td>1 giờ trước deadline</td></tr>
+                <tr><td>30 phút trước</td><td>30 phút trước deadline</td></tr>
+                <tr><td>5 phút trước</td><td>5 phút trước deadline</td></tr>
+                <tr><td>Khi trễ hạn</td><td>Khi việc trễ hạn</td></tr>
+            </table>
+
+            <h3>Nguồn Nhắc Nhở</h3>
+            <table>
+                <tr><th>Nguồn</th><th>Mô tả</th></tr>
+                <tr><td>Telegram</td><td>Bot gửi nhắc nhở trong chat</td></tr>
+                <tr><td>Google Calendar</td><td>Thông báo từ ứng dụng Calendar</td></tr>
+                <tr><td>Cả hai</td><td>Cả Telegram và Calendar</td></tr>
+            </table>
+
+            <hr>
+
+            <h2 id="tips">💡 Mẹo Sử Dụng</h2>
+
+            <div class="info-box tip">
+                <span class="info-box-icon">✨</span>
+                <div class="info-box-content">
+                    <strong>Dùng wizard</strong> cho việc phức tạp với nhiều tùy chọn
+                </div>
+            </div>
+
+            <div class="info-box tip">
+                <span class="info-box-icon">⚡</span>
+                <div class="info-box-content">
+                    <strong>Dùng chế độ nhanh</strong> cho việc đơn giản
+                </div>
+            </div>
+
+            <div class="info-box tip">
+                <span class="info-box-icon">👤</span>
+                <div class="info-box-content">
+                    <strong>Text mention</strong> hoạt động với người không có @username
+                </div>
+            </div>
+
+            <div class="info-box tip">
+                <span class="info-box-icon">💬</span>
+                <div class="info-box-content">
+                    <strong>Reply tin nhắn bot</strong> trong nhóm chat khi nhập text
+                </div>
+            </div>
+
+            <div class="info-box tip">
+                <span class="info-box-icon">📅</span>
+                <div class="info-box-content">
+                    <strong>Kết nối Google Calendar</strong> (<code>/lichgoogle</code>) để nhận thông báo calendar
+                </div>
+            </div>
+
+            <div class="info-box tip">
+                <span class="info-box-icon">🔔</span>
+                <div class="info-box-content">
+                    <strong>Dùng "Cả hai" nguồn nhắc</strong> để nhận thông báo qua cả Telegram và Calendar
+                </div>
+            </div>
+
+            <div class="footer">
+                <p>TeleTask Bot — Quản lý công việc hiệu quả qua Telegram</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

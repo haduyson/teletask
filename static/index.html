@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hướng Dẫn Sử Dụng</title>
+    <style>
+        /* Reset */
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Base */
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Layout Container */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ==================== SIDEBAR ==================== */
+        .sidebar {
+            width: 260px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-right: 1px solid rgba(0, 0, 0, 0.1);
+            padding: 20px 16px;
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+        }
+
+        /* Desktop: sidebar always visible */
+        @media (min-width: 769px) {
+            .sidebar {
+                position: sticky;
+                top: 0;
+                height: 100vh;
+                transform: none !important;
+            }
+        }
+
+        /* Mobile: sidebar hidden by default */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+                padding-bottom: 45px;
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 16px;
+            margin-bottom: 16px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .sidebar-logo {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1d1d1f;
+        }
+
+        .sidebar-close {
+            display: none;
+            width: 32px;
+            height: 32px;
+            border: none;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar-close {
+                display: flex;
+            }
+        }
+
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+
+        .sidebar-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #86868b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0 12px;
+            margin-bottom: 8px;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #1d1d1f;
+            text-decoration: none;
+            transition: background 0.15s;
+            cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .sidebar-item:hover,
+        .sidebar-item:active {
+            background: rgba(0, 0, 0, 0.05);
+        }
+
+        .sidebar-item.active {
+            background: #007aff;
+            color: white;
+        }
+
+        .sidebar-icon {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        /* ==================== OVERLAY ==================== */
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 999;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        /* ==================== MAIN CONTENT ==================== */
+        .main-wrapper {
+            flex: 1;
+            min-width: 0;
+            background: rgba(246, 246, 246, 0.8);
+        }
+
+        @media (min-width: 769px) {
+            .main-wrapper {
+                margin-left: 0;
+                background: transparent;
+            }
+        }
+
+        /* Mobile Header */
+        .mobile-header {
+            display: none;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        @media (max-width: 768px) {
+            .mobile-header {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }
+        }
+
+        .menu-button {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: rgba(0, 0, 0, 0.05);
+            border-radius: 10px;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        .menu-button:active {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .mobile-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+
+        /* Main Content Area */
+        .main-content {
+            padding: 40px;
+            max-width: 900px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 20px 16px;
+            }
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 40px 0 50px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+            margin-bottom: 40px;
+        }
+
+        .hero-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(180deg, #007aff 0%, #0055d4 100%);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            margin: 0 auto 20px;
+            box-shadow: 0 8px 24px rgba(0, 122, 255, 0.3);
+        }
+
+        .hero h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin-bottom: 8px;
+        }
+
+        .hero p {
+            font-size: 17px;
+            color: #86868b;
+        }
+
+        @media (max-width: 768px) {
+            .hero {
+                padding: 30px 0 40px;
+            }
+            .hero-icon {
+                width: 64px;
+                height: 64px;
+                font-size: 32px;
+            }
+            .hero h1 {
+                font-size: 24px;
+            }
+            .hero p {
+                font-size: 15px;
+            }
+        }
+
+        /* Feature Grid */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 50px;
+        }
+
+        @media (max-width: 768px) {
+            .feature-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 12px;
+            }
+        }
+
+        .feature-card {
+            background: #f5f5f7;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        }
+
+        .feature-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+
+        .feature-card h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 4px;
+        }
+
+        .feature-card p {
+            font-size: 13px;
+            color: #86868b;
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 50px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+        }
+
+        .section-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(180deg, #f5f5f7 0%, #e8e8ed 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+
+        /* Command Items */
+        .command-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 12px 16px;
+            background: #f5f5f7;
+            border-radius: 10px;
+            margin-bottom: 8px;
+        }
+
+        .command-code {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            color: #007aff;
+            min-width: 200px;
+            flex-shrink: 0;
+        }
+
+        .command-desc {
+            font-size: 13px;
+            color: #1d1d1f;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 768px) {
+            .command-item {
+                flex-direction: column;
+            }
+            .command-code {
+                min-width: auto;
+                margin-bottom: 6px;
+            }
+        }
+
+        /* Example Box */
+        .example-box {
+            background: rgba(0, 122, 255, 0.06);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-top: 12px;
+            border: 1px solid rgba(0, 122, 255, 0.1);
+        }
+
+        .example-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #007aff;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+
+        .example-code {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+            color: #1d1d1f;
+            display: block;
+            padding: 4px 0;
+        }
+
+        /* Tip Box */
+        .tip-box {
+            background: rgba(52, 199, 89, 0.08);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-top: 16px;
+            border: 1px solid rgba(52, 199, 89, 0.15);
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .tip-icon {
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .tip-content {
+            font-size: 13px;
+            color: #1d1d1f;
+            line-height: 1.5;
+        }
+
+        .tip-content strong {
+            color: #248a3d;
+        }
+
+        .tip-content ul {
+            margin: 8px 0 0 0;
+            padding-left: 20px;
+        }
+
+        /* Tips Grid */
+        .tips-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .tip-card {
+            border-radius: 10px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+        }
+
+        .tip-card.green {
+            background: rgba(52, 199, 89, 0.08);
+            border: 1px solid rgba(52, 199, 89, 0.12);
+        }
+
+        .tip-card.blue {
+            background: rgba(0, 122, 255, 0.06);
+            border: 1px solid rgba(0, 122, 255, 0.1);
+        }
+
+        .tip-card.purple {
+            background: rgba(175, 82, 222, 0.08);
+            border: 1px solid rgba(175, 82, 222, 0.12);
+        }
+
+        .tip-card .tip-icon {
+            font-size: 24px;
+        }
+
+        .tip-card h4 {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1d1d1f;
+            margin-bottom: 4px;
+        }
+
+        .tip-card p {
+            font-size: 13px;
+            color: #86868b;
+            line-height: 1.5;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 30px;
+            border-top: 1px solid rgba(0, 0, 0, 0.08);
+            margin-top: 40px;
+        }
+
+        .footer p {
+            font-size: 13px;
+            color: #86868b;
+        }
+
+        .footer .brand {
+            font-weight: 600;
+            color: #1d1d1f;
+        }
+    </style>
+</head>
+<body>
+    <!-- Overlay for mobile menu -->
+    <div class="overlay" id="overlay"></div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <span class="sidebar-logo bot-name">TeleTask Bot</span>
+                <button class="sidebar-close" id="sidebarClose">✕</button>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Bắt đầu</div>
+                <a href="#features" class="sidebar-item active">
+                    <span class="sidebar-icon">✨</span>
+                    <span>Tính năng</span>
+                </a>
+                <a href="#basic" class="sidebar-item">
+                    <span class="sidebar-icon">🚀</span>
+                    <span>Lệnh cơ bản</span>
+                </a>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Quản lý việc</div>
+                <a href="#create" class="sidebar-item">
+                    <span class="sidebar-icon">📝</span>
+                    <span>Tạo việc</span>
+                </a>
+                <a href="#recurring" class="sidebar-item">
+                    <span class="sidebar-icon">🔄</span>
+                    <span>Việc lặp lại</span>
+                </a>
+                <a href="#view" class="sidebar-item">
+                    <span class="sidebar-icon">👀</span>
+                    <span>Xem việc</span>
+                </a>
+                <a href="#update" class="sidebar-item">
+                    <span class="sidebar-icon">✏️</span>
+                    <span>Cập nhật</span>
+                </a>
+                <a href="#reminder" class="sidebar-item">
+                    <span class="sidebar-icon">⏰</span>
+                    <span>Nhắc việc</span>
+                </a>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Báo cáo</div>
+                <a href="#stats" class="sidebar-item">
+                    <span class="sidebar-icon">📊</span>
+                    <span>Thống kê</span>
+                </a>
+                <a href="#export" class="sidebar-item">
+                    <span class="sidebar-icon">📤</span>
+                    <span>Xuất báo cáo</span>
+                </a>
+            </div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-title">Khác</div>
+                <a href="#calendar" class="sidebar-item">
+                    <span class="sidebar-icon">📅</span>
+                    <span>Google Calendar</span>
+                </a>
+                <a href="#settings" class="sidebar-item">
+                    <span class="sidebar-icon">⚙️</span>
+                    <span>Cài đặt</span>
+                </a>
+                <a href="#tips" class="sidebar-item">
+                    <span class="sidebar-icon">💡</span>
+                    <span>Mẹo sử dụng</span>
+                </a>
+                <a href="/user-guide.html" class="sidebar-item">
+                    <span class="sidebar-icon">📖</span>
+                    <span>Tài liệu đầy đủ</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content Wrapper -->
+        <div class="main-wrapper">
+            <!-- Mobile Header -->
+            <header class="mobile-header">
+                <button class="menu-button" id="menuButton">☰</button>
+                <span class="mobile-title bot-name">TeleTask Bot</span>
+            </header>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <div class="hero">
+                    <div class="hero-icon">📋</div>
+                    <h1 class="bot-name">TeleTask Bot</h1>
+                    <p>Hệ thống quản lý công việc qua Telegram</p>
+                </div>
+
+                <section id="features" class="section">
+                    <div class="feature-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon">✅</div>
+                            <h3>Tạo & Giao Việc</h3>
+                            <p>Tạo việc cá nhân hoặc giao cho người khác</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">🔄</div>
+                            <h3>Việc Lặp Lại</h3>
+                            <p>Tự động tạo việc hàng ngày/tuần/tháng</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">📊</div>
+                            <h3>Thống Kê</h3>
+                            <p>Báo cáo tiến độ tuần, tháng</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon">📅</div>
+                            <h3>Google Calendar</h3>
+                            <p>Đồng bộ deadline với lịch Google</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="basic" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">🚀</div>
+                        <h2 class="section-title">Lệnh Cơ Bản</h2>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/start</span>
+                        <span class="command-desc">Bắt đầu sử dụng bot, đăng ký tài khoản</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/menu</span>
+                        <span class="command-desc">Menu tính năng với nút bấm tương tác</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/help</span>
+                        <span class="command-desc">Xem hướng dẫn sử dụng nhanh</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/thongtin</span>
+                        <span class="command-desc">Xem thông tin tài khoản và thống kê</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/caidat</span>
+                        <span class="command-desc">Cài đặt nhắc nhở (24h, 1h trước deadline)</span>
+                    </div>
+                </section>
+
+                <section id="create" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">📝</div>
+                        <h2 class="section-title">Tạo Việc</h2>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/taoviec [nội dung]</span>
+                        <span class="command-desc">Tạo việc cá nhân mới (có wizard hướng dẫn)</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/giaoviec @user [nội dung]</span>
+                        <span class="command-desc">Giao việc cho người khác</span>
+                    </div>
+                    <div class="example-box">
+                        <div class="example-label">Ví dụ</div>
+                        <code class="example-code">/taoviec Họp đội 14h30</code>
+                        <code class="example-code">/taoviec Nộp báo cáo ngày mai 10h</code>
+                        <code class="example-code">/giaoviec @nam Chuẩn bị slide ngày mai 15h</code>
+                    </div>
+                </section>
+
+                <section id="recurring" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">🔄</div>
+                        <h2 class="section-title">Việc Lặp Lại</h2>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/vieclaplai [nội dung] [lịch]</span>
+                        <span class="command-desc">Tạo việc tự động lặp lại</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/danhsachvieclaplai</span>
+                        <span class="command-desc">Xem danh sách việc lặp lại</span>
+                    </div>
+                    <div class="example-box">
+                        <div class="example-label">Ví dụ</div>
+                        <code class="example-code">/vieclaplai Họp đội hàng tuần thứ 2 9h</code>
+                        <code class="example-code">/vieclaplai Báo cáo hàng tháng ngày 1 10h</code>
+                        <code class="example-code">/vieclaplai Kiểm tra email hàng ngày 8h</code>
+                    </div>
+                </section>
+
+                <section id="view" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">👀</div>
+                        <h2 class="section-title">Xem Việc</h2>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/xemviec</span>
+                        <span class="command-desc">Danh mục việc (menu với nút bấm)</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/xemviec [mã việc]</span>
+                        <span class="command-desc">Xem chi tiết một việc (P-ID hoặc G-ID)</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/viecdagiao</span>
+                        <span class="command-desc">Việc bạn đã giao cho người khác</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/viecdanhan</span>
+                        <span class="command-desc">Việc được giao cho bạn</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/timviec [từ khóa]</span>
+                        <span class="command-desc">Tìm kiếm việc theo nội dung</span>
+                    </div>
+                </section>
+
+                <section id="update" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">✏️</div>
+                        <h2 class="section-title">Cập Nhật Việc</h2>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/xong [mã việc]</span>
+                        <span class="command-desc">Đánh dấu việc hoàn thành</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/tiendo [mã] [%]</span>
+                        <span class="command-desc">Cập nhật tiến độ (0-100%)</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/xoa [mã việc]</span>
+                        <span class="command-desc">Xóa việc (hoàn tác trong 10s)</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/xoanhieu [mã1,mã2,...]</span>
+                        <span class="command-desc">Xóa nhiều việc cùng lúc</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/xoatatca</span>
+                        <span class="command-desc">Xóa tất cả việc (hoàn tác trong 10s)</span>
+                    </div>
+                </section>
+
+                <section id="reminder" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">⏰</div>
+                        <h2 class="section-title">Nhắc Việc</h2>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/nhacviec [mã] [thời gian]</span>
+                        <span class="command-desc">Đặt nhắc cho việc</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/xemnhac</span>
+                        <span class="command-desc">Xem danh sách nhắc đã đặt</span>
+                    </div>
+                    <div class="example-box">
+                        <div class="example-label">Ví dụ</div>
+                        <code class="example-code">/nhacviec ABC123 15 phút</code>
+                        <code class="example-code">/nhacviec ABC123 ngày mai 8h</code>
+                    </div>
+                </section>
+
+                <section id="stats" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">📊</div>
+                        <h2 class="section-title">Thống Kê</h2>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/thongke</span>
+                        <span class="command-desc">Thống kê tổng hợp của bạn</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/thongketuan</span>
+                        <span class="command-desc">Thống kê tuần này</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/thongkethang</span>
+                        <span class="command-desc">Thống kê tháng này</span>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/viectrehan</span>
+                        <span class="command-desc">Xem danh sách việc trễ hạn</span>
+                    </div>
+                </section>
+
+                <section id="export" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">📤</div>
+                        <h2 class="section-title">Xuất Báo Cáo</h2>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/export</span>
+                        <span class="command-desc">Xuất báo cáo (CSV, Excel, PDF)</span>
+                    </div>
+                    <div class="tip-box">
+                        <span class="tip-icon">💡</span>
+                        <div class="tip-content">
+                            <strong>Mẹo:</strong> Lệnh /export hỗ trợ chọn khoảng thời gian (7 ngày, 30 ngày, tuần này, tháng này, hoặc tùy chọn ngày cụ thể), loại việc, và định dạng file. Báo cáo có mật khẩu bảo vệ và hết hạn sau 72 giờ.
+                        </div>
+                    </div>
+                </section>
+
+                <section id="calendar" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">📅</div>
+                        <h2 class="section-title">Google Calendar</h2>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/lichgoogle</span>
+                        <span class="command-desc">Kết nối và cài đặt Google Calendar</span>
+                    </div>
+                    <div class="tip-box">
+                        <span class="tip-icon">💡</span>
+                        <div class="tip-content">
+                            <strong>Tính năng:</strong>
+                            <ul>
+                                <li><b>🔗 Kết nối:</b> Đăng nhập Google để đồng bộ lịch</li>
+                                <li><b>⚙️ Chế độ đồng bộ:</b> Tự động khi có thay đổi hoặc thủ công</li>
+                                <li><b>📤 Đồng bộ ngay:</b> Đồng bộ tất cả việc có deadline vào lịch</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="settings" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">⚙️</div>
+                        <h2 class="section-title">Cài Đặt</h2>
+                    </div>
+                    <div class="command-item">
+                        <span class="command-code">/caidat</span>
+                        <span class="command-desc">Mở menu cài đặt cá nhân</span>
+                    </div>
+                    <div class="tip-box">
+                        <span class="tip-icon">💡</span>
+                        <div class="tip-content">
+                            <strong>Menu cài đặt:</strong>
+                            <ul>
+                                <li><b>🔔 Thông báo:</b> Giao việc mới, trạng thái việc, nhắc việc, báo cáo tuần/tháng</li>
+                                <li><b>🌏 Múi giờ:</b> Chọn múi giờ hiển thị</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="tips" class="section">
+                    <div class="section-header">
+                        <div class="section-icon">💡</div>
+                        <h2 class="section-title">Mẹo Sử Dụng</h2>
+                    </div>
+                    <div class="tips-grid">
+                        <div class="tip-card green">
+                            <span class="tip-icon">✨</span>
+                            <div>
+                                <h4>Thời gian linh hoạt</h4>
+                                <p>Bot hiểu các cách viết thời gian như: "14h30", "ngày mai 10h", "thứ 2 tuần sau", "15/12 9h", "2 ngày nữa"...</p>
+                            </div>
+                        </div>
+                        <div class="tip-card blue">
+                            <span class="tip-icon">🎯</span>
+                            <div>
+                                <h4>Mức ưu tiên</h4>
+                                <p>Khi tạo việc, bạn có thể chọn mức ưu tiên: Khẩn cấp > Cao > Bình thường > Thấp. Việc khẩn cấp sẽ được nhắc thường xuyên hơn.</p>
+                            </div>
+                        </div>
+                        <div class="tip-card purple">
+                            <span class="tip-icon">🔔</span>
+                            <div>
+                                <h4>Nhắc tự động</h4>
+                                <p>Bot tự động nhắc trước deadline 24 giờ và 1 giờ. Bạn có thể đặt thêm nhắc tùy chỉnh với /nhacviec.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="footer">
+                    <p><span class="brand bot-name">TeleTask Bot</span> — Quản lý công việc hiệu quả</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // Elements
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        const menuButton = document.getElementById('menuButton');
+        const sidebarClose = document.getElementById('sidebarClose');
+
+        // Open sidebar
+        function openSidebar() {
+            sidebar.classList.add('open');
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        // Close sidebar
+        function closeSidebar() {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        // Event listeners
+        menuButton.addEventListener('click', openSidebar);
+        sidebarClose.addEventListener('click', closeSidebar);
+        overlay.addEventListener('click', closeSidebar);
+
+        // Handle navigation clicks
+        document.querySelectorAll('.sidebar-item[href^="#"]').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    // Update active state
+                    document.querySelectorAll('.sidebar-item').forEach(function(item) {
+                        item.classList.remove('active');
+                    });
+                    this.classList.add('active');
+
+                    // Scroll to target
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                    // Close sidebar on mobile
+                    if (window.innerWidth <= 768) {
+                        closeSidebar();
+                    }
+                }
+            });
+        });
+
+        // Load bot name from config
+        fetch('/config.json')
+            .then(function(response) { return response.json(); })
+            .then(function(config) {
+                var botName = config.bot_name || 'TeleTask Bot';
+                document.querySelectorAll('.bot-name').forEach(function(el) {
+                    el.textContent = botName;
+                });
+                document.title = 'Hướng Dẫn Sử Dụng - ' + botName;
+            })
+            .catch(function() {});
+    </script>
+</body>
+</html>

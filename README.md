@@ -53,7 +53,7 @@ pm2 save
 ```bash
 # 1. Clone và thiết lập
 git clone <repo-url>
-cd hasontechtask
+cd teletask
 python3.11 -m venv venv
 source venv/bin/activate
 
@@ -64,8 +64,9 @@ pip install -r requirements.txt
 cp .env.example .env
 nano .env  # Điền BOT_TOKEN và DATABASE_URL
 
-# 4. Chạy migrations
-alembic upgrade head
+# 4. Kiểm tra và khởi tạo database
+python scripts/db_setup.py --check    # Kiểm tra kết nối
+python scripts/db_setup.py            # Chạy migrations
 
 # 5. Khởi động bot
 python bot.py
@@ -73,6 +74,19 @@ python bot.py
 # Hoặc dùng PM2 cho production
 pm2 start ecosystem.config.js
 pm2 save
+```
+
+### Database Setup Script
+
+```bash
+# Kiểm tra kết nối database
+python scripts/db_setup.py --check
+
+# Chạy tất cả migrations
+python scripts/db_setup.py
+
+# Reset database (XÓA TẤT CẢ DATA!)
+python scripts/db_setup.py --reset
 ```
 
 ---
