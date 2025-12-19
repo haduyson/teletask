@@ -111,7 +111,6 @@ from .validators import (
     validate_progress,
     parse_task_command,
     is_valid_public_id,
-    sanitize_html,
 )
 
 from .db_utils import (
@@ -212,7 +211,6 @@ __all__ = [
     "validate_progress",
     "parse_task_command",
     "is_valid_public_id",
-    "sanitize_html",
     # DB utils
     "validate_user_setting_column",
     "get_report_column",

@@ -5,7 +5,8 @@ Async PostgreSQL connection pooling with asyncpg
 
 import asyncio
 import logging
-from typing import Any, Optional
+from contextlib import asynccontextmanager
+from typing import Any, AsyncGenerator, Optional
 
 import asyncpg
 from asyncpg import Pool, Connection, Record
@@ -149,21 +150,24 @@ class Database:
 
     # Transaction support
 
-    async def transaction(self) -> Connection:
+    @asynccontextmanager
+    async def transaction(self) -> AsyncGenerator[Connection, None]:
         """
-        Get connection for manual transaction management.
+        Get connection for manual transaction management with auto commit/rollback.
 
         Usage:
             async with db.transaction() as conn:
                 await conn.execute(...)
                 await conn.execute(...)
+            # Auto-commits on success, auto-rollbacks on exception
 
-        Returns:
+        Yields:
             Connection with transaction started
         """
         pool = await self._ensure_pool()
-        conn = await pool.acquire()
-        return conn
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                yield conn
 
     # Health check
 

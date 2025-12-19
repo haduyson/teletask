@@ -1,8 +1,9 @@
 """
 Health Check Server
-HTTP endpoint for monitoring bot health status and report downloads
+HTTP endpoint for monitoring bot health status, report downloads, and static files
 """
 
+import json
 import os
 import logging
 from datetime import datetime
@@ -14,6 +15,9 @@ import pytz
 logger = logging.getLogger(__name__)
 
 TZ = pytz.timezone("Asia/Ho_Chi_Minh")
+
+# Static files directory
+STATIC_DIR = Path(__file__).parent.parent / "static"
 
 
 class HealthCheckServer:
@@ -28,11 +32,20 @@ class HealthCheckServer:
 
     async def start(self):
         """Start health check HTTP server."""
+        # Generate config.json with bot name on startup
+        self._generate_static_config()
+
         web_app = web.Application()
         web_app.router.add_get('/health', self.health_handler)
         web_app.router.add_get('/metrics', self.metrics_handler)
         web_app.router.add_get('/report/{report_id}', self.report_page_handler)
         web_app.router.add_post('/report/{report_id}', self.report_download_handler)
+
+        # Add static file routes (index.html, user-guide.html, config.json)
+        web_app.router.add_get('/', self.index_handler)
+        web_app.router.add_get('/index.html', self.index_handler)
+        web_app.router.add_get('/user-guide.html', self.user_guide_handler)
+        web_app.router.add_get('/config.json', self.config_json_handler)
 
         self.runner = web.AppRunner(web_app)
         await self.runner.setup()
@@ -553,3 +566,65 @@ class HealthCheckServer:
     </div>
 </body>
 </html>'''
+
+    def _generate_static_config(self) -> None:
+        """Generate config.json with bot name and domain for static pages."""
+        try:
+            config_path = STATIC_DIR / "config.json"
+            bot_name = os.getenv("BOT_NAME", "TeleTask Bot")
+            domain = os.getenv("BOT_DOMAIN", "")
+
+            config = {
+                "bot_name": bot_name,
+                "domain": domain,
+            }
+
+            # Create static directory if it doesn't exist
+            STATIC_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Write config.json
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+
+            logger.info(f"Generated static config.json (bot_name={bot_name}, domain={domain})")
+        except Exception as e:
+            logger.warning(f"Failed to generate config.json: {e}")
+
+    async def index_handler(self, request):
+        """Serve index.html (user guide page)."""
+        return await self._serve_static_file("index.html", request)
+
+    async def user_guide_handler(self, request):
+        """Serve user-guide.html (detailed guide page)."""
+        return await self._serve_static_file("user-guide.html", request)
+
+    async def config_json_handler(self, request):
+        """Serve config.json for static pages."""
+        return await self._serve_static_file("config.json", request, content_type="application/json")
+
+    async def _serve_static_file(self, filename: str, request, content_type: str = "text/html"):
+        """Serve a static file from the static directory."""
+        file_path = STATIC_DIR / filename
+
+        if not file_path.exists():
+            return web.Response(
+                text=self._error_page("File không tồn tại", f"Không tìm thấy file: {filename}"),
+                content_type="text/html",
+                status=404
+            )
+
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            # Note: aiohttp auto-handles charset when using text= parameter
+            return web.Response(
+                text=content,
+                content_type=content_type
+            )
+        except Exception as e:
+            logger.error(f"Error serving static file {filename}: {e}")
+            return web.Response(
+                text=self._error_page("Lỗi đọc file", str(e)),
+                content_type="text/html",
+                status=500
+            )

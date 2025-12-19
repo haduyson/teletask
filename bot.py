@@ -13,6 +13,7 @@ Environment Variables:
 """
 
 import asyncio
+import atexit
 import logging
 import os
 import sys
@@ -20,6 +21,51 @@ from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+
+# =============================================================================
+# PID Lock File - Prevent duplicate bot instances
+# =============================================================================
+def _get_lock_file_path() -> Path:
+    """Get the lock file path in the bot directory."""
+    return Path(__file__).parent / ".bot.pid"
+
+
+def acquire_lock() -> bool:
+    """
+    Acquire exclusive lock by creating a PID file.
+    Returns True if lock acquired, False if another instance is running.
+    """
+    lock_file = _get_lock_file_path()
+
+    # Check if lock file exists
+    if lock_file.exists():
+        try:
+            old_pid = int(lock_file.read_text().strip())
+            # Check if process is still running
+            os.kill(old_pid, 0)  # Signal 0 = check if process exists
+            # Process exists - another instance is running
+            return False
+        except (ValueError, ProcessLookupError, PermissionError):
+            # PID invalid or process not running - stale lock file
+            pass
+
+    # Write our PID to lock file
+    lock_file.write_text(str(os.getpid()))
+    return True
+
+
+def release_lock() -> None:
+    """Release the lock by removing the PID file."""
+    lock_file = _get_lock_file_path()
+    try:
+        if lock_file.exists():
+            # Only remove if it's our PID
+            current_pid = lock_file.read_text().strip()
+            if current_pid == str(os.getpid()):
+                lock_file.unlink()
+    except Exception:
+        pass  # Best effort cleanup
 from telegram import Update
 from telegram.ext import Application
 
@@ -280,6 +326,15 @@ async def error_handler(update, context):
 
 
 if __name__ == "__main__":
+    # Prevent duplicate instances
+    if not acquire_lock():
+        print("ERROR: Another bot instance is already running!", file=sys.stderr)
+        print("       Check 'ps aux | grep bot.py' or remove .bot.pid if stale", file=sys.stderr)
+        sys.exit(1)
+
+    # Register cleanup on exit
+    atexit.register(release_lock)
+
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
@@ -287,3 +342,5 @@ if __name__ == "__main__":
     except Exception as e:
         logger.exception(f"Bot crashed: {e}")
         sys.exit(1)
+    finally:
+        release_lock()

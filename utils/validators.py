@@ -196,21 +196,4 @@ def is_valid_public_id(public_id: str) -> bool:
     return bool(re.match(pattern, public_id.upper()))
 
 
-def sanitize_html(text: str) -> str:
-    """
-    Sanitize text for HTML message mode.
-
-    Args:
-        text: Input text
-
-    Returns:
-        Sanitized text
-    """
-    replacements = [
-        ("&", "&amp;"),
-        ("<", "&lt;"),
-        (">", "&gt;"),
-    ]
-    for old, new in replacements:
-        text = text.replace(old, new)
-    return text
+# NOTE: sanitize_html was removed - use escape_html from utils.formatters instead

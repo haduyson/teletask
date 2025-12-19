@@ -4,7 +4,9 @@ Format task data for display
 """
 
 import html
+import os
 from datetime import datetime
+from functools import lru_cache
 from typing import Any, Dict, List, Optional
 import pytz
 
@@ -29,7 +31,16 @@ from .messages import (
     ICON_HIGH,
 )
 
-TZ = pytz.timezone("Asia/Ho_Chi_Minh")
+
+@lru_cache()
+def get_default_timezone() -> pytz.BaseTzInfo:
+    """Get default timezone from environment or config."""
+    tz_name = os.getenv("TZ", "Asia/Ho_Chi_Minh")
+    return pytz.timezone(tz_name)
+
+
+# Legacy alias for backward compatibility
+TZ = get_default_timezone()
 
 
 def format_status(status: str) -> str:

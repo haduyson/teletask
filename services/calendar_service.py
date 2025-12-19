@@ -19,6 +19,8 @@ from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
+from utils.security import encrypt_token, decrypt_token
+
 logger = logging.getLogger(__name__)
 
 # OAuth 2.0 scopes
@@ -506,9 +508,10 @@ async def get_user_token_data(db, user_id: int) -> Optional[Dict[str, str]]:
         if not user or not user["google_calendar_token"]:
             return None
 
+        # Decrypt tokens (handles both encrypted and plaintext for backward compatibility)
         return {
-            "access_token": user["google_calendar_token"],
-            "refresh_token": user["google_calendar_refresh_token"],
+            "access_token": decrypt_token(user["google_calendar_token"]),
+            "refresh_token": decrypt_token(user["google_calendar_refresh_token"]) if user["google_calendar_refresh_token"] else None,
         }
 
     except Exception as e:
@@ -558,6 +561,10 @@ async def save_user_tokens(
         True if saved successfully
     """
     try:
+        # Encrypt tokens before storing
+        encrypted_access = encrypt_token(access_token) if access_token else None
+        encrypted_refresh = encrypt_token(refresh_token) if refresh_token else None
+
         await db.execute(
             """
             UPDATE users SET
@@ -566,7 +573,7 @@ async def save_user_tokens(
                 updated_at = NOW()
             WHERE id = $1
             """,
-            user_id, access_token, refresh_token
+            user_id, encrypted_access, encrypted_refresh
         )
         return True
 
@@ -625,3 +632,104 @@ async def is_user_connected(db, user_id: int) -> bool:
     except Exception as e:
         logger.error(f"Error checking user connection: {e}")
         return False
+
+
+# =============================================================================
+# Unified Calendar Sync Helper (DRY refactor)
+# =============================================================================
+
+async def sync_task_to_calendar(
+    db,
+    task: Dict[str, Any],
+    action: str = "create"
+) -> Optional[str]:
+    """
+    Unified helper to sync task to Google Calendar.
+
+    Args:
+        db: Database connection
+        task: Task dict with keys: id, public_id, content, deadline, description,
+              priority, status, assignee_id, google_event_id
+        action: 'create', 'update', or 'delete'
+
+    Returns:
+        Google Calendar event ID (for create) or None
+    """
+    if not is_calendar_enabled():
+        return None
+
+    assignee_id = task.get("assignee_id")
+    if not assignee_id:
+        return None
+
+    token_data = await get_user_token_data(db, assignee_id)
+    if not token_data:
+        return None
+
+    try:
+        if action == "delete":
+            event_id = task.get("google_event_id")
+            if event_id:
+                await delete_calendar_event(token_data, event_id)
+                await db.execute(
+                    "UPDATE tasks SET google_event_id = NULL WHERE id = $1",
+                    task["id"]
+                )
+                logger.info(f"Deleted calendar event for task {task['id']}")
+            return None
+
+        elif action == "update":
+            event_id = task.get("google_event_id")
+            if event_id and task.get("deadline"):
+                await update_calendar_event(
+                    token_data, event_id,
+                    task["public_id"], task["content"],
+                    task["deadline"], task.get("description", ""),
+                    task.get("priority", "normal"),
+                    task.get("status", "pending"),
+                )
+                logger.info(f"Updated calendar event for task {task['id']}")
+            return event_id
+
+        else:  # create
+            if not task.get("deadline"):
+                return None
+            reminder_source = await get_user_reminder_source(db, assignee_id)
+            event_id = await create_calendar_event(
+                token_data,
+                task["public_id"], task["content"],
+                task["deadline"], task.get("description", ""),
+                task.get("priority", "normal"),
+                reminder_source,
+            )
+            if event_id:
+                await db.execute(
+                    "UPDATE tasks SET google_event_id = $2 WHERE id = $1",
+                    task["id"], event_id
+                )
+                logger.info(f"Created calendar event for task {task['id']}: {event_id}")
+            return event_id
+
+    except Exception as e:
+        logger.warning(f"Calendar sync ({action}) failed for task {task.get('id')}: {e}")
+        return None
+
+
+async def sync_task_create_or_update(
+    db,
+    task: Dict[str, Any],
+) -> Optional[str]:
+    """
+    Create or update calendar event based on whether event exists.
+
+    Args:
+        db: Database connection
+        task: Task dict
+
+    Returns:
+        Google Calendar event ID or None
+    """
+    if task.get("google_event_id"):
+        return await sync_task_to_calendar(db, task, action="update")
+    else:
+        return await sync_task_to_calendar(db, task, action="create")

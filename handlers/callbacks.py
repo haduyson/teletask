@@ -5,9 +5,45 @@ Routes inline button callbacks to appropriate handlers
 
 import logging
 import re
-from typing import Optional, Tuple
+import time
+from collections import defaultdict
+from functools import wraps
+from typing import Callable, Optional, Tuple
 from telegram import Update
 from telegram.ext import ContextTypes, CallbackQueryHandler, MessageHandler, filters
+
+
+# =============================================================================
+# Rate Limiting
+# =============================================================================
+_rate_limits: dict = defaultdict(list)
+RATE_LIMIT = 30  # max requests per window
+RATE_WINDOW = 60  # seconds
+
+
+def rate_limit(func: Callable) -> Callable:
+    """Rate limit decorator for callback handlers."""
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        now = time.time()
+
+        # Clean old entries
+        _rate_limits[user_id] = [
+            t for t in _rate_limits[user_id]
+            if now - t < RATE_WINDOW
+        ]
+
+        if len(_rate_limits[user_id]) >= RATE_LIMIT:
+            await update.callback_query.answer(
+                "⚠️ Quá nhiều yêu cầu. Vui lòng đợi.",
+                show_alert=True
+            )
+            return
+
+        _rate_limits[user_id].append(now)
+        return await func(update, context)
+    return wrapper
 
 from database import get_db
 from services import (
@@ -164,6 +200,7 @@ def parse_callback_data(data: str) -> Tuple[str, list]:
     return (action, parts[1:])
 
 
+@rate_limit
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Route callback queries to appropriate handlers.
@@ -755,27 +792,24 @@ async def handle_task_filter(query, db, db_user, filter_type: str, list_type: st
     from utils import task_type_filter_keyboard
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
-    # Get all tasks first
-    all_tasks = await get_all_user_related_tasks(db, db_user["id"], limit=50)
+    # Map filter_type to task_type for SQL filtering
+    task_type_map = {
+        "individual": "individual",
+        "group": "group",
+    }
+    task_type = task_type_map.get(filter_type)
 
-    if not all_tasks:
-        await query.edit_message_text(
-            "Không có việc nào.",
-            reply_markup=task_category_keyboard(),
-        )
-        return
+    # Get tasks with SQL filter (no in-memory filtering needed)
+    tasks = await get_all_user_related_tasks(
+        db, db_user["id"], limit=50, task_type=task_type
+    )
 
-    # Filter by type
+    # Set title based on filter
     if filter_type == "individual":
-        # P-ID tasks (not starting with G)
-        tasks = [t for t in all_tasks if not t.get("public_id", "").upper().startswith("G")]
         title = "👤 VIỆC CÁ NHÂN"
     elif filter_type == "group":
-        # G-ID tasks (group tasks)
-        tasks = [t for t in all_tasks if t.get("public_id", "").upper().startswith("G")]
         title = "👥 VIỆC NHÓM"
     else:
-        tasks = all_tasks
         title = "📊 TẤT CẢ VIỆC"
 
     # Build filter buttons row

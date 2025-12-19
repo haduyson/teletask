@@ -67,6 +67,12 @@ class Settings:
         default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0")
     )
 
+    # Security - Encryption key for sensitive data (OAuth tokens)
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    encryption_key: str = field(
+        default_factory=lambda: os.getenv("ENCRYPTION_KEY", "")
+    )
+
     def __post_init__(self) -> None:
         """Parse complex fields after initialization."""
         # Parse admin IDs

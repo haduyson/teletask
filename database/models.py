@@ -147,10 +147,10 @@ class Task(Base):
     )
     progress = Column(Integer, default=0)
 
-    # Relationships
-    creator_id = Column(Integer, ForeignKey("users.id"))
-    assignee_id = Column(Integer, ForeignKey("users.id"))
-    group_id = Column(Integer, ForeignKey("groups.id"))
+    # Relationships - with proper cascade behavior
+    creator_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    assignee_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"))
 
     # Timestamps
     deadline = Column(DateTime(timezone=True))
@@ -160,7 +160,7 @@ class Task(Base):
     is_recurring = Column(Boolean, default=False)
     recurring_pattern = Column(String(100))  # 'daily', 'weekly', 'monthly', 'custom'
     recurring_config = Column(JSONB)  # {'interval': 1, 'days': [1,3,5], ...}
-    parent_recurring_id = Column(Integer, ForeignKey("tasks.id"))
+    parent_recurring_id = Column(Integer, ForeignKey("tasks.id", ondelete="SET NULL"))
 
     # Google Calendar
     google_event_id = Column(String(255))
@@ -169,7 +169,7 @@ class Task(Base):
     is_personal = Column(Boolean, default=False)
     is_deleted = Column(Boolean, default=False, index=True)
     deleted_at = Column(DateTime(timezone=True))
-    deleted_by = Column(Integer, ForeignKey("users.id"))
+    deleted_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -205,7 +205,7 @@ class Reminder(Base):
 
     id = Column(Integer, primary_key=True)
     task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
 
     remind_at = Column(DateTime(timezone=True), nullable=False)
     reminder_type = Column(
@@ -246,7 +246,7 @@ class TaskHistory(Base):
 
     id = Column(Integer, primary_key=True)
     task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
 
     action = Column(String(50), nullable=False)  # 'created', 'updated', 'completed', 'deleted'
     field_name = Column(String(100))  # 'status', 'deadline', 'assignee', etc.
@@ -276,8 +276,8 @@ class UserStatistics(Base):
     __tablename__ = "user_statistics"
 
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    group_id = Column(Integer, ForeignKey("groups.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    group_id = Column(Integer, ForeignKey("groups.id", ondelete="CASCADE"))
 
     period_type = Column(String(20), nullable=False)  # 'weekly', 'monthly'
     period_start = Column(Date, nullable=False)
@@ -322,7 +322,7 @@ class DeletedTaskUndo(Base):
     id = Column(Integer, primary_key=True)
     task_id = Column(Integer, nullable=False)  # Original task ID
     task_data = Column(JSONB, nullable=False)  # Full task snapshot
-    deleted_by = Column(Integer, ForeignKey("users.id"))
+    deleted_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     deleted_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True))  # Calculated: deleted_at + 30 seconds
     is_restored = Column(Boolean, default=False)

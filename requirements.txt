@@ -45,3 +45,6 @@ reportlab>=4.0.0
 
 # System monitoring
 psutil>=5.9.0
+
+# Security - Token encryption
+cryptography>=42.0.0

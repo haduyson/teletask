@@ -20,9 +20,8 @@ logger = logging.getLogger(__name__)
 
 TZ = pytz.timezone("Asia/Ho_Chi_Minh")
 
-# Export directory - dynamically set based on bot location
-BOT_NAME = os.environ.get("BOT_NAME", "default")
-EXPORT_DIR = Path(f"/home/botpanel/bots/{BOT_NAME}/exports")
+# Export directory - configurable via env, fallback to current directory
+EXPORT_DIR = Path(os.environ.get("EXPORT_DIR", str(Path(__file__).parent.parent / "exports")))
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Report TTL (72 hours)
