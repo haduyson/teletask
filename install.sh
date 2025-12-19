@@ -3,242 +3,250 @@
 # TeleTask Bot - Cài Đặt Tự Động
 # Hỗ trợ Ubuntu 22.04/24.04
 #
-# Sử dụng: ./install.sh [TÙY CHỌN]
-#   --domain DOMAIN    Domain cho nginx (vd: teletask.example.com)
-#   --email EMAIL      Email cho chứng chỉ SSL Let's Encrypt
-#   --bot-name NAME    Tên bot (mặc định: TeleTask Bot)
-#   --skip-nginx       Bỏ qua cài nginx
-#   --skip-ssl         Bỏ qua cài SSL
-#   --skip-db          Bỏ qua cài PostgreSQL (dùng database bên ngoài)
-#   --help             Hiện hướng dẫn
+# Cài đặt một lệnh:
+#   curl -fsSL https://raw.githubusercontent.com/haduyson/teletask/master/install.sh | sudo bash
 #
-# Ví dụ:
-#   sudo ./install.sh --domain teletask.example.com --email admin@example.com
+# Hoặc với tham số:
+#   curl -fsSL https://raw.githubusercontent.com/haduyson/teletask/master/install.sh | sudo bash -s -- \
+#     --domain teletask.example.com --email admin@example.com --bot-id mybot
 #
 
 set -e
 
-# Colors for output
+# ============================================================================
+# COLORS & HELPERS
+# ============================================================================
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+CYAN='\033[0;36m'
+NC='\033[0m'
 
-# Default values
-DOMAIN=""
-EMAIL=""
-BOT_NAME="TeleTask Bot"
-SKIP_NGINX=false
-SKIP_SSL=false
-SKIP_DB=false
+log_info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
+log_success() { echo -e "${GREEN}[OK]${NC} $1"; }
+log_warn()    { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
+
+print_banner() {
+    echo -e "${CYAN}"
+    echo "╔═══════════════════════════════════════════════════════════╗"
+    echo "║                                                           ║"
+    echo "║   ████████╗███████╗██╗     ███████╗████████╗ █████╗ ███████╗██╗  ██╗  ║"
+    echo "║   ╚══██╔══╝██╔════╝██║     ██╔════╝╚══██╔══╝██╔══██╗██╔════╝██║ ██╔╝  ║"
+    echo "║      ██║   █████╗  ██║     █████╗     ██║   ███████║███████╗█████╔╝   ║"
+    echo "║      ██║   ██╔══╝  ██║     ██╔══╝     ██║   ██╔══██║╚════██║██╔═██╗   ║"
+    echo "║      ██║   ███████╗███████╗███████╗   ██║   ██║  ██║███████║██║  ██╗  ║"
+    echo "║      ╚═╝   ╚══════╝╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝  ║"
+    echo "║                                                           ║"
+    echo "║           Bot Quản Lý Công Việc Telegram                  ║"
+    echo "║                                                           ║"
+    echo "╚═══════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+# ============================================================================
+# DEFAULT VALUES
+# ============================================================================
+REPO_URL="https://github.com/haduyson/teletask.git"
+BOTPANEL_DIR="/home/botpanel"
+BOTS_DIR="$BOTPANEL_DIR/bots"
+LOGS_DIR="$BOTPANEL_DIR/logs"
 PYTHON_VERSION="python3.11"
 HEALTH_PORT=8080
-BOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BOT_ID="$(basename "$BOT_DIR")"
 
 # Parse arguments
+BOT_ID=""
+DOMAIN=""
+EMAIL=""
+BOT_TOKEN=""
+ADMIN_IDS=""
+SKIP_INTERACTIVE=false
+
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --domain)
-            DOMAIN="$2"
-            shift 2
-            ;;
-        --email)
-            EMAIL="$2"
-            shift 2
-            ;;
-        --bot-name)
-            BOT_NAME="$2"
-            shift 2
-            ;;
-        --skip-nginx)
-            SKIP_NGINX=true
-            shift
-            ;;
-        --skip-ssl)
-            SKIP_SSL=true
-            shift
-            ;;
-        --skip-db)
-            SKIP_DB=true
-            shift
-            ;;
+        --bot-id)      BOT_ID="$2"; shift 2 ;;
+        --domain)      DOMAIN="$2"; shift 2 ;;
+        --email)       EMAIL="$2"; shift 2 ;;
+        --bot-token)   BOT_TOKEN="$2"; shift 2 ;;
+        --admin-ids)   ADMIN_IDS="$2"; shift 2 ;;
+        --skip-interactive) SKIP_INTERACTIVE=true; shift ;;
         --help)
-            head -20 "$0" | tail -17
+            echo "Sử dụng: install.sh [TÙY CHỌN]"
+            echo ""
+            echo "Tùy chọn:"
+            echo "  --bot-id ID        ID cho bot (vd: mybot)"
+            echo "  --domain DOMAIN    Domain cho nginx (vd: teletask.example.com)"
+            echo "  --email EMAIL      Email cho SSL Let's Encrypt"
+            echo "  --bot-token TOKEN  Bot token từ @BotFather"
+            echo "  --admin-ids IDS    Telegram user IDs (phân cách bằng dấu phẩy)"
+            echo "  --skip-interactive Bỏ qua các câu hỏi tương tác"
+            echo "  --help             Hiện hướng dẫn này"
             exit 0
             ;;
-        *)
-            echo -e "${RED}Unknown option: $1${NC}"
-            exit 1
-            ;;
+        *) log_error "Tùy chọn không hợp lệ: $1"; exit 1 ;;
     esac
 done
 
-# Helper functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
+# ============================================================================
+# CHECK PREREQUISITES
+# ============================================================================
 check_root() {
     if [[ $EUID -ne 0 ]]; then
-        log_error "This script must be run with sudo privileges"
+        log_error "Script này cần chạy với quyền root (sudo)"
         exit 1
     fi
 }
 
 check_ubuntu() {
-    if ! grep -q "Ubuntu" /etc/os-release 2>/dev/null; then
-        log_warn "This script is designed for Ubuntu. Proceed with caution on other distributions."
+    if ! grep -qi "ubuntu" /etc/os-release 2>/dev/null; then
+        log_warn "Script được thiết kế cho Ubuntu. Hệ điều hành khác có thể gặp lỗi."
+        read -p "Tiếp tục? (y/n): " -n 1 -r
+        echo
+        [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
     fi
 }
 
 # ============================================================================
-# PHASE 1: System Dependencies
+# INTERACTIVE PROMPTS
+# ============================================================================
+prompt_config() {
+    if $SKIP_INTERACTIVE; then
+        return
+    fi
+
+    echo ""
+    log_info "Cấu hình bot mới"
+    echo "─────────────────────────────────────────"
+
+    # Bot ID
+    if [[ -z "$BOT_ID" ]]; then
+        while true; do
+            read -p "Bot ID (chữ thường, không dấu, vd: mybot): " BOT_ID
+            if [[ "$BOT_ID" =~ ^[a-z][a-z0-9_-]*$ ]]; then
+                break
+            fi
+            log_error "ID không hợp lệ. Chỉ dùng chữ thường, số, gạch ngang."
+        done
+    fi
+
+    # Domain
+    if [[ -z "$DOMAIN" ]]; then
+        read -p "Domain (vd: teletask.example.com, để trống nếu không dùng): " DOMAIN
+    fi
+
+    # Email (required if domain is set)
+    if [[ -n "$DOMAIN" && -z "$EMAIL" ]]; then
+        read -p "Email cho SSL ($DOMAIN): " EMAIL
+    fi
+
+    # Bot Token
+    if [[ -z "$BOT_TOKEN" ]]; then
+        read -p "Bot Token từ @BotFather: " BOT_TOKEN
+    fi
+
+    # Admin IDs
+    if [[ -z "$ADMIN_IDS" ]]; then
+        read -p "Admin Telegram ID (ID của bạn, để nhận thông báo): " ADMIN_IDS
+    fi
+
+    echo ""
+    log_info "Xác nhận cấu hình:"
+    echo "  Bot ID:    $BOT_ID"
+    echo "  Domain:    ${DOMAIN:-'(không)'}"
+    echo "  Email:     ${EMAIL:-'(không)'}"
+    echo "  Bot Token: ${BOT_TOKEN:0:10}..."
+    echo "  Admin IDs: $ADMIN_IDS"
+    echo ""
+
+    read -p "Tiếp tục cài đặt? (y/n): " -n 1 -r
+    echo
+    [[ ! $REPLY =~ ^[Yy]$ ]] && exit 1
+}
+
+# ============================================================================
+# PHASE 1: SYSTEM DEPENDENCIES
 # ============================================================================
 install_system_deps() {
-    log_info "Installing system dependencies..."
+    log_info "Đang cài đặt dependencies hệ thống..."
 
-    apt update
-    apt install -y \
+    apt update -qq
+
+    # Python
+    apt install -y -qq software-properties-common
+    add-apt-repository -y ppa:deadsnakes/ppa 2>/dev/null || true
+    apt update -qq
+    apt install -y -qq \
         $PYTHON_VERSION \
         $PYTHON_VERSION-venv \
         $PYTHON_VERSION-dev \
         build-essential \
         libpq-dev \
         curl \
-        git \
-        supervisor
+        git
 
-    log_success "System dependencies installed"
+    log_success "Dependencies hệ thống đã cài"
 }
 
 # ============================================================================
-# PHASE 2: PostgreSQL Database
+# PHASE 2: POSTGRESQL
 # ============================================================================
 install_postgresql() {
-    if $SKIP_DB; then
-        log_info "Skipping PostgreSQL installation (--skip-db)"
+    if command -v psql &> /dev/null; then
+        log_info "PostgreSQL đã được cài"
         return
     fi
 
-    log_info "Installing PostgreSQL..."
-
-    apt install -y postgresql postgresql-contrib
-
-    # Start PostgreSQL
+    log_info "Đang cài PostgreSQL..."
+    apt install -y -qq postgresql postgresql-contrib
     systemctl start postgresql
     systemctl enable postgresql
-
-    log_success "PostgreSQL installed and running"
+    log_success "PostgreSQL đã cài và chạy"
 }
 
 setup_database() {
-    if $SKIP_DB; then
-        log_info "Skipping database setup (--skip-db)"
-        return
-    fi
+    log_info "Đang tạo database..."
 
-    log_info "Setting up database..."
-
-    # Generate random password
-    DB_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
     DB_NAME="${BOT_ID//-/_}_db"
     DB_USER="${BOT_ID//-/_}_user"
+    DB_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
 
-    # Create database and user
     sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
     sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" 2>/dev/null || true
-    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
+    sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;" 2>/dev/null || true
 
-    # Save to .env
-    echo "DATABASE_URL=postgresql+asyncpg://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME" >> "$BOT_DIR/.env"
-
-    log_success "Database '$DB_NAME' created with user '$DB_USER'"
+    DATABASE_URL="postgresql+asyncpg://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME"
+    log_success "Database '$DB_NAME' đã tạo"
 }
 
 # ============================================================================
-# PHASE 3: Python Virtual Environment
-# ============================================================================
-setup_python_venv() {
-    log_info "Setting up Python virtual environment..."
-
-    cd "$BOT_DIR"
-
-    # Create virtual environment
-    $PYTHON_VERSION -m venv venv
-
-    # Activate and install dependencies
-    source venv/bin/activate
-    pip install --upgrade pip
-    pip install -r requirements.txt
-
-    log_success "Python virtual environment ready"
-}
-
-# ============================================================================
-# PHASE 4: Nginx Reverse Proxy
+# PHASE 3: NGINX
 # ============================================================================
 install_nginx() {
-    if $SKIP_NGINX; then
-        log_info "Skipping nginx installation (--skip-nginx)"
-        return
-    fi
-
-    log_info "Installing nginx..."
-
-    apt install -y nginx
-
-    systemctl start nginx
-    systemctl enable nginx
-
-    log_success "Nginx installed and running"
-}
-
-configure_nginx() {
-    if $SKIP_NGINX; then
-        log_info "Skipping nginx configuration (--skip-nginx)"
-        return
-    fi
-
     if [[ -z "$DOMAIN" ]]; then
-        log_warn "No domain specified. Skipping nginx configuration."
-        log_warn "Run with --domain to configure reverse proxy."
+        log_info "Bỏ qua nginx (không có domain)"
         return
     fi
 
-    log_info "Configuring nginx for $DOMAIN..."
+    if ! command -v nginx &> /dev/null; then
+        log_info "Đang cài Nginx..."
+        apt install -y -qq nginx
+        systemctl start nginx
+        systemctl enable nginx
+    fi
 
-    # Create nginx configuration
+    log_info "Đang cấu hình Nginx cho $DOMAIN..."
+
     cat > "/etc/nginx/sites-available/$DOMAIN" << EOF
-# Nginx reverse proxy for TeleTask Bot
-# Domain: $DOMAIN
-# Backend: localhost:$HEALTH_PORT (HealthCheckServer)
-# Generated by install.sh on $(date)
-
 server {
     listen 80;
     listen [::]:80;
     server_name $DOMAIN;
 
-    # Let's Encrypt verification
     location /.well-known/acme-challenge/ {
         root /var/www/html;
     }
 
-    # Reverse proxy to bot health server
     location / {
         proxy_pass http://127.0.0.1:$HEALTH_PORT;
         proxy_http_version 1.1;
@@ -246,262 +254,213 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
-
-        # WebSocket support
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
-
-        # Timeouts
         proxy_connect_timeout 60s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
     }
 
-    # Security headers
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
 }
 EOF
 
-    # Enable site
     ln -sf "/etc/nginx/sites-available/$DOMAIN" /etc/nginx/sites-enabled/
+    nginx -t && systemctl reload nginx
 
-    # Test configuration
-    nginx -t
-
-    # Reload nginx
-    systemctl reload nginx
-
-    log_success "Nginx configured for $DOMAIN"
+    log_success "Nginx đã cấu hình"
 }
 
 # ============================================================================
-# PHASE 5: SSL Certificate (Let's Encrypt)
+# PHASE 4: SSL CERTIFICATE
 # ============================================================================
 setup_ssl() {
-    if $SKIP_SSL || $SKIP_NGINX; then
-        log_info "Skipping SSL setup"
+    if [[ -z "$DOMAIN" || -z "$EMAIL" ]]; then
         return
     fi
 
-    if [[ -z "$DOMAIN" ]]; then
-        log_warn "No domain specified. Skipping SSL setup."
-        return
-    fi
+    log_info "Đang lấy chứng chỉ SSL..."
 
-    if [[ -z "$EMAIL" ]]; then
-        log_warn "No email specified. Skipping SSL setup."
-        log_warn "Run with --email to configure SSL certificate."
-        return
-    fi
+    apt install -y -qq certbot python3-certbot-nginx
 
-    log_info "Installing certbot and configuring SSL..."
-
-    apt install -y certbot python3-certbot-nginx
-
-    # Get certificate
     certbot --nginx -d "$DOMAIN" \
         --non-interactive \
         --agree-tos \
         --email "$EMAIL" \
-        --redirect
+        --redirect || log_warn "SSL thất bại, kiểm tra DNS"
 
-    log_success "SSL certificate installed for $DOMAIN"
+    log_success "SSL đã cài"
 }
 
 # ============================================================================
-# PHASE 6: Environment Configuration
+# PHASE 5: NODE.JS & PM2
 # ============================================================================
-setup_environment() {
-    log_info "Setting up environment configuration..."
-
-    cd "$BOT_DIR"
-
-    # Create .env if not exists
-    if [[ ! -f .env ]]; then
-        cat > .env << EOF
-# TeleTask Bot Configuration
-# Generated by install.sh on $(date)
-
-# Required: Get from @BotFather on Telegram
-BOT_TOKEN=
-
-# Database (auto-configured if --skip-db not used)
-# DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/dbname
-
-# Bot Settings
-BOT_NAME=$BOT_NAME
-TZ=Asia/Ho_Chi_Minh
-LOG_LEVEL=INFO
-
-# Domain (for static file serving)
-BOT_DOMAIN=${DOMAIN:+https://$DOMAIN}
-
-# Monitoring (comma-separated Telegram user IDs)
-ADMIN_IDS=
-
-# Health check port
-HEALTH_PORT=$HEALTH_PORT
-
-# Optional: Google Calendar
-GOOGLE_CALENDAR_ENABLED=false
-# GOOGLE_CREDENTIALS_FILE=
-
-# Optional: Metrics
-METRICS_ENABLED=false
-
-# Optional: Redis caching
-REDIS_ENABLED=false
-# REDIS_URL=redis://localhost:6379/0
-
-# Security: Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-ENCRYPTION_KEY=
-EOF
-        log_info "Created .env file - please configure BOT_TOKEN and ADMIN_IDS"
+install_pm2() {
+    if command -v pm2 &> /dev/null; then
+        log_info "PM2 đã được cài"
+        return
     fi
 
-    # Update config.json with domain
-    if [[ -n "$DOMAIN" ]]; then
-        cat > "$BOT_DIR/static/config.json" << EOF
-{
-  "bot_name": "$BOT_NAME",
-  "domain": "https://$DOMAIN"
-}
-EOF
-        log_info "Updated static/config.json with domain"
-    fi
+    log_info "Đang cài Node.js và PM2..."
 
-    log_success "Environment configuration ready"
-}
-
-# ============================================================================
-# PHASE 7: PM2 Process Manager
-# ============================================================================
-setup_pm2() {
-    log_info "Setting up PM2 process manager..."
-
-    # Install Node.js if needed
     if ! command -v node &> /dev/null; then
         curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-        apt install -y nodejs
+        apt install -y -qq nodejs
     fi
 
-    # Install PM2 globally
     npm install -g pm2
-
-    # Update ecosystem.config.js with actual values
-    cd "$BOT_DIR"
-    sed -i "s|BOT_ID_PLACEHOLDER|$BOT_ID|g" ecosystem.config.js
-
-    # Create logs directory
-    mkdir -p /home/botpanel/logs
-
-    log_success "PM2 configured"
+    log_success "PM2 đã cài"
 }
 
 # ============================================================================
-# PHASE 8: Database Migrations
+# PHASE 6: CLONE & SETUP BOT
 # ============================================================================
-run_migrations() {
-    log_info "Running database migrations..."
+setup_bot() {
+    log_info "Đang cài đặt bot..."
 
-    cd "$BOT_DIR"
-    source venv/bin/activate
+    # Create directories
+    mkdir -p "$BOTS_DIR" "$LOGS_DIR"
 
-    # Check if DATABASE_URL is set
-    if grep -q "^DATABASE_URL=" .env; then
-        alembic upgrade head
-        log_success "Database migrations completed"
-    else
-        log_warn "DATABASE_URL not configured. Skipping migrations."
-        log_warn "Configure DATABASE_URL in .env, then run: alembic upgrade head"
+    BOT_DIR="$BOTS_DIR/$BOT_ID"
+
+    # Clone repository
+    if [[ -d "$BOT_DIR" ]]; then
+        log_warn "Thư mục $BOT_DIR đã tồn tại"
+        read -p "Ghi đè? (y/n): " -n 1 -r
+        echo
+        [[ $REPLY =~ ^[Yy]$ ]] && rm -rf "$BOT_DIR"
     fi
-}
 
-# ============================================================================
-# PHASE 9: Generate Encryption Key
-# ============================================================================
-generate_encryption_key() {
-    log_info "Generating encryption key..."
-
+    git clone "$REPO_URL" "$BOT_DIR"
     cd "$BOT_DIR"
-    source venv/bin/activate
 
-    # Generate key
+    # Create virtual environment
+    $PYTHON_VERSION -m venv venv
+    source venv/bin/activate
+    pip install --upgrade pip -q
+    pip install -r requirements.txt -q
+
+    # Generate encryption key
     ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 
-    # Add to .env if not already set
-    if grep -q "^ENCRYPTION_KEY=$" .env; then
-        sed -i "s|^ENCRYPTION_KEY=$|ENCRYPTION_KEY=$ENCRYPTION_KEY|" .env
-        log_success "Encryption key generated and saved to .env"
-    else
-        log_info "Encryption key already configured"
-    fi
+    # Create .env file
+    cat > "$BOT_DIR/.env" << EOF
+# TeleTask Bot Configuration
+# Bot ID: $BOT_ID
+# Generated: $(date)
+
+# Telegram Bot
+BOT_TOKEN=$BOT_TOKEN
+BOT_NAME=$BOT_ID
+
+# Database
+DATABASE_URL=$DATABASE_URL
+
+# Domain
+BOT_DOMAIN=${DOMAIN:+https://$DOMAIN}
+
+# Timezone
+TZ=Asia/Ho_Chi_Minh
+
+# Monitoring
+ADMIN_IDS=$ADMIN_IDS
+HEALTH_PORT=$HEALTH_PORT
+LOG_LEVEL=INFO
+
+# Security
+ENCRYPTION_KEY=$ENCRYPTION_KEY
+
+# Optional
+GOOGLE_CALENDAR_ENABLED=false
+METRICS_ENABLED=false
+REDIS_ENABLED=false
+EOF
+
+    # Update ecosystem.config.js
+    sed -i "s|BOT_ID_PLACEHOLDER|$BOT_ID|g" ecosystem.config.js
+
+    # Update static/config.json
+    cat > "$BOT_DIR/static/config.json" << EOF
+{
+  "bot_name": "$BOT_ID",
+  "domain": "${DOMAIN:+https://$DOMAIN}"
+}
+EOF
+
+    # Run database migrations
+    log_info "Đang chạy database migrations..."
+    alembic upgrade head
+
+    log_success "Bot đã cài đặt tại $BOT_DIR"
 }
 
 # ============================================================================
-# MAIN INSTALLATION
+# PHASE 7: START BOT
+# ============================================================================
+start_bot() {
+    log_info "Đang khởi động bot..."
+
+    cd "$BOT_DIR"
+    pm2 start ecosystem.config.js
+    pm2 save
+
+    # Setup PM2 startup
+    pm2 startup systemd -u root --hp /root 2>/dev/null || true
+
+    log_success "Bot đã khởi động"
+}
+
+# ============================================================================
+# MAIN
 # ============================================================================
 main() {
-    echo ""
-    echo "=============================================="
-    echo "  TeleTask Bot - Full Stack Installer"
-    echo "=============================================="
-    echo ""
-    echo "Bot Directory: $BOT_DIR"
-    echo "Bot ID: $BOT_ID"
-    [[ -n "$DOMAIN" ]] && echo "Domain: $DOMAIN"
-    [[ -n "$EMAIL" ]] && echo "Email: $EMAIL"
-    echo ""
+    print_banner
 
-    # Check prerequisites
+    check_root
     check_ubuntu
+    prompt_config
 
-    # Run installation phases
+    # Validate required fields
+    if [[ -z "$BOT_ID" || -z "$BOT_TOKEN" ]]; then
+        log_error "Thiếu Bot ID hoặc Bot Token"
+        exit 1
+    fi
+
+    echo ""
+    log_info "Bắt đầu cài đặt..."
+    echo "═══════════════════════════════════════════════════════════"
+
     install_system_deps
     install_postgresql
     setup_database
-    setup_python_venv
     install_nginx
-    configure_nginx
     setup_ssl
-    setup_environment
-    setup_pm2
-    generate_encryption_key
-
-    # Only run migrations if database was set up
-    if ! $SKIP_DB && grep -q "^DATABASE_URL=" "$BOT_DIR/.env"; then
-        run_migrations
-    fi
+    install_pm2
+    setup_bot
+    start_bot
 
     echo ""
-    echo "=============================================="
-    echo "  Installation Complete!"
-    echo "=============================================="
+    echo "═══════════════════════════════════════════════════════════"
+    echo -e "${GREEN}CÀI ĐẶT HOÀN TẤT!${NC}"
+    echo "═══════════════════════════════════════════════════════════"
     echo ""
-    echo "Next steps:"
-    echo "  1. Edit .env and set BOT_TOKEN (from @BotFather)"
-    echo "  2. Edit .env and set ADMIN_IDS (your Telegram user ID)"
-    echo "  3. Start the bot:"
-    echo "     cd $BOT_DIR"
-    echo "     pm2 start ecosystem.config.js"
-    echo "     pm2 save"
+    echo "Bot đã được cài đặt tại: $BOT_DIR"
     echo ""
     if [[ -n "$DOMAIN" ]]; then
-        echo "  Your bot will be accessible at:"
-        echo "    https://$DOMAIN/"
-        echo "    https://$DOMAIN/health"
-        echo "    https://$DOMAIN/user-guide.html"
+        echo "Truy cập:"
+        echo "  https://$DOMAIN/"
+        echo "  https://$DOMAIN/health"
+        echo "  https://$DOMAIN/user-guide.html"
         echo ""
     fi
-    echo "  View logs: pm2 logs $BOT_ID"
-    echo "  Restart:   pm2 restart $BOT_ID"
-    echo "  Stop:      pm2 stop $BOT_ID"
+    echo "Quản lý bot:"
+    echo "  pm2 logs $BOT_ID       # Xem logs"
+    echo "  pm2 restart $BOT_ID    # Khởi động lại"
+    echo "  pm2 stop $BOT_ID       # Dừng bot"
+    echo ""
+    echo "Cấu hình: $BOT_DIR/.env"
     echo ""
 }
 
-# Run main if executed directly
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main
-fi
+main "$@"
