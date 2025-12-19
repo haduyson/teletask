@@ -1,19 +1,19 @@
 #!/bin/bash
 #
-# TeleTask Bot - Full Stack Installer
-# Automated setup for Ubuntu 22.04/24.04 servers
+# TeleTask Bot - Cài Đặt Tự Động
+# Hỗ trợ Ubuntu 22.04/24.04
 #
-# Usage: ./install.sh [OPTIONS]
-#   --domain DOMAIN    Set domain for nginx (e.g., teletask.example.com)
-#   --email EMAIL      Email for Let's Encrypt SSL certificate
-#   --bot-name NAME    Bot display name (default: TeleTask Bot)
-#   --skip-nginx       Skip nginx installation
-#   --skip-ssl         Skip SSL certificate setup
-#   --skip-db          Skip PostgreSQL setup (use existing database)
-#   --help             Show this help message
+# Sử dụng: ./install.sh [TÙY CHỌN]
+#   --domain DOMAIN    Domain cho nginx (vd: teletask.example.com)
+#   --email EMAIL      Email cho chứng chỉ SSL Let's Encrypt
+#   --bot-name NAME    Tên bot (mặc định: TeleTask Bot)
+#   --skip-nginx       Bỏ qua cài nginx
+#   --skip-ssl         Bỏ qua cài SSL
+#   --skip-db          Bỏ qua cài PostgreSQL (dùng database bên ngoài)
+#   --help             Hiện hướng dẫn
 #
-# Example:
-#   ./install.sh --domain teletask.example.com --email admin@example.com
+# Ví dụ:
+#   sudo ./install.sh --domain teletask.example.com --email admin@example.com
 #
 
 set -e
