@@ -11,16 +11,17 @@ module.exports = {
         // Bot identification
         name: 'BOT_ID_PLACEHOLDER',
 
-        // Entry point
-        script: 'bot.py',
-        interpreter: 'python3.11',
+        // Entry point (absolute paths for reliability)
+        script: '/home/botpanel/bots/BOT_ID_PLACEHOLDER/bot.py',
+        interpreter: '/home/botpanel/bots/BOT_ID_PLACEHOLDER/venv/bin/python',
 
         // Working directory
         cwd: '/home/botpanel/bots/BOT_ID_PLACEHOLDER',
 
         // Environment
         env: {
-            NODE_ENV: 'production'
+            NODE_ENV: 'production',
+            PYTHONUNBUFFERED: '1'
         },
 
         // Process management

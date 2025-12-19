@@ -58,7 +58,8 @@ PYTHON_VERSION="python3.11"
 HEALTH_PORT=8080
 
 # Parse arguments
-BOT_ID=""
+BOT_NAME=""
+BOT_SLUG=""
 DOMAIN=""
 EMAIL=""
 BOT_TOKEN=""
@@ -67,9 +68,15 @@ SKIP_INTERACTIVE=false
 SYSTEM_ONLY=false
 ADD_BOT_MODE=false
 
+# Function to convert bot name to slug
+name_to_slug() {
+    echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g'
+}
+
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --bot-id)      BOT_ID="$2"; shift 2 ;;
+        --bot-name)    BOT_NAME="$2"; shift 2 ;;
+        --bot-slug)    BOT_SLUG="$2"; shift 2 ;;
         --domain)      DOMAIN="$2"; shift 2 ;;
         --email)       EMAIL="$2"; shift 2 ;;
         --bot-token)   BOT_TOKEN="$2"; shift 2 ;;
@@ -85,13 +92,14 @@ while [[ $# -gt 0 ]]; do
             echo "  Dùng 'botpanel' sau đó để thêm bot"
             echo ""
             echo "Tùy chọn:"
-            echo "  --system-only      Chỉ cài hệ thống (mặc định nếu không có bot-id)"
+            echo "  --system-only      Chỉ cài hệ thống (mặc định nếu không có bot-name)"
             echo "  --add-bot          Chế độ thêm bot (gọi từ botpanel)"
-            echo "  --bot-id ID        ID cho bot (vd: mybot)"
+            echo "  --bot-name NAME    Tên bot (vd: 'My Task Bot')"
+            echo "  --bot-slug SLUG    Slug cho thư mục (tự tạo từ tên nếu không có)"
             echo "  --domain DOMAIN    Domain cho nginx (vd: teletask.example.com)"
             echo "  --email EMAIL      Email cho SSL Let's Encrypt"
             echo "  --bot-token TOKEN  Bot token từ @BotFather"
-            echo "  --admin-ids IDS    Telegram user IDs (phân cách bằng dấu phẩy)"
+            echo "  --admin-ids IDS    Admin Telegram (@username hoặc ID số)"
             echo "  --skip-interactive Bỏ qua các câu hỏi tương tác"
             echo "  --help             Hiện hướng dẫn này"
             exit 0
@@ -101,7 +109,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Auto-detect mode: system-only if no bot params provided
-if [[ -z "$BOT_ID" && -z "$BOT_TOKEN" && "$ADD_BOT_MODE" != "true" ]]; then
+if [[ -z "$BOT_NAME" && -z "$BOT_TOKEN" && "$ADD_BOT_MODE" != "true" ]]; then
     SYSTEM_ONLY=true
 fi
 
@@ -136,15 +144,21 @@ prompt_config() {
     log_info "Cấu hình bot mới"
     echo "─────────────────────────────────────────"
 
-    # Bot ID
-    if [[ -z "$BOT_ID" ]]; then
+    # Bot Name (allows spaces, no accents)
+    if [[ -z "$BOT_NAME" ]]; then
         while true; do
-            read -p "Bot ID (chữ thường, không dấu, vd: mybot): " BOT_ID
-            if [[ "$BOT_ID" =~ ^[a-z][a-z0-9_-]*$ ]]; then
+            read -p "Tên Bot (vd: My Task Bot): " BOT_NAME
+            if [[ -n "$BOT_NAME" && "$BOT_NAME" =~ ^[a-zA-Z0-9\ _-]+$ ]]; then
                 break
             fi
-            log_error "ID không hợp lệ. Chỉ dùng chữ thường, số, gạch ngang."
+            log_error "Tên không hợp lệ. Chỉ dùng chữ cái (không dấu), số, dấu cách, gạch ngang."
         done
+    fi
+
+    # Auto-generate slug from name if not provided
+    if [[ -z "$BOT_SLUG" ]]; then
+        BOT_SLUG=$(name_to_slug "$BOT_NAME")
+        echo -e "  ${DIM}→ Thư mục: $BOT_SLUG${NC}"
     fi
 
     # Domain
@@ -162,18 +176,19 @@ prompt_config() {
         read -p "Bot Token từ @BotFather: " BOT_TOKEN
     fi
 
-    # Admin IDs
+    # Admin (accepts @username or numeric ID)
     if [[ -z "$ADMIN_IDS" ]]; then
-        read -p "Admin Telegram ID (ID của bạn, để nhận thông báo): " ADMIN_IDS
+        read -p "Admin Telegram (@username hoặc ID số): " ADMIN_IDS
     fi
 
     echo ""
     log_info "Xác nhận cấu hình:"
-    echo "  Bot ID:    $BOT_ID"
+    echo "  Tên Bot:   $BOT_NAME"
+    echo "  Thư mục:   $BOT_SLUG"
     echo "  Domain:    ${DOMAIN:-'(không)'}"
     echo "  Email:     ${EMAIL:-'(không)'}"
     echo "  Bot Token: ${BOT_TOKEN:0:10}..."
-    echo "  Admin IDs: $ADMIN_IDS"
+    echo "  Admin:     ${ADMIN_IDS:-'(không)'}"
     echo ""
 
     read -p "Tiếp tục cài đặt? (y/n): " -n 1 -r
@@ -224,8 +239,8 @@ install_postgresql() {
 setup_database() {
     log_info "Đang tạo database..."
 
-    DB_NAME="${BOT_ID//-/_}_db"
-    DB_USER="${BOT_ID//-/_}_user"
+    DB_NAME="${BOT_SLUG//-/_}_db"
+    DB_USER="${BOT_SLUG//-/_}_user"
     DB_PASSWORD=$(openssl rand -base64 24 | tr -dc 'a-zA-Z0-9' | head -c 24)
 
     sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || true
@@ -334,42 +349,77 @@ install_pm2() {
 # PHASE 6: CLONE & SETUP BOT
 # ============================================================================
 setup_bot() {
-    log_info "Đang cài đặt bot..."
+    log_info "Đang cài đặt bot '$BOT_NAME'..."
 
     # Create directories
     mkdir -p "$BOTS_DIR" "$LOGS_DIR"
 
-    BOT_DIR="$BOTS_DIR/$BOT_ID"
+    BOT_DIR="$BOTS_DIR/$BOT_SLUG"
 
-    # Clone repository
+    # Handle existing directory (auto-remove in non-interactive mode)
     if [[ -d "$BOT_DIR" ]]; then
-        log_warn "Thư mục $BOT_DIR đã tồn tại"
-        read -p "Ghi đè? (y/n): " -n 1 -r
-        echo
-        [[ $REPLY =~ ^[Yy]$ ]] && rm -rf "$BOT_DIR"
+        if $SKIP_INTERACTIVE; then
+            log_warn "Thư mục $BOT_DIR đã tồn tại, đang xóa..."
+            rm -rf "$BOT_DIR"
+        else
+            log_warn "Thư mục $BOT_DIR đã tồn tại"
+            read -p "Ghi đè? (y/n): " -n 1 -r </dev/tty
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                rm -rf "$BOT_DIR"
+            else
+                log_error "Hủy cài đặt"
+                return 1
+            fi
+        fi
     fi
 
-    git clone "$REPO_URL" "$BOT_DIR"
-    cd "$BOT_DIR"
+    # Clone repository
+    log_info "Đang clone repository..."
+    if ! git clone "$REPO_URL" "$BOT_DIR"; then
+        log_error "Không thể clone repository"
+        return 1
+    fi
 
-    # Create virtual environment
-    $PYTHON_VERSION -m venv venv
-    source venv/bin/activate
-    pip install --upgrade pip -q
-    pip install -r requirements.txt -q
+    # Verify clone succeeded
+    if [[ ! -f "$BOT_DIR/requirements.txt" ]]; then
+        log_error "Clone thất bại: requirements.txt không tồn tại"
+        return 1
+    fi
+
+    if [[ ! -f "$BOT_DIR/bot.py" ]]; then
+        log_error "Clone thất bại: bot.py không tồn tại"
+        return 1
+    fi
+
+    # Create virtual environment (use absolute paths)
+    log_info "Đang tạo virtual environment..."
+    if ! $PYTHON_VERSION -m venv "$BOT_DIR/venv"; then
+        log_error "Không thể tạo virtual environment"
+        return 1
+    fi
+
+    # Install dependencies (use absolute paths)
+    log_info "Đang cài đặt dependencies..."
+    "$BOT_DIR/venv/bin/pip" install --upgrade pip -q
+    if ! "$BOT_DIR/venv/bin/pip" install -r "$BOT_DIR/requirements.txt" -q; then
+        log_error "Không thể cài đặt dependencies"
+        return 1
+    fi
 
     # Generate encryption key
-    ENCRYPTION_KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+    ENCRYPTION_KEY=$("$BOT_DIR/venv/bin/python" -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
 
     # Create .env file
     cat > "$BOT_DIR/.env" << EOF
 # TeleTask Bot Configuration
-# Bot ID: $BOT_ID
+# Bot Name: $BOT_NAME
+# Bot Slug: $BOT_SLUG
 # Generated: $(date)
 
 # Telegram Bot
 BOT_TOKEN=$BOT_TOKEN
-BOT_NAME=$BOT_ID
+BOT_NAME=$BOT_NAME
 
 # Database
 DATABASE_URL=$DATABASE_URL
@@ -394,22 +444,25 @@ METRICS_ENABLED=false
 REDIS_ENABLED=false
 EOF
 
-    # Update ecosystem.config.js
-    sed -i "s|BOT_ID_PLACEHOLDER|$BOT_ID|g" ecosystem.config.js
+    # Update ecosystem.config.js with slug for PM2 process name
+    sed -i "s|BOT_ID_PLACEHOLDER|$BOT_SLUG|g" "$BOT_DIR/ecosystem.config.js"
 
-    # Update static/config.json
+    # Update static/config.json with display name
     cat > "$BOT_DIR/static/config.json" << EOF
 {
-  "bot_name": "$BOT_ID",
+  "bot_name": "$BOT_NAME",
+  "bot_slug": "$BOT_SLUG",
   "domain": "${DOMAIN:+https://$DOMAIN}"
 }
 EOF
 
     # Run database migrations
     log_info "Đang chạy database migrations..."
-    alembic upgrade head
+    cd "$BOT_DIR/database/migrations"
+    "$BOT_DIR/venv/bin/alembic" upgrade head
+    cd - > /dev/null
 
-    log_success "Bot đã cài đặt tại $BOT_DIR"
+    log_success "Bot '$BOT_NAME' đã cài đặt tại $BOT_DIR"
 }
 
 # ============================================================================
@@ -705,6 +758,11 @@ view_logs() {
     pm2 logs "$bot_id" --lines "$lines"
 }
 
+# Function to convert bot name to slug (for embedded botpanel)
+name_to_slug() {
+    echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-\|-$//g'
+}
+
 # Add new bot
 add_bot() {
     echo -e "\n${BOLD}Thêm Bot Mới${NC}"
@@ -722,18 +780,21 @@ add_bot() {
             log_info "Cấu hình bot mới"
             echo "─────────────────────────────────────────"
 
-            # Bot ID
-            local bot_id=""
+            # Bot Name (allows spaces, no accents)
+            local bot_name=""
+            local bot_slug=""
             while true; do
-                read -p "Bot ID (chữ thường, không dấu, vd: mybot): " bot_id
-                if [[ "$bot_id" =~ ^[a-z][a-z0-9_-]*$ ]]; then
-                    if [[ -d "$BOTS_DIR/$bot_id" ]]; then
-                        log_error "Bot '$bot_id' đã tồn tại"
+                read -p "Tên Bot (vd: My Task Bot): " bot_name
+                if [[ -n "$bot_name" && "$bot_name" =~ ^[a-zA-Z0-9\ _-]+$ ]]; then
+                    bot_slug=$(name_to_slug "$bot_name")
+                    if [[ -d "$BOTS_DIR/$bot_slug" ]]; then
+                        log_error "Bot '$bot_name' (thư mục: $bot_slug) đã tồn tại"
                     else
+                        echo -e "  ${DIM}→ Thư mục: $bot_slug${NC}"
                         break
                     fi
                 else
-                    log_error "ID không hợp lệ. Chỉ dùng chữ thường, số, gạch ngang."
+                    log_error "Tên không hợp lệ. Chỉ dùng chữ cái (không dấu), số, dấu cách, gạch ngang."
                 fi
             done
 
@@ -745,9 +806,9 @@ add_bot() {
                 return 1
             fi
 
-            # Admin IDs
+            # Admin (accepts @username or numeric ID)
             local admin_ids=""
-            read -p "Admin Telegram ID (để nhận thông báo): " admin_ids
+            read -p "Admin Telegram (@username hoặc ID số): " admin_ids
 
             # Domain (optional)
             local domain=""
@@ -759,9 +820,10 @@ add_bot() {
 
             echo ""
             log_info "Xác nhận cấu hình:"
-            echo "  Bot ID:    $bot_id"
+            echo "  Tên Bot:   $bot_name"
+            echo "  Thư mục:   $bot_slug"
             echo "  Bot Token: ${bot_token:0:10}..."
-            echo "  Admin IDs: ${admin_ids:-'(không)'}"
+            echo "  Admin:     ${admin_ids:-'(không)'}"
             echo "  Domain:    ${domain:-'(không)'}"
             echo ""
 
@@ -770,10 +832,11 @@ add_bot() {
             [[ ! $REPLY =~ ^[Yy]$ ]] && return 1
 
             # Run installer in add-bot mode
-            log_info "Đang cài đặt bot..."
+            log_info "Đang cài đặt bot '$bot_name'..."
             curl -fsSL "$INSTALLER_URL" | sudo bash -s -- \
                 --add-bot \
-                --bot-id "$bot_id" \
+                --bot-name "$bot_name" \
+                --bot-slug "$bot_slug" \
                 --bot-token "$bot_token" \
                 ${admin_ids:+--admin-ids "$admin_ids"} \
                 ${domain:+--domain "$domain"} \
@@ -787,25 +850,26 @@ add_bot() {
                 return 1
             fi
 
-            read -p "Bot ID (tên thư mục trong bots/): " bot_id
-            if [[ -z "$bot_id" ]]; then
-                log_error "Chưa nhập Bot ID"
+            read -p "Tên Bot: " bot_name
+            if [[ -z "$bot_name" ]]; then
+                log_error "Chưa nhập Tên Bot"
                 return 1
             fi
 
-            local dest="$BOTS_DIR/$bot_id"
+            local bot_slug=$(name_to_slug "$bot_name")
+            local dest="$BOTS_DIR/$bot_slug"
             if [[ -d "$dest" ]]; then
-                log_error "Bot '$bot_id' đã tồn tại"
+                log_error "Bot '$bot_name' (thư mục: $bot_slug) đã tồn tại"
                 return 1
             fi
 
             log_info "Đang copy bot..."
             cp -r "$bot_path" "$dest"
-            log_success "Bot đã được thêm vào $dest"
+            log_success "Bot '$bot_name' đã được thêm vào $dest"
 
             read -p "Khởi động bot ngay? (y/n): " -n 1 -r
             echo
-            [[ $REPLY =~ ^[Yy]$ ]] && start_bot "$bot_id"
+            [[ $REPLY =~ ^[Yy]$ ]] && start_bot "$bot_slug"
             ;;
         0|"")
             return 0
@@ -1208,16 +1272,21 @@ BOTPANEL_EOF
 # PHASE 8: START BOT
 # ============================================================================
 start_bot() {
-    log_info "Đang khởi động bot..."
+    log_info "Đang khởi động bot '$BOT_NAME'..."
 
-    cd "$BOT_DIR"
-    pm2 start ecosystem.config.js
+    # Use absolute path for ecosystem.config.js
+    if [[ ! -f "$BOT_DIR/ecosystem.config.js" ]]; then
+        log_error "ecosystem.config.js không tồn tại tại $BOT_DIR"
+        return 1
+    fi
+
+    pm2 start "$BOT_DIR/ecosystem.config.js"
     pm2 save
 
     # Setup PM2 startup
     pm2 startup systemd -u root --hp /root 2>/dev/null || true
 
-    log_success "Bot đã khởi động"
+    log_success "Bot '$BOT_NAME' đã khởi động"
 }
 
 # ============================================================================
@@ -1278,13 +1347,18 @@ main_with_bot() {
     prompt_config
 
     # Validate required fields
-    if [[ -z "$BOT_ID" || -z "$BOT_TOKEN" ]]; then
-        log_error "Thiếu Bot ID hoặc Bot Token"
+    if [[ -z "$BOT_NAME" || -z "$BOT_TOKEN" ]]; then
+        log_error "Thiếu Tên Bot hoặc Bot Token"
         exit 1
     fi
 
+    # Ensure slug is generated
+    if [[ -z "$BOT_SLUG" ]]; then
+        BOT_SLUG=$(name_to_slug "$BOT_NAME")
+    fi
+
     echo ""
-    log_info "Bắt đầu cài đặt..."
+    log_info "Bắt đầu cài đặt '$BOT_NAME'..."
     echo "═══════════════════════════════════════════════════════════"
 
     install_system_deps
@@ -1302,7 +1376,7 @@ main_with_bot() {
     echo -e "${GREEN}CÀI ĐẶT HOÀN TẤT!${NC}"
     echo "═══════════════════════════════════════════════════════════"
     echo ""
-    echo "Bot đã được cài đặt tại: $BOT_DIR"
+    echo "Bot '$BOT_NAME' đã được cài đặt tại: $BOT_DIR"
     echo ""
     if [[ -n "$DOMAIN" ]]; then
         echo "Truy cập:"
@@ -1314,8 +1388,8 @@ main_with_bot() {
     echo -e "${CYAN}Quản lý bot với BotPanel:${NC}"
     echo "  botpanel              # Menu tương tác"
     echo "  botpanel status       # Xem trạng thái"
-    echo "  botpanel logs $BOT_ID # Xem logs"
-    echo "  botpanel restart $BOT_ID"
+    echo "  botpanel logs $BOT_SLUG # Xem logs"
+    echo "  botpanel restart $BOT_SLUG"
     echo ""
     echo "Cấu hình: $BOT_DIR/.env"
     echo ""
@@ -1330,9 +1404,13 @@ elif [[ "$ADD_BOT_MODE" == "true" ]]; then
     # Called from botpanel to add a bot (system already installed)
     check_root
     prompt_config
-    if [[ -z "$BOT_ID" || -z "$BOT_TOKEN" ]]; then
-        log_error "Thiếu Bot ID hoặc Bot Token"
+    if [[ -z "$BOT_NAME" || -z "$BOT_TOKEN" ]]; then
+        log_error "Thiếu Tên Bot hoặc Bot Token"
         exit 1
+    fi
+    # Ensure slug is generated
+    if [[ -z "$BOT_SLUG" ]]; then
+        BOT_SLUG=$(name_to_slug "$BOT_NAME")
     fi
     setup_database
     install_nginx
@@ -1340,7 +1418,7 @@ elif [[ "$ADD_BOT_MODE" == "true" ]]; then
     setup_bot
     start_bot
     echo ""
-    log_success "Bot '$BOT_ID' đã được thêm và khởi động!"
+    log_success "Bot '$BOT_NAME' đã được thêm và khởi động!"
 else
     main_with_bot
 fi
