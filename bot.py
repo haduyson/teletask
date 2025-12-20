@@ -26,9 +26,13 @@ from dotenv import load_dotenv
 # =============================================================================
 # PID Lock File - Prevent duplicate bot instances
 # =============================================================================
+# Cache the bot directory path at module load time (before __file__ might become unavailable)
+_BOT_DIR = Path(__file__).parent if '__file__' in dir() else Path.cwd()
+
+
 def _get_lock_file_path() -> Path:
     """Get the lock file path in the bot directory."""
-    return Path(__file__).parent / ".bot.pid"
+    return _BOT_DIR / ".bot.pid"
 
 
 def acquire_lock() -> bool:
