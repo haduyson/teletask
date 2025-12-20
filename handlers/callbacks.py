@@ -826,6 +826,87 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
         tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size, group_id=gid)
         title = "📋 VIỆC CÁ NHÂN"
         list_type = "personal"
+
+        # Privacy feature: In group context, send personal tasks via private DM
+        if gid is not None:
+            from utils import mention_user
+            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+            user_telegram_id = db_user.get("telegram_id")
+            user_mention = mention_user(db_user)
+
+            if not tasks:
+                # No personal tasks - notify in group and send empty message privately
+                try:
+                    await query.message.get_bot().send_message(
+                        chat_id=user_telegram_id,
+                        text="📋 *VIỆC CÁ NHÂN*\n\n"
+                             "📭 Bạn chưa có việc cá nhân nào.\n\n"
+                             "Tạo việc mới: /taoviec",
+                        parse_mode="Markdown",
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not send private message to {user_telegram_id}: {e}")
+                    await safe_edit_message(
+                        query,
+                        f"⚠️ Không thể gửi tin nhắn riêng.\n\n"
+                        f"Vui lòng nhắn /start cho bot trước để nhận tin nhắn riêng.",
+                    )
+                    return
+
+                await safe_edit_message(
+                    query,
+                    f"📬 Đã gửi tin nhắn riêng về việc cá nhân cho {user_mention}.\n\n"
+                    f"_Kiểm tra tin nhắn riêng từ bot._",
+                    parse_mode="Markdown",
+                )
+                return
+
+            # Has personal tasks - send list via private DM
+            total = len(tasks)
+            total_pages = max(1, (total + page_size - 1) // page_size)
+
+            # Build task list message for private DM
+            task_lines = []
+            for task in tasks[:10]:
+                task_id = task.get("public_id", "")
+                content = task.get("content", "")[:40]
+                if len(task.get("content", "")) > 40:
+                    content += "..."
+                status_icon = "✅" if task.get("status") == "completed" else "📋"
+                task_lines.append(f"{status_icon} `{task_id}`: {content}")
+
+            task_list_text = "\n".join(task_lines)
+
+            try:
+                # Send private DM with task list and action buttons
+                await query.message.get_bot().send_message(
+                    chat_id=user_telegram_id,
+                    text=f"📋 *VIỆC CÁ NHÂN CỦA BẠN*\n\n"
+                         f"Tổng: {total} việc\n\n"
+                         f"{task_list_text}\n\n"
+                         f"_Sử dụng /xemviec [mã việc] để xem chi tiết_",
+                    parse_mode="Markdown",
+                    reply_markup=task_list_with_pagination(tasks, 1, total_pages, list_type, None),
+                )
+            except Exception as e:
+                logger.warning(f"Could not send private message to {user_telegram_id}: {e}")
+                await safe_edit_message(
+                    query,
+                    f"⚠️ Không thể gửi tin nhắn riêng.\n\n"
+                    f"Vui lòng nhắn /start cho bot trước để nhận tin nhắn riêng.",
+                )
+                return
+
+            # Update group message with notification
+            await safe_edit_message(
+                query,
+                f"📬 Đã gửi tin nhắn riêng về việc cá nhân cho {user_mention}.\n\n"
+                f"_Kiểm tra tin nhắn riêng từ bot._",
+                parse_mode="Markdown",
+            )
+            return
+
     elif category == "assigned":
         tasks = await get_user_created_tasks(db, db_user["id"], limit=page_size, group_id=gid)
         title = "📤 VIỆC ĐÃ GIAO"
