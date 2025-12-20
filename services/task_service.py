@@ -339,9 +339,24 @@ async def get_user_personal_tasks(
     limit: int = 20,
     offset: int = 0,
     include_completed: bool = False,
+    group_id: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Get personal tasks (created by user for themselves)."""
+    """Get personal tasks (created by user for themselves).
+
+    Args:
+        group_id: If provided, filter to tasks in this group only.
+                  If None, show all personal tasks (for private chat).
+    """
     status_filter = "" if include_completed else "AND t.status != 'completed'"
+
+    # Build group filter - when in group, only show tasks from that group
+    if group_id is not None:
+        group_filter = "AND t.group_id = $4"
+        params = [user_id, limit, offset, group_id]
+    else:
+        group_filter = ""
+        params = [user_id, limit, offset]
+
     tasks = await db.fetch_all(
         f"""
         SELECT t.*, u.display_name as creator_name
@@ -351,6 +366,7 @@ async def get_user_personal_tasks(
         AND t.assignee_id = $1
         AND t.is_deleted = false
         {status_filter}
+        {group_filter}
         ORDER BY
             CASE t.priority
                 WHEN 'urgent' THEN 1
@@ -362,7 +378,7 @@ async def get_user_personal_tasks(
             t.created_at DESC
         LIMIT $2 OFFSET $3
         """,
-        user_id, limit, offset
+        *params
     )
     return [dict(t) for t in tasks]
 

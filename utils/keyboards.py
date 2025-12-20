@@ -166,8 +166,13 @@ def task_list_with_pagination(
     page: int,
     total_pages: int,
     list_type: str = "personal",
+    group_id: Optional[int] = None,
 ) -> InlineKeyboardMarkup:
-    """Create task list with pagination."""
+    """Create task list with pagination.
+
+    Args:
+        group_id: If provided, preserve group context in pagination callbacks.
+    """
     buttons = []
 
     # Task buttons with longer content display
@@ -184,24 +189,27 @@ def task_list_with_pagination(
             )
         ])
 
+    # Build group suffix for pagination callbacks
+    g = f"g{group_id}" if group_id else "g0"
+
     # Pagination
     nav_row = []
     if page > 1:
         nav_row.append(
-            InlineKeyboardButton("« Trước", callback_data=f"list:{list_type}:{page - 1}")
+            InlineKeyboardButton("« Trước", callback_data=f"list:{list_type}:{page - 1}:{g}")
         )
     nav_row.append(
         InlineKeyboardButton(f"{page}/{total_pages}", callback_data="noop")
     )
     if page < total_pages:
         nav_row.append(
-            InlineKeyboardButton("Sau »", callback_data=f"list:{list_type}:{page + 1}")
+            InlineKeyboardButton("Sau »", callback_data=f"list:{list_type}:{page + 1}:{g}")
         )
     buttons.append(nav_row)
 
-    # Back to category menu
+    # Back to category menu (preserve group context)
     buttons.append([
-        InlineKeyboardButton("« Quay lại danh mục", callback_data="task_category:menu")
+        InlineKeyboardButton("« Quay lại danh mục", callback_data=f"task_category:menu:{g}")
     ])
 
     return InlineKeyboardMarkup(buttons)

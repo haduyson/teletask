@@ -340,7 +340,16 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         elif action == "list":
             list_type = validate_list_type(params[0] if params else "all")
             page = validate_int(params[1] if len(params) > 1 else "1", min_val=1, max_val=1000) or 1
-            await handle_list_page(query, db, db_user, list_type, page)
+            # Parse group_id from callback data (format: list:type:page:gN)
+            group_id = None
+            if len(params) > 2 and params[2].startswith("g"):
+                try:
+                    gid = int(params[2][1:])
+                    if gid > 0:
+                        group_id = gid
+                except ValueError:
+                    pass
+            await handle_list_page(query, db, db_user, list_type, page, group_id)
 
         # No-op (for pagination display)
         elif action == "noop":
@@ -710,8 +719,12 @@ async def handle_bulk_undo(query, db, undo_id: int, context=None) -> None:
         )
 
 
-async def handle_list_page(query, db, db_user, list_type: str, page: int) -> None:
-    """Handle list pagination."""
+async def handle_list_page(query, db, db_user, list_type: str, page: int, group_id: int = None) -> None:
+    """Handle list pagination.
+
+    Args:
+        group_id: If provided, filter tasks to this group only.
+    """
     from services import (
         get_user_personal_tasks,
         get_user_created_tasks,
@@ -722,24 +735,26 @@ async def handle_list_page(query, db, db_user, list_type: str, page: int) -> Non
 
     page_size = 10
     offset = (page - 1) * page_size
+    g_suffix = f":g{group_id}" if group_id else ":g0"
 
     if list_type == "personal":
-        tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size, offset=offset)
+        tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=group_id)
         title = "📋 VIỆC CÁ NHÂN"
     elif list_type == "assigned":
-        tasks = await get_user_created_tasks(db, db_user["id"], limit=page_size, offset=offset)
+        tasks = await get_user_created_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=group_id)
         title = "📤 VIỆC ĐÃ GIAO"
     elif list_type == "received":
-        tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size, offset=offset)
+        tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=group_id)
         title = "📥 VIỆC ĐÃ NHẬN"
     else:  # all
-        tasks = await get_all_user_related_tasks(db, db_user["id"], limit=page_size, offset=offset)
+        tasks = await get_all_user_related_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=group_id)
         title = "📊 TẤT CẢ VIỆC"
 
     if not tasks:
-        await query.edit_message_text(
-            f"{title}\n\nKhông có việc nào.",
-            reply_markup=task_category_keyboard(),
+        await safe_edit_message(
+            query,
+            f"{title}\n\n📭 Không có việc nào.",
+            reply_markup=task_category_keyboard(group_id),
         )
         return
 
@@ -748,11 +763,13 @@ async def handle_list_page(query, db, db_user, list_type: str, page: int) -> Non
     total_count = len(tasks) + offset
 
     # Show only title with count - task list is in buttons
-    msg = f"{title}\n\nTổng: {total_count} việc | Trang {page}/{total_pages}\n\nChọn việc để xem chi tiết:"
+    group_note = " (trong nhóm)" if group_id else ""
+    msg = f"{title}{group_note}\n\nTổng: {total_count} việc | Trang {page}/{total_pages}\n\nChọn việc để xem chi tiết:"
 
-    await query.edit_message_text(
+    await safe_edit_message(
+        query,
         msg,
-        reply_markup=task_list_with_pagination(tasks, page, total_pages, list_type),
+        reply_markup=task_list_with_pagination(tasks, page, total_pages, list_type, group_id),
     )
 
 
@@ -806,7 +823,7 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
         return
 
     if category == "personal":
-        tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size)
+        tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size, group_id=gid)
         title = "📋 VIỆC CÁ NHÂN"
         list_type = "personal"
     elif category == "assigned":
