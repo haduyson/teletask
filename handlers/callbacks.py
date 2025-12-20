@@ -823,7 +823,6 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
         return
 
     if category == "personal":
-        tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size, group_id=gid)
         title = "📋 VIỆC CÁ NHÂN"
         list_type = "personal"
 
@@ -831,6 +830,9 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
         if gid is not None:
             from utils import mention_user
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+            # Fetch ALL personal tasks (not filtered by group) for private DM
+            tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size, group_id=None)
 
             user_telegram_id = db_user.get("telegram_id")
             user_mention = mention_user(db_user)
@@ -906,6 +908,9 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
                 parse_mode="Markdown",
             )
             return
+        else:
+            # Private chat context - show all personal tasks inline
+            tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size, group_id=None)
 
     elif category == "assigned":
         tasks = await get_user_created_tasks(db, db_user["id"], limit=page_size, group_id=gid)
