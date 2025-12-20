@@ -863,7 +863,7 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
     await safe_edit_message(
         query,
         msg,
-        reply_markup=task_list_with_pagination(tasks, 1, total_pages, list_type),
+        reply_markup=task_list_with_pagination(tasks, 1, total_pages, list_type, gid),
     )
 
 
