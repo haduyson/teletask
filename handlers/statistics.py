@@ -9,7 +9,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, CommandHandler
 
 from database import get_db
-from services import get_or_create_user
+from services import get_or_create_user, get_or_create_group
 from services.statistics_service import (
     calculate_user_stats,
     calculate_all_time_stats,
@@ -34,29 +34,43 @@ async def thongke_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """
     Handle /thongke command.
     Show overview statistics.
+    In group chat: Only stats for that group
+    In private chat: All stats
     """
     user = update.effective_user
-    if not user:
+    chat = update.effective_chat
+    if not user or not chat:
         return
 
     try:
         db = get_db()
         db_user = await get_or_create_user(db, user)
 
-        # Get all-time stats
-        stats = await calculate_all_time_stats(db, db_user["id"])
+        # Detect group context for filtering
+        is_group = chat.type in ["group", "supergroup"]
+        group_id = None
+        group_note = ""
+        if is_group:
+            group = await get_or_create_group(db, chat.id, chat.title or "Unknown")
+            group_id = group["id"]
+            group_note = f"\n\n_Chỉ thống kê trong nhóm {chat.title}_"
 
+        # Get all-time stats (pass group_id for filtering)
+        stats = await calculate_all_time_stats(db, db_user["id"], group_id)
+
+        # Encode group_id in callback data
+        g = f":{group_id}" if group_id else ":0"
         keyboard = InlineKeyboardMarkup(
             [
                 [
-                    InlineKeyboardButton("Tuần này", callback_data="stats_weekly"),
-                    InlineKeyboardButton("Tháng này", callback_data="stats_monthly"),
+                    InlineKeyboardButton("Tuần này", callback_data=f"stats_weekly{g}"),
+                    InlineKeyboardButton("Tháng này", callback_data=f"stats_monthly{g}"),
                 ],
             ]
         )
 
-        text = format_stats_overview(stats, db_user.get("display_name") or user.full_name)
-        await update.message.reply_text(text, reply_markup=keyboard)
+        text = format_stats_overview(stats, db_user.get("display_name") or user.full_name) + group_note
+        await update.message.reply_text(text, reply_markup=keyboard, parse_mode="Markdown")
 
     except Exception as e:
         logger.error(f"Error in thongke_command: {e}")
@@ -67,20 +81,32 @@ async def thongketuan_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     """
     Handle /thongketuan command.
     Show this week's statistics.
+    In group chat: Only stats for that group
+    In private chat: All stats
     """
     user = update.effective_user
-    if not user:
+    chat = update.effective_chat
+    if not user or not chat:
         return
 
     try:
         db = get_db()
         db_user = await get_or_create_user(db, user)
 
+        # Detect group context for filtering
+        is_group = chat.type in ["group", "supergroup"]
+        group_id = None
+        group_note = ""
+        if is_group:
+            group = await get_or_create_group(db, chat.id, chat.title or "Unknown")
+            group_id = group["id"]
+            group_note = f"\n\n_Chỉ thống kê trong nhóm {chat.title}_"
+
         week_start, week_end = get_week_range()
-        stats = await calculate_user_stats(db, db_user["id"], "weekly", week_start, week_end)
+        stats = await calculate_user_stats(db, db_user["id"], "weekly", week_start, week_end, group_id)
 
         prev_start, prev_end = get_previous_week_range()
-        prev_stats = await calculate_user_stats(db, db_user["id"], "weekly", prev_start, prev_end)
+        prev_stats = await calculate_user_stats(db, db_user["id"], "weekly", prev_start, prev_end, group_id)
 
         text = format_weekly_report(
             db_user.get("display_name") or user.full_name,
@@ -88,8 +114,8 @@ async def thongketuan_command(update: Update, context: ContextTypes.DEFAULT_TYPE
             week_start,
             week_end,
             prev_stats=prev_stats,
-        )
-        await update.message.reply_text(text)
+        ) + group_note
+        await update.message.reply_text(text, parse_mode="Markdown")
 
     except Exception as e:
         logger.error(f"Error in thongketuan_command: {e}")
@@ -100,20 +126,32 @@ async def thongkethang_command(update: Update, context: ContextTypes.DEFAULT_TYP
     """
     Handle /thongkethang command.
     Show this month's statistics.
+    In group chat: Only stats for that group
+    In private chat: All stats
     """
     user = update.effective_user
-    if not user:
+    chat = update.effective_chat
+    if not user or not chat:
         return
 
     try:
         db = get_db()
         db_user = await get_or_create_user(db, user)
 
+        # Detect group context for filtering
+        is_group = chat.type in ["group", "supergroup"]
+        group_id = None
+        group_note = ""
+        if is_group:
+            group = await get_or_create_group(db, chat.id, chat.title or "Unknown")
+            group_id = group["id"]
+            group_note = f"\n\n_Chỉ thống kê trong nhóm {chat.title}_"
+
         month_start, month_end = get_month_range()
-        stats = await calculate_user_stats(db, db_user["id"], "monthly", month_start, month_end)
+        stats = await calculate_user_stats(db, db_user["id"], "monthly", month_start, month_end, group_id)
 
         prev_start, prev_end = get_previous_month_range()
-        prev_stats = await calculate_user_stats(db, db_user["id"], "monthly", prev_start, prev_end)
+        prev_stats = await calculate_user_stats(db, db_user["id"], "monthly", prev_start, prev_end, group_id)
 
         text = format_monthly_report(
             db_user.get("display_name") or user.full_name,
@@ -121,8 +159,8 @@ async def thongkethang_command(update: Update, context: ContextTypes.DEFAULT_TYP
             prev_stats,
             month_start,
             month_end,
-        )
-        await update.message.reply_text(text)
+        ) + group_note
+        await update.message.reply_text(text, parse_mode="Markdown")
 
     except Exception as e:
         logger.error(f"Error in thongkethang_command: {e}")
@@ -141,12 +179,29 @@ async def handle_stats_callback(update: Update, context: ContextTypes.DEFAULT_TY
         db = get_db()
         db_user = await get_or_create_user(db, user)
 
+        # Parse group_id from callback data (format: stats_weekly:123 or stats_weekly:0)
+        group_id = None
+        group_note = ""
+        if ":" in data:
+            parts = data.split(":")
+            data = parts[0]
+            try:
+                gid = int(parts[1])
+                if gid > 0:
+                    group_id = gid
+                    # Get group name for display
+                    group_row = await db.fetch_one("SELECT title FROM groups WHERE id = $1", group_id)
+                    if group_row:
+                        group_note = f"\n\n_Chỉ thống kê trong nhóm {group_row['title']}_"
+            except (ValueError, IndexError):
+                pass
+
         if data == "stats_weekly":
             week_start, week_end = get_week_range()
-            stats = await calculate_user_stats(db, db_user["id"], "weekly", week_start, week_end)
+            stats = await calculate_user_stats(db, db_user["id"], "weekly", week_start, week_end, group_id)
 
             prev_start, prev_end = get_previous_week_range()
-            prev_stats = await calculate_user_stats(db, db_user["id"], "weekly", prev_start, prev_end)
+            prev_stats = await calculate_user_stats(db, db_user["id"], "weekly", prev_start, prev_end, group_id)
 
             text = format_weekly_report(
                 db_user.get("display_name") or user.full_name,
@@ -154,15 +209,15 @@ async def handle_stats_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 week_start,
                 week_end,
                 prev_stats=prev_stats,
-            )
-            await query.edit_message_text(text)
+            ) + group_note
+            await query.edit_message_text(text, parse_mode="Markdown")
 
         elif data == "stats_monthly":
             month_start, month_end = get_month_range()
-            stats = await calculate_user_stats(db, db_user["id"], "monthly", month_start, month_end)
+            stats = await calculate_user_stats(db, db_user["id"], "monthly", month_start, month_end, group_id)
 
             prev_start, prev_end = get_previous_month_range()
-            prev_stats = await calculate_user_stats(db, db_user["id"], "monthly", prev_start, prev_end)
+            prev_stats = await calculate_user_stats(db, db_user["id"], "monthly", prev_start, prev_end, group_id)
 
             text = format_monthly_report(
                 db_user.get("display_name") or user.full_name,
@@ -170,8 +225,8 @@ async def handle_stats_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 prev_stats,
                 month_start,
                 month_end,
-            )
-            await query.edit_message_text(text)
+            ) + group_note
+            await query.edit_message_text(text, parse_mode="Markdown")
 
     except Exception as e:
         logger.error(f"Error in stats callback: {e}")

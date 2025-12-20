@@ -246,7 +246,7 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 group_id=group_id,
             )
 
-            # Send confirmation to creator with mention
+            # Send confirmation to group (visible to all)
             assignee_mention = mention_user(assignee)
             await message.reply_text(
                 MSG_TASK_ASSIGNED_MD.format(
@@ -258,7 +258,21 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 parse_mode="Markdown",
             )
 
-            # Notify assignee with mention (check notification preferences)
+            # Send private confirmation to creator
+            try:
+                await context.bot.send_message(
+                    chat_id=user.id,
+                    text=f"✅ *Đã giao việc thành công!*\n\n"
+                         f"📋 Mã việc: `{task['public_id']}`\n"
+                         f"📝 Nội dung: {content}\n"
+                         f"👤 Người nhận: {assignee_mention}\n"
+                         f"⏰ Deadline: {deadline_str}",
+                    parse_mode="Markdown",
+                )
+            except Exception as e:
+                logger.warning(f"Could not send private confirmation to creator {user.id}: {e}")
+
+            # Notify assignee via private message (check notification preferences)
             try:
                 if assignee.get("telegram_id") != user.id:
                     # Check if user wants to receive notifications
@@ -306,7 +320,7 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             # Format assignee mentions
             assignee_mentions = ", ".join(mention_user(a) for a in assignees)
 
-            # Send confirmation to creator with mentions
+            # Send confirmation to group (visible to all)
             await message.reply_text(
                 MSG_GROUP_TASK_CREATED_MD.format(
                     task_id=group_task["public_id"],
@@ -317,7 +331,22 @@ async def giaoviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 parse_mode="Markdown",
             )
 
-            # Notify each assignee with their personal P-ID (check notification preferences)
+            # Send private confirmation to creator
+            try:
+                await context.bot.send_message(
+                    chat_id=user.id,
+                    text=f"✅ *Đã giao việc nhóm thành công!*\n\n"
+                         f"📋 Mã việc: `{group_task['public_id']}`\n"
+                         f"📝 Nội dung: {content}\n"
+                         f"👥 Người nhận: {assignee_mentions}\n"
+                         f"👤 Số người: {len(assignees)}\n"
+                         f"⏰ Deadline: {deadline_str}",
+                    parse_mode="Markdown",
+                )
+            except Exception as e:
+                logger.warning(f"Could not send private confirmation to creator {user.id}: {e}")
+
+            # Notify each assignee via private message with their personal P-ID (check notification preferences)
             creator_mention = mention_user(db_user)
             for i, assignee in enumerate(assignees):
                 try:

@@ -142,12 +142,18 @@ async def create_task(
         note=f"Task created: {content[:50]}"
     )
 
-    # Create default reminders if deadline exists
+    # Create default reminders if deadline exists (non-critical, don't fail task creation)
     if deadline:
-        await create_default_reminders(db, task["id"], assignee_id, deadline, creator_id)
+        try:
+            await create_default_reminders(db, task["id"], assignee_id, deadline, creator_id)
+        except Exception as e:
+            logger.warning(f"Failed to create reminders for task {public_id}: {e}")
 
-    # Auto-sync to Google Calendar if enabled
-    await sync_task_to_calendar(db, dict(task), action="create")
+    # Auto-sync to Google Calendar if enabled (non-critical)
+    try:
+        await sync_task_to_calendar(db, dict(task), action="create")
+    except Exception as e:
+        logger.warning(f"Failed to sync task {public_id} to calendar: {e}")
 
     logger.info(f"Created task {public_id}: {content[:30]}...")
     return dict(task)
@@ -203,6 +209,7 @@ async def get_user_tasks(
     limit: int = 20,
     offset: int = 0,
     include_completed: bool = False,
+    group_id: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """
     Get tasks assigned to user.
@@ -214,6 +221,7 @@ async def get_user_tasks(
         limit: Max results
         offset: Skip results
         include_completed: Include completed tasks
+        group_id: Filter by group (None = all groups)
 
     Returns:
         List of task records
@@ -226,6 +234,10 @@ async def get_user_tasks(
         params.append(status)
     elif not include_completed:
         conditions.append("t.status != 'completed'")
+
+    if group_id is not None:
+        conditions.append(f"t.group_id = ${len(params) + 1}")
+        params.append(group_id)
 
     query = f"""
         SELECT t.*, u.display_name as creator_name
@@ -253,20 +265,28 @@ async def get_user_created_tasks(
     user_id: int,
     limit: int = 20,
     offset: int = 0,
+    group_id: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Get tasks created by user (assigned to others)."""
+    group_filter = ""
+    params = [user_id, limit, offset]
+    if group_id is not None:
+        group_filter = "AND t.group_id = $4"
+        params.append(group_id)
+
     tasks = await db.fetch_all(
-        """
+        f"""
         SELECT t.*, u.display_name as assignee_name
         FROM tasks t
         LEFT JOIN users u ON t.assignee_id = u.id
         WHERE t.creator_id = $1
         AND t.assignee_id != $1
         AND t.is_deleted = false
+        {group_filter}
         ORDER BY t.created_at DESC
         LIMIT $2 OFFSET $3
         """,
-        user_id, limit, offset
+        *params
     )
     return [dict(t) for t in tasks]
 
@@ -277,9 +297,16 @@ async def get_user_received_tasks(
     limit: int = 20,
     offset: int = 0,
     include_completed: bool = False,
+    group_id: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Get tasks assigned TO the user BY others (not self-created)."""
     status_filter = "" if include_completed else "AND t.status != 'completed'"
+    group_filter = ""
+    params = [user_id, limit, offset]
+    if group_id is not None:
+        group_filter = "AND t.group_id = $4"
+        params.append(group_id)
+
     tasks = await db.fetch_all(
         f"""
         SELECT t.*, c.display_name as creator_name
@@ -289,6 +316,7 @@ async def get_user_received_tasks(
         AND t.creator_id != $1
         AND t.is_deleted = false
         {status_filter}
+        {group_filter}
         ORDER BY
             CASE t.priority
                 WHEN 'urgent' THEN 1
@@ -300,7 +328,7 @@ async def get_user_received_tasks(
             t.created_at DESC
         LIMIT $2 OFFSET $3
         """,
-        user_id, limit, offset
+        *params
     )
     return [dict(t) for t in tasks]
 
@@ -346,11 +374,13 @@ async def get_all_user_related_tasks(
     offset: int = 0,
     include_completed: bool = False,
     task_type: Optional[str] = None,  # 'individual', 'group', or None for all
+    group_id: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Get ALL tasks related to user (created, received, or assigned).
 
     Args:
         task_type: Filter by task type - 'individual' (P-*), 'group' (G-*), or None
+        group_id: Filter by group (None = all groups)
     """
     status_filter = "" if include_completed else "AND t.status != 'completed'"
 
@@ -360,6 +390,13 @@ async def get_all_user_related_tasks(
         type_filter = "AND t.public_id LIKE 'P-%'"
     elif task_type == "group":
         type_filter = "AND t.public_id LIKE 'G-%'"
+
+    # Filter by group
+    group_filter = ""
+    params = [user_id, limit, offset]
+    if group_id is not None:
+        group_filter = f"AND t.group_id = ${len(params) + 1}"
+        params.append(group_id)
 
     tasks = await db.fetch_all(
         f"""
@@ -373,6 +410,7 @@ async def get_all_user_related_tasks(
         AND t.is_deleted = false
         {status_filter}
         {type_filter}
+        {group_filter}
         ORDER BY
             CASE t.priority
                 WHEN 'urgent' THEN 1
@@ -384,7 +422,7 @@ async def get_all_user_related_tasks(
             t.created_at DESC
         LIMIT $2 OFFSET $3
         """,
-        user_id, limit, offset
+        *params
     )
     return [dict(t) for t in tasks]
 
@@ -1357,9 +1395,12 @@ async def create_group_task(
             note=f"Individual task for {assignee.get('display_name', 'user')}"
         )
 
-        # Create reminders
+        # Create reminders (non-critical, don't fail task creation)
         if deadline:
-            await create_default_reminders(db, task["id"], assignee["id"], deadline, creator_id)
+            try:
+                await create_default_reminders(db, task["id"], assignee["id"], deadline, creator_id)
+            except Exception as e:
+                logger.warning(f"Failed to create reminders for child task {task['public_id']}: {e}")
 
         individual_tasks.append((dict(task), assignee))
 
@@ -1603,9 +1644,12 @@ async def convert_individual_to_group(
         )
         child_tasks.append((dict(child), assignee))
 
-        # Create reminders
+        # Create reminders (non-critical)
         if task.get("deadline"):
-            await create_default_reminders(db, child["id"], assignee["id"], task["deadline"], task["creator_id"])
+            try:
+                await create_default_reminders(db, child["id"], assignee["id"], task["deadline"], task["creator_id"])
+            except Exception as e:
+                logger.warning(f"Failed to create reminders for converted task {child['public_id']}: {e}")
 
     # Soft delete original task
     await db.execute(
@@ -1704,7 +1748,10 @@ async def update_group_assignees(
         new_children.append((dict(child), assignee))
 
         if parent.get("deadline"):
-            await create_default_reminders(db, child["id"], assignee["id"], parent["deadline"], parent["creator_id"])
+            try:
+                await create_default_reminders(db, child["id"], assignee["id"], parent["deadline"], parent["creator_id"])
+            except Exception as e:
+                logger.warning(f"Failed to create reminders for new child task {child['public_id']}: {e}")
 
     # Log history
     await add_task_history(

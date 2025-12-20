@@ -64,10 +64,17 @@ async def calculate_user_stats(
     return {}
 
 
-async def calculate_all_time_stats(db, user_id: int) -> Dict[str, int]:
-    """Calculate all-time stats for user."""
-    row = await db.fetch_one(
-        """
+async def calculate_all_time_stats(
+    db, user_id: int, group_id: Optional[int] = None
+) -> Dict[str, int]:
+    """Calculate all-time stats for user.
+
+    Args:
+        db: Database connection
+        user_id: User ID
+        group_id: Optional group ID for filtering (None = all groups)
+    """
+    base_query = """
         SELECT
             COUNT(*) FILTER (WHERE creator_id = $1) as total_assigned,
             COUNT(*) FILTER (WHERE creator_id = $1 AND status = 'completed') as assigned_done,
@@ -77,9 +84,13 @@ async def calculate_all_time_stats(db, user_id: int) -> Dict[str, int]:
             COUNT(*) FILTER (WHERE assignee_id = $1 AND is_personal = true AND status = 'completed') as personal_done
         FROM tasks
         WHERE is_deleted = false AND (creator_id = $1 OR assignee_id = $1)
-        """,
-        user_id,
-    )
+    """
+
+    if group_id:
+        base_query += " AND group_id = $2"
+        row = await db.fetch_one(base_query, user_id, group_id)
+    else:
+        row = await db.fetch_one(base_query, user_id)
 
     if row:
         return {

@@ -375,15 +375,29 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             category = params[0].lower() if params else "menu"
             if category not in VALID_CATEGORIES:
                 category = "menu"
-            await handle_task_category(query, db, db_user, category)
+            # Parse group_id from callback data (format: task_category:category:gN)
+            group_id = None
+            if len(params) > 1 and params[1].startswith("g"):
+                try:
+                    group_id = int(params[1][1:])  # Extract number after 'g'
+                except ValueError:
+                    pass
+            await handle_task_category(query, db, db_user, category, group_id)
 
         # Task type filter (Individual/Group)
         elif action == "task_filter":
             filter_type = params[0].lower() if params else "all"
             if filter_type not in VALID_FILTER_TYPES:
                 filter_type = "all"
-            list_type = validate_list_type(params[1] if len(params) > 1 else "all")
-            await handle_task_filter(query, db, db_user, filter_type, list_type)
+            # Parse group_id from callback data
+            group_id = None
+            if len(params) > 1 and params[1].startswith("g"):
+                try:
+                    group_id = int(params[1][1:])
+                except ValueError:
+                    pass
+            list_type = validate_list_type(params[2] if len(params) > 2 else "all")
+            await handle_task_filter(query, db, db_user, filter_type, list_type, group_id)
 
         # Statistics callbacks
         elif action in ("stats_weekly", "stats_monthly"):
@@ -712,8 +726,12 @@ async def handle_list_page(query, db, db_user, list_type: str, page: int) -> Non
     )
 
 
-async def handle_task_category(query, db, db_user, category: str) -> None:
-    """Handle task category selection."""
+async def handle_task_category(query, db, db_user, category: str, group_id: int = None) -> None:
+    """Handle task category selection.
+
+    Args:
+        group_id: If provided, filter tasks to this group only (0 = no filter)
+    """
     from services import (
         get_user_personal_tasks,
         get_user_created_tasks,
@@ -724,29 +742,35 @@ async def handle_task_category(query, db, db_user, category: str) -> None:
 
     page_size = 10
 
+    # Parse group_id (0 means no filter)
+    gid = group_id if group_id and group_id > 0 else None
+    g_suffix = f":g{group_id}" if group_id else ":g0"
+
     if category == "menu":
         # Show category menu with filter options
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📋 Việc cá nhân", callback_data="task_category:personal")],
-            [InlineKeyboardButton("📤 Việc đã giao", callback_data="task_category:assigned")],
-            [InlineKeyboardButton("📥 Việc đã nhận", callback_data="task_category:received")],
-            [InlineKeyboardButton("📊 Tất cả việc", callback_data="task_category:all")],
+            [InlineKeyboardButton("📋 Việc cá nhân", callback_data=f"task_category:personal{g_suffix}")],
+            [InlineKeyboardButton("📤 Việc đã giao", callback_data=f"task_category:assigned{g_suffix}")],
+            [InlineKeyboardButton("📥 Việc đã nhận", callback_data=f"task_category:received{g_suffix}")],
+            [InlineKeyboardButton("📊 Tất cả việc", callback_data=f"task_category:all{g_suffix}")],
             [
-                InlineKeyboardButton("👤 Lọc: Cá nhân", callback_data="task_filter:individual"),
-                InlineKeyboardButton("👥 Lọc: Nhóm", callback_data="task_filter:group"),
+                InlineKeyboardButton("👤 Lọc: Cá nhân", callback_data=f"task_filter:individual{g_suffix}"),
+                InlineKeyboardButton("👥 Lọc: Nhóm", callback_data=f"task_filter:group{g_suffix}"),
             ],
         ])
 
+        group_note = "\n\n👥 _Chỉ hiển thị việc trong nhóm này_" if gid else ""
         await query.edit_message_text(
             "📋 CHỌN DANH MỤC VIỆC\n\n"
             "📋 Việc cá nhân - Việc bạn tự tạo cho mình\n"
             "📤 Việc đã giao - Việc bạn giao cho người khác\n"
             "📥 Việc đã nhận - Việc người khác giao cho bạn\n"
             "📊 Tất cả việc - Toàn bộ việc liên quan\n\n"
-            "🔍 Lọc theo loại: Cá nhân (P-ID) | Nhóm (G-ID)",
+            "🔍 Lọc theo loại: Cá nhân (P-ID) | Nhóm (G-ID)" + group_note,
             reply_markup=keyboard,
+            parse_mode="Markdown",
         )
         return
 
@@ -755,22 +779,22 @@ async def handle_task_category(query, db, db_user, category: str) -> None:
         title = "📋 VIỆC CÁ NHÂN"
         list_type = "personal"
     elif category == "assigned":
-        tasks = await get_user_created_tasks(db, db_user["id"], limit=page_size)
+        tasks = await get_user_created_tasks(db, db_user["id"], limit=page_size, group_id=gid)
         title = "📤 VIỆC ĐÃ GIAO"
         list_type = "assigned"
     elif category == "received":
-        tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size)
+        tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size, group_id=gid)
         title = "📥 VIỆC ĐÃ NHẬN"
         list_type = "received"
     else:  # all
-        tasks = await get_all_user_related_tasks(db, db_user["id"], limit=page_size)
+        tasks = await get_all_user_related_tasks(db, db_user["id"], limit=page_size, group_id=gid)
         title = "📊 TẤT CẢ VIỆC"
         list_type = "all"
 
     if not tasks:
         await query.edit_message_text(
             f"{title}\n\nKhông có việc nào trong danh mục này.",
-            reply_markup=task_category_keyboard(),
+            reply_markup=task_category_keyboard(group_id),
         )
         return
 
@@ -778,7 +802,8 @@ async def handle_task_category(query, db, db_user, category: str) -> None:
     total_pages = max(1, (total + page_size - 1) // page_size)
 
     # Show only title with count - task list is in buttons
-    msg = f"{title}\n\nTổng: {total} việc | Trang 1/{total_pages}\n\nChọn việc để xem chi tiết:"
+    group_note = " (trong nhóm)" if gid else ""
+    msg = f"{title}{group_note}\n\nTổng: {total} việc | Trang 1/{total_pages}\n\nChọn việc để xem chi tiết:"
 
     await query.edit_message_text(
         msg,
@@ -786,11 +811,15 @@ async def handle_task_category(query, db, db_user, category: str) -> None:
     )
 
 
-async def handle_task_filter(query, db, db_user, filter_type: str, list_type: str) -> None:
+async def handle_task_filter(query, db, db_user, filter_type: str, list_type: str, group_id: int = None) -> None:
     """Handle task type filter (Individual/Group)."""
     from services import get_all_user_related_tasks
     from utils import task_type_filter_keyboard
     from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+
+    # Parse group_id (0 means no filter)
+    gid = group_id if group_id and group_id > 0 else None
+    g_suffix = f":g{group_id}" if group_id else ":g0"
 
     # Map filter_type to task_type for SQL filtering
     task_type_map = {
@@ -801,7 +830,7 @@ async def handle_task_filter(query, db, db_user, filter_type: str, list_type: st
 
     # Get tasks with SQL filter (no in-memory filtering needed)
     tasks = await get_all_user_related_tasks(
-        db, db_user["id"], limit=50, task_type=task_type
+        db, db_user["id"], limit=50, task_type=task_type, group_id=gid
     )
 
     # Set title based on filter
@@ -812,12 +841,15 @@ async def handle_task_filter(query, db, db_user, filter_type: str, list_type: st
     else:
         title = "📊 TẤT CẢ VIỆC"
 
+    if gid:
+        title += " (trong nhóm)"
+
     # Build filter buttons row
     filter_kb = task_type_filter_keyboard(filter_type)
 
     if not tasks:
         buttons = list(filter_kb.inline_keyboard) + [
-            [InlineKeyboardButton("« Quay lại danh mục", callback_data="task_category:menu")]
+            [InlineKeyboardButton("« Quay lại danh mục", callback_data=f"task_category:menu{g_suffix}")]
         ]
         await query.edit_message_text(
             f"{title}\n\nKhông có việc nào trong danh mục này.",
@@ -847,12 +879,12 @@ async def handle_task_filter(query, db, db_user, filter_type: str, list_type: st
     nav_row = []
     nav_row.append(InlineKeyboardButton("1/{}".format(total_pages), callback_data="noop"))
     if total_pages > 1:
-        nav_row.append(InlineKeyboardButton("Sau »", callback_data=f"task_filter:{filter_type}:2"))
+        nav_row.append(InlineKeyboardButton("Sau »", callback_data=f"task_filter:{filter_type}:2{g_suffix}"))
     task_buttons.append(nav_row)
 
     # Combine: filter row + task buttons + back button
     all_buttons = list(filter_kb.inline_keyboard) + task_buttons + [
-        [InlineKeyboardButton("« Quay lại danh mục", callback_data="task_category:menu")]
+        [InlineKeyboardButton("« Quay lại danh mục", callback_data=f"task_category:menu{g_suffix}")]
     ]
 
     await query.edit_message_text(

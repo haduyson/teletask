@@ -11,6 +11,7 @@ from telegram.ext import ContextTypes, CommandHandler
 from database import get_db
 from services import (
     get_or_create_user,
+    get_or_create_group,
     get_task_by_public_id,
     get_user_tasks,
     get_group_tasks,
@@ -106,14 +107,25 @@ async def xemviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     Handle /xemviec or /vic [task_id] command.
     View task detail by ID or list all tasks.
     Supports G-ID group tasks with aggregated progress.
+
+    In group chat: Only shows tasks related to that group
+    In private chat: Shows all tasks from all groups
     """
     user = update.effective_user
-    if not user:
+    chat = update.effective_chat
+    if not user or not chat:
         return
 
     try:
         db = get_db()
         db_user = await get_or_create_user(db, user)
+
+        # Detect group context for filtering
+        is_group = chat.type in ["group", "supergroup"]
+        group_id = None
+        if is_group:
+            group = await get_or_create_group(db, chat.id, chat.title or "Unknown")
+            group_id = group["id"]
 
         # Check if task ID provided
         if context.args:
@@ -160,14 +172,16 @@ async def xemviec_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
                 await update.message.reply_text(msg, reply_markup=keyboard, parse_mode="HTML")
         else:
-            # Show task category menu
+            # Show task category menu with group context
+            group_note = f"\n\n👥 _Chỉ hiển thị việc trong nhóm này_" if is_group else ""
             await update.message.reply_text(
                 "📋 CHỌN DANH MỤC VIỆC\n\n"
                 "📋 Việc cá nhân - Việc bạn tự tạo cho mình\n"
                 "📤 Việc đã giao - Việc bạn giao cho người khác\n"
                 "📥 Việc đã nhận - Việc người khác giao cho bạn\n"
-                "📊 Tất cả việc - Toàn bộ việc liên quan",
-                reply_markup=task_category_keyboard(),
+                "📊 Tất cả việc - Toàn bộ việc liên quan" + group_note,
+                reply_markup=task_category_keyboard(group_id),
+                parse_mode="Markdown",
             )
 
     except Exception as e:

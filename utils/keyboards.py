@@ -70,20 +70,26 @@ def task_detail_keyboard(
     return InlineKeyboardMarkup(buttons)
 
 
-def task_category_keyboard() -> InlineKeyboardMarkup:
-    """Create task category selection menu."""
+def task_category_keyboard(group_id: Optional[int] = None) -> InlineKeyboardMarkup:
+    """Create task category selection menu.
+
+    Args:
+        group_id: If provided, filter tasks to this group only
+    """
+    # Encode group_id in callback data (g0 means no group filter)
+    g = f"g{group_id}" if group_id else "g0"
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("📋 Việc cá nhân", callback_data="task_category:personal"),
+            InlineKeyboardButton("📋 Việc cá nhân", callback_data=f"task_category:personal:{g}"),
         ],
         [
-            InlineKeyboardButton("📤 Việc đã giao", callback_data="task_category:assigned"),
+            InlineKeyboardButton("📤 Việc đã giao", callback_data=f"task_category:assigned:{g}"),
         ],
         [
-            InlineKeyboardButton("📥 Việc đã nhận", callback_data="task_category:received"),
+            InlineKeyboardButton("📥 Việc đã nhận", callback_data=f"task_category:received:{g}"),
         ],
         [
-            InlineKeyboardButton("📊 Tất cả việc", callback_data="task_category:all"),
+            InlineKeyboardButton("📊 Tất cả việc", callback_data=f"task_category:all:{g}"),
         ],
     ])
 
