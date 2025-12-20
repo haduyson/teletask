@@ -200,6 +200,36 @@ def parse_callback_data(data: str) -> Tuple[str, list]:
     return (action, parts[1:])
 
 
+async def safe_edit_message(query, text: str, reply_markup=None, parse_mode=None) -> bool:
+    """
+    Safely edit message, catching 'Message is not modified' errors.
+
+    Args:
+        query: CallbackQuery object
+        text: New message text
+        reply_markup: Optional keyboard markup
+        parse_mode: Optional parse mode
+
+    Returns:
+        True if edit succeeded, False if skipped due to same content
+    """
+    try:
+        await query.edit_message_text(
+            text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode,
+        )
+        return True
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "message is not modified" in error_msg:
+            # Content unchanged - this is not a real error
+            logger.debug(f"Skipped edit: message unchanged")
+            return False
+        # Re-raise other errors
+        raise
+
+
 @rate_limit
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
@@ -762,7 +792,8 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
         ])
 
         group_note = "\n\n👥 _Chỉ hiển thị việc trong nhóm này_" if gid else ""
-        await query.edit_message_text(
+        await safe_edit_message(
+            query,
             "📋 CHỌN DANH MỤC VIỆC\n\n"
             "📋 Việc cá nhân - Việc bạn tự tạo cho mình\n"
             "📤 Việc đã giao - Việc bạn giao cho người khác\n"
@@ -792,9 +823,16 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
         list_type = "all"
 
     if not tasks:
-        await query.edit_message_text(
-            f"{title}\n\nKhông có việc nào trong danh mục này.",
-            reply_markup=task_category_keyboard(group_id),
+        from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+        # Use simple back button instead of full menu to avoid duplicate content
+        back_kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("« Quay lại danh mục", callback_data=f"task_category:menu{g_suffix}")]
+        ])
+        group_note = " (trong nhóm)" if gid else ""
+        await safe_edit_message(
+            query,
+            f"{title}{group_note}\n\n📭 Không có việc nào trong danh mục này.\n\nTạo việc mới: /taoviec hoặc /giaoviec",
+            reply_markup=back_kb,
         )
         return
 
@@ -805,7 +843,8 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
     group_note = " (trong nhóm)" if gid else ""
     msg = f"{title}{group_note}\n\nTổng: {total} việc | Trang 1/{total_pages}\n\nChọn việc để xem chi tiết:"
 
-    await query.edit_message_text(
+    await safe_edit_message(
+        query,
         msg,
         reply_markup=task_list_with_pagination(tasks, 1, total_pages, list_type),
     )
@@ -851,8 +890,9 @@ async def handle_task_filter(query, db, db_user, filter_type: str, list_type: st
         buttons = list(filter_kb.inline_keyboard) + [
             [InlineKeyboardButton("« Quay lại danh mục", callback_data=f"task_category:menu{g_suffix}")]
         ]
-        await query.edit_message_text(
-            f"{title}\n\nKhông có việc nào trong danh mục này.",
+        await safe_edit_message(
+            query,
+            f"{title}\n\n📭 Không có việc nào trong danh mục này.\n\nTạo việc mới: /taoviec hoặc /giaoviec",
             reply_markup=InlineKeyboardMarkup(buttons),
         )
         return
@@ -887,7 +927,8 @@ async def handle_task_filter(query, db, db_user, filter_type: str, list_type: st
         [InlineKeyboardButton("« Quay lại danh mục", callback_data=f"task_category:menu{g_suffix}")]
     ]
 
-    await query.edit_message_text(
+    await safe_edit_message(
+        query,
         msg,
         reply_markup=InlineKeyboardMarkup(all_buttons),
     )
