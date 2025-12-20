@@ -226,7 +226,7 @@ class Reminder(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "reminder_type IN ('before_deadline', 'after_deadline', 'custom')",
+            "reminder_type IN ('before_deadline', 'after_deadline', 'custom', 'creator_overdue')",
             name="ck_reminder_type"
         ),
         Index("idx_reminders_pending", "remind_at", postgresql_where="is_sent = false"),

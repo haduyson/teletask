@@ -145,7 +145,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["task_id"], ["tasks.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
-        sa.CheckConstraint("reminder_type IN ('before_deadline', 'after_deadline', 'custom')", name="ck_reminder_type"),
+        sa.CheckConstraint("reminder_type IN ('before_deadline', 'after_deadline', 'custom', 'creator_overdue')", name="ck_reminder_type"),
     )
     op.create_index("idx_reminders_pending", "reminders", ["remind_at"], postgresql_where="is_sent = false")
     op.create_index("idx_reminders_task", "reminders", ["task_id"])
