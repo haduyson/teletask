@@ -43,11 +43,12 @@
 - **Task Deletion** (`/xoa`): Soft delete with 30-second undo window
 
 ### Advanced Features
-- **Reminders** (`/nhacviec`): Set custom, before-deadline, after-deadline alerts
-- **Recurring Tasks** (`/vieclaplai`): Automated task generation patterns
-- **Statistics** (`/thongke`): Weekly/monthly metrics with export
-- **Google Calendar** (`/lichgoogle`): OAuth 2.0 sync of completed tasks
-- **Settings** (`/caidat`): Timezone, language, notification preferences
+- **Reminders** (`/nhacviec`): Custom, before-deadline (24h/1h/30m/5m), after-deadline (1h/1d), creator overdue alerts
+- **Recurring Tasks** (`/vieclaplai`): Vietnamese-parsed patterns (daily/weekly/monthly with custom intervals)
+- **Statistics** (`/thongke`, `/thongketuan`, `/thongkethang`): Real-time metrics with period comparison
+- **Report Export** (`/export`): CSV (UTF-8 BOM), XLSX (with charts), PDF (ReportLab) with 72-hour download window
+- **Google Calendar** (`/lichgoogle`): OAuth 2.0 sync with automatic interval configuration
+- **Settings** (`/caidat`): Timezone, language, notification preferences (per reminder type)
 
 ### Administrative Features
 - **Health Monitoring**: HTTP health check endpoint (port 8080)
@@ -60,30 +61,34 @@
 ### Technology Stack
 - **Language**: Python 3.11+
 - **Telegram Framework**: python-telegram-bot 21.0+
-- **Database**: PostgreSQL with async driver (asyncpg)
-- **ORM**: SQLAlchemy 2.0
-- **Scheduling**: APScheduler 3.10+
-- **Process Manager**: PM2
+- **Database**: PostgreSQL 12+ with async driver (asyncpg)
+- **ORM**: SQLAlchemy 2.0 with async support
+- **Scheduling**: APScheduler 3.10+ (AsyncIOScheduler)
+- **Process Manager**: PM2 or systemd
+- **Web Server**: aiohttp (for health checks & OAuth callbacks)
+- **Reporting**: openpyxl (XLSX), reportlab (PDF), matplotlib (charts)
 - **Optional**:
-  - Google Calendar API for calendar integration
-  - Prometheus for metrics
+  - Google Calendar API v3 for calendar integration (OAuth 2.0)
+  - Prometheus client for metrics
   - Redis for caching
 
 ### Database Models (10 core entities)
-1. **User**: Telegram users with timezone/notification prefs
+1. **User**: Telegram users with timezone/notification preferences, Google OAuth tokens
 2. **Group**: Telegram groups for shared task management
 3. **GroupMember**: Group membership with roles (admin/member)
-4. **Task**: Main entity (status: pending/in_progress/completed)
-5. **Reminder**: Task notifications (before/after deadline/custom)
-6. **TaskHistory**: Audit trail of all task changes
-7. **RecurringTemplate**: Templates for recurring tasks
-8. **UserStatistics**: Weekly/monthly task metrics
-9. **DeletedTaskUndo**: Soft delete recovery (30s window)
-10. **BotConfig**: Runtime configuration
+4. **Task**: Main entity with P-ID/G-ID (status: pending/in_progress/completed)
+5. **Reminder**: Task notifications (before/after deadline/custom with offset-based scheduling)
+6. **TaskHistory**: Audit trail of all task changes (action, field, old_value, new_value)
+7. **RecurringTemplate**: Templates for recurring tasks with recurrence patterns
+8. **UserStatistics**: Weekly/monthly task metrics (calculated on schedule)
+9. **DeletedTaskUndo**: Soft delete recovery buffer (30-second undo window)
+10. **ExportReport**: Generated reports with password-protected downloads (72-hour TTL)
 
 ### Public ID System
-- **P-XXXX**: Personal task IDs (P-0001, P-0042, etc.)
-- **G-XXXX**: Group task IDs (G-0001, G-0500, etc.)
+- **P-XXXX**: Personal/individual task IDs (P-0001, P-0042, P-9999+)
+- **G-XXXX**: Group parent task IDs (G-0001, G-0500, G-9999+)
+- Generated via PostgreSQL sequence (atomic, race-condition safe)
+- Format determines task type in queries
 
 ## 6. Architecture Overview
 
