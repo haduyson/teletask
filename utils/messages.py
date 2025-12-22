@@ -3,6 +3,11 @@ Vietnamese Messages
 All user-facing messages in Vietnamese with proper diacritics
 """
 
+import os
+
+# Get domain from environment variable
+BOT_DOMAIN = os.getenv("BOT_DOMAIN", "")
+
 # Command responses
 MSG_START = """
 Xin chào {name}!
@@ -31,7 +36,7 @@ Sử dụng các lệnh:
 Gõ /help để xem hướng dẫn chi tiết.
 """
 
-MSG_HELP = """
+MSG_HELP_TEMPLATE = """
 📖 HƯỚNG DẪN SỬ DỤNG TELETASK BOT
 
 ━━━━━ TẠO VIỆC ━━━━━
@@ -81,11 +86,19 @@ Ví dụ:
 /thongtin - Thông tin tài khoản
 /start - Bắt đầu sử dụng bot
 /help - Xem hướng dẫn này
+{guide_link}"""
 
-📖 Hướng dẫn chi tiết: https://teletask.haduyson.com
-"""
 
-MSG_HELP_GROUP = """
+def get_msg_help():
+    """Get help message with dynamic domain."""
+    guide_link = f"\n📖 Hướng dẫn chi tiết: {BOT_DOMAIN}" if BOT_DOMAIN else ""
+    return MSG_HELP_TEMPLATE.format(guide_link=guide_link)
+
+
+# Keep MSG_HELP for backward compatibility
+MSG_HELP = get_msg_help()
+
+MSG_HELP_GROUP_TEMPLATE = """
 📖 HƯỚNG DẪN SỬ DỤNG TELETASK BOT
 
 ━━━━━ TẠO VIỆC ━━━━━
@@ -138,9 +151,17 @@ Ví dụ:
 /thongtin - Thông tin tài khoản
 /start - Bắt đầu sử dụng bot
 /help - Xem hướng dẫn này
+{guide_link}"""
 
-📖 Hướng dẫn chi tiết: https://teletask.haduyson.com
-"""
+
+def get_msg_help_group():
+    """Get group help message with dynamic domain."""
+    guide_link = f"\n📖 Hướng dẫn chi tiết: {BOT_DOMAIN}" if BOT_DOMAIN else ""
+    return MSG_HELP_GROUP_TEMPLATE.format(guide_link=guide_link)
+
+
+# Keep MSG_HELP_GROUP for backward compatibility
+MSG_HELP_GROUP = get_msg_help_group()
 
 MSG_INFO = """
 Thông tin tài khoản
