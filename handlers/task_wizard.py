@@ -174,7 +174,9 @@ async def wizard_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 async def direct_task_creation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle direct task creation with args (legacy /taoviec flow)."""
     user = update.effective_user
+    chat = update.effective_chat
     text = " ".join(context.args)
+    is_group = chat and chat.type in ["group", "supergroup"]
 
     try:
         db = get_db()
@@ -207,17 +209,49 @@ async def direct_task_creation(update: Update, context: ContextTypes.DEFAULT_TYP
         deadline_str = format_datetime(deadline, relative=True) if deadline else "Không có"
         priority_str = format_priority("normal")
 
-        await update.message.reply_text(
-            MSG_TASK_CREATED.format(
-                task_id=task["public_id"],
-                content=content,
-                deadline=deadline_str,
-                priority=priority_str,
-            ),
-            reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
+        confirmation_msg = MSG_TASK_CREATED.format(
+            task_id=task["public_id"],
+            content=content,
+            deadline=deadline_str,
+            priority=priority_str,
         )
 
-        logger.info(f"Direct: User {user.id} created task {task['public_id']}")
+        # P-ID (personal) tasks: Send confirmation via DM in group context
+        if is_group:
+            # Send DM with task details
+            dm_sent = await send_private_notification(
+                context,
+                user.id,
+                confirmation_msg,
+                parse_mode="HTML",
+                reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
+            )
+
+            if dm_sent:
+                # Notify in group that task was created privately
+                await update.message.reply_text(
+                    f"📋 Đã tạo việc cá nhân `{task['public_id']}`.\n"
+                    f"📬 _Chi tiết đã gửi qua tin nhắn riêng._",
+                    parse_mode="Markdown",
+                )
+            else:
+                # Fallback: show in group if DM fails
+                await update.message.reply_text(
+                    f"⚠️ Không thể gửi tin nhắn riêng.\n"
+                    f"Vui lòng nhắn /start cho bot trước.\n\n"
+                    f"{confirmation_msg}",
+                    parse_mode="HTML",
+                    reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
+                )
+        else:
+            # Private chat: show inline
+            await update.message.reply_text(
+                confirmation_msg,
+                parse_mode="HTML",
+                reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
+            )
+
+        logger.info(f"Direct: User {user.id} created task {task['public_id']} (group={is_group})")
 
     except Exception as e:
         logger.error(f"Error in direct_task_creation: {e}")
@@ -647,26 +681,15 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 priority_str = format_priority(priority)
 
                 if is_personal:
-                    # Personal task - no mention needed
-                    await query.edit_message_text(
-                        MSG_TASK_CREATED.format(
-                            task_id=task["public_id"],
-                            content=content,
-                            deadline=deadline_str,
-                            priority=priority_str,
-                        ),
-                        reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
-                    )
-
                     # Sync to Google Calendar if connected
                     calendar_synced = False
                     if deadline:
                         calendar_synced = await sync_task_to_calendar(db, task, db_user["id"])
 
-                    # Send private notification if created in group
+                    # P-ID personal task: show details via DM only in group context
                     if is_group_chat:
                         calendar_note = "\n📅 *Đã thêm vào Google Calendar*" if calendar_synced else ""
-                        await send_private_notification(
+                        dm_sent = await send_private_notification(
                             context,
                             user.id,
                             f"📋 *Việc cá nhân đã tạo*\n\n"
@@ -674,6 +697,39 @@ async def confirm_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                             f"📅 Deadline: {deadline_str}\n"
                             f"⚡ Ưu tiên: {priority_str}{calendar_note}\n\n"
                             f"Xem chi tiết: /xemviec {task['public_id']}",
+                            reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
+                        )
+
+                        if dm_sent:
+                            # Brief confirmation in group - details via DM
+                            await query.edit_message_text(
+                                f"📋 Đã tạo việc cá nhân `{task['public_id']}`.\n"
+                                f"📬 _Chi tiết đã gửi qua tin nhắn riêng._",
+                                parse_mode="Markdown",
+                            )
+                        else:
+                            # Fallback: show in group if DM fails
+                            await query.edit_message_text(
+                                f"⚠️ Không thể gửi tin nhắn riêng.\n"
+                                f"Vui lòng nhắn /start cho bot.\n\n" +
+                                MSG_TASK_CREATED.format(
+                                    task_id=task["public_id"],
+                                    content=content,
+                                    deadline=deadline_str,
+                                    priority=priority_str,
+                                ),
+                                reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
+                            )
+                    else:
+                        # Private chat: show full details inline
+                        calendar_note = "\n📅 Đã thêm vào Google Calendar" if calendar_synced else ""
+                        await query.edit_message_text(
+                            MSG_TASK_CREATED.format(
+                                task_id=task["public_id"],
+                                content=content,
+                                deadline=deadline_str,
+                                priority=priority_str,
+                            ) + calendar_note,
                             reply_markup=task_actions_keyboard(task["public_id"], show_complete=False),
                         )
                 else:
