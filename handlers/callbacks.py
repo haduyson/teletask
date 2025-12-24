@@ -738,7 +738,8 @@ async def handle_list_page(query, db, db_user, list_type: str, page: int, group_
     g_suffix = f":g{group_id}" if group_id else ":g0"
 
     if list_type == "personal":
-        tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=group_id)
+        # Personal tasks are always shown without group filter (sent via DM in group context)
+        tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=None)
         title = "📋 VIỆC CÁ NHÂN"
     elif list_type == "assigned":
         tasks = await get_user_created_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=group_id)
@@ -747,7 +748,13 @@ async def handle_list_page(query, db, db_user, list_type: str, page: int, group_
         tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=group_id)
         title = "📥 VIỆC ĐÃ NHẬN"
     else:  # all
-        tasks = await get_all_user_related_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=group_id)
+        # In group context: show only assigned + received (personal goes via DM)
+        if group_id:
+            assigned_tasks = await get_user_created_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=group_id)
+            received_tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=group_id)
+            tasks = assigned_tasks + received_tasks
+        else:
+            tasks = await get_all_user_related_tasks(db, db_user["id"], limit=page_size, offset=offset, group_id=None)
         title = "📊 TẤT CẢ VIỆC"
 
     if not tasks:
@@ -917,96 +924,17 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
         title = "📤 VIỆC ĐÃ GIAO"
         list_type = "assigned"
     elif category == "received":
+        # In group context: show tasks received IN THIS GROUP (filtered by group_id)
+        # In private chat: show ALL received tasks
+        tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size, group_id=gid)
         title = "📥 VIỆC ĐÃ NHẬN"
         list_type = "received"
-
-        # Privacy feature: In group context, send received tasks via private DM
-        if gid is not None:
-            from utils import mention_user
-            from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-
-            # Fetch ALL received tasks (not filtered by group) for private DM
-            tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size, group_id=None)
-
-            user_telegram_id = db_user.get("telegram_id")
-            user_mention = mention_user(db_user)
-
-            if not tasks:
-                try:
-                    await query.message.get_bot().send_message(
-                        chat_id=user_telegram_id,
-                        text="📥 *VIỆC ĐÃ NHẬN*\n\n"
-                             "📭 Bạn chưa được giao việc nào.\n\n"
-                             "Xem việc khác: /xemviec",
-                        parse_mode="Markdown",
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not send private message to {user_telegram_id}: {e}")
-                    await safe_edit_message(
-                        query,
-                        f"⚠️ Không thể gửi tin nhắn riêng.\n\n"
-                        f"Vui lòng nhắn /start cho bot trước để nhận tin nhắn riêng.",
-                    )
-                    return
-
-                await safe_edit_message(
-                    query,
-                    f"📬 Đã gửi tin nhắn riêng về việc đã nhận cho {user_mention}.\n\n"
-                    f"_Kiểm tra tin nhắn riêng từ bot._",
-                    parse_mode="Markdown",
-                )
-                return
-
-            # Has received tasks - send list via private DM
-            total = len(tasks)
-            total_pages = max(1, (total + page_size - 1) // page_size)
-
-            task_lines = []
-            for task in tasks[:10]:
-                task_id = task.get("public_id", "")
-                content = task.get("content", "")[:40]
-                if len(task.get("content", "")) > 40:
-                    content += "..."
-                status_icon = "✅" if task.get("status") == "completed" else "📥"
-                task_lines.append(f"{status_icon} `{task_id}`: {content}")
-
-            task_list_text = "\n".join(task_lines)
-
-            try:
-                await query.message.get_bot().send_message(
-                    chat_id=user_telegram_id,
-                    text=f"📥 *VIỆC ĐÃ NHẬN*\n\n"
-                         f"Tổng: {total} việc\n\n"
-                         f"{task_list_text}\n\n"
-                         f"_Sử dụng /xemviec [mã việc] để xem chi tiết_",
-                    parse_mode="Markdown",
-                    reply_markup=task_list_with_pagination(tasks, 1, total_pages, list_type, None),
-                )
-            except Exception as e:
-                logger.warning(f"Could not send private message to {user_telegram_id}: {e}")
-                await safe_edit_message(
-                    query,
-                    f"⚠️ Không thể gửi tin nhắn riêng.\n\n"
-                    f"Vui lòng nhắn /start cho bot trước để nhận tin nhắn riêng.",
-                )
-                return
-
-            await safe_edit_message(
-                query,
-                f"📬 Đã gửi tin nhắn riêng về việc đã nhận cho {user_mention}.\n\n"
-                f"_Kiểm tra tin nhắn riêng từ bot._",
-                parse_mode="Markdown",
-            )
-            return
-        else:
-            # Private chat context - show inline
-            tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size, group_id=None)
 
     else:  # all
         title = "📊 TẤT CẢ VIỆC"
         list_type = "all"
 
-        # Privacy feature: In group context, split tasks - assigned in group, personal+received via DM
+        # Privacy feature: In group context, show assigned+received in group, send personal via DM
         if gid is not None:
             from utils import mention_user
             from telegram import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1014,29 +942,24 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
             user_telegram_id = db_user.get("telegram_id")
             user_mention = mention_user(db_user)
 
-            # Fetch all three categories separately
+            # Fetch tasks: assigned+received filtered by group, personal for DM
             assigned_tasks = await get_user_created_tasks(db, db_user["id"], limit=page_size, group_id=gid)
+            received_tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size, group_id=gid)
             personal_tasks = await get_user_personal_tasks(db, db_user["id"], limit=page_size, group_id=None)
-            received_tasks = await get_user_received_tasks(db, db_user["id"], limit=page_size, group_id=None)
 
-            # Build private message for personal + received tasks
-            private_tasks = personal_tasks + received_tasks
+            # Combine assigned + received for group display
+            group_tasks = assigned_tasks + received_tasks
             dm_sent = False
 
-            if private_tasks:
+            # Send ONLY personal tasks via DM (not received)
+            if personal_tasks:
                 task_lines = []
-                for task in private_tasks[:15]:
+                for task in personal_tasks[:15]:
                     task_id = task.get("public_id", "")
                     content = task.get("content", "")[:35]
                     if len(task.get("content", "")) > 35:
                         content += "..."
-                    # Determine task type icon
-                    if task.get("creator_id") == task.get("assignee_id"):
-                        icon = "📋"  # Personal
-                    else:
-                        icon = "📥"  # Received
-                    if task.get("status") == "completed":
-                        icon = "✅"
+                    icon = "✅" if task.get("status") == "completed" else "📋"
                     task_lines.append(f"{icon} `{task_id}`: {content}")
 
                 task_list_text = "\n".join(task_lines)
@@ -1044,8 +967,8 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
                 try:
                     await query.message.get_bot().send_message(
                         chat_id=user_telegram_id,
-                        text=f"📋📥 *VIỆC CÁ NHÂN & ĐÃ NHẬN*\n\n"
-                             f"Tổng: {len(private_tasks)} việc\n\n"
+                        text=f"📋 *VIỆC CÁ NHÂN*\n\n"
+                             f"Tổng: {len(personal_tasks)} việc\n\n"
                              f"{task_list_text}\n\n"
                              f"_Sử dụng /xemviec [mã việc] để xem chi tiết_",
                         parse_mode="Markdown",
@@ -1054,33 +977,32 @@ async def handle_task_category(query, db, db_user, category: str, group_id: int 
                 except Exception as e:
                     logger.warning(f"Could not send private message to {user_telegram_id}: {e}")
 
-            # Show assigned tasks in group (or "no tasks" message)
-            if not assigned_tasks:
-                dm_note = f"\n\n📬 Đã gửi {len(private_tasks)} việc cá nhân & đã nhận qua tin nhắn riêng." if dm_sent else ""
+            # Show assigned+received tasks in group (or "no tasks" message)
+            if not group_tasks:
+                dm_note = f"\n\n📬 Đã gửi {len(personal_tasks)} việc cá nhân qua tin nhắn riêng." if dm_sent else ""
                 back_kb = InlineKeyboardMarkup([
                     [InlineKeyboardButton("« Quay lại danh mục", callback_data=f"task_category:menu{g_suffix}")]
                 ])
                 await safe_edit_message(
                     query,
-                    f"📤 *VIỆC ĐÃ GIAO* (trong nhóm)\n\n"
-                    f"📭 Bạn chưa giao việc nào trong nhóm này.{dm_note}\n\n"
-                    f"_Kiểm tra tin nhắn riêng từ bot._",
+                    f"📊 *TẤT CẢ VIỆC* (trong nhóm)\n\n"
+                    f"📭 Không có việc nào liên quan đến nhóm này.{dm_note}",
                     reply_markup=back_kb,
                     parse_mode="Markdown",
                 )
                 return
 
-            # Has assigned tasks - show in group
-            total = len(assigned_tasks)
+            # Has group tasks - show in group
+            total = len(group_tasks)
             total_pages = max(1, (total + page_size - 1) // page_size)
-            dm_note = f"\n\n📬 Đã gửi {len(private_tasks)} việc cá nhân & đã nhận qua tin nhắn riêng cho {user_mention}." if dm_sent else ""
+            dm_note = f"\n\n📬 Đã gửi {len(personal_tasks)} việc cá nhân qua tin nhắn riêng." if dm_sent else ""
 
-            msg = f"📤 *VIỆC ĐÃ GIAO* (trong nhóm)\n\nTổng: {total} việc | Trang 1/{total_pages}{dm_note}\n\nChọn việc để xem chi tiết:"
+            msg = f"📊 *TẤT CẢ VIỆC* (trong nhóm)\n\nTổng: {total} việc | Trang 1/{total_pages}{dm_note}\n\nChọn việc để xem chi tiết:"
 
             await safe_edit_message(
                 query,
                 msg,
-                reply_markup=task_list_with_pagination(assigned_tasks, 1, total_pages, "assigned", gid),
+                reply_markup=task_list_with_pagination(group_tasks, 1, total_pages, list_type, gid),
                 parse_mode="Markdown",
             )
             return
